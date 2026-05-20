@@ -7,7 +7,7 @@
 // PR101 Negd S2S adapter).
 //
 // Strict read-only:
-//   • NO `Withdraw` / `Payout` / `Гаргах` button anywhere.
+//   • NO cash-out / `Гаргах` button anywhere.
 //   • `payableMnt` rendered DISABLED with a "not available yet" label,
 //     never as an actionable balance.
 //   • Dry-run amounts clearly labelled "тооцоолсон / dry-run, төлөгдөх биш".
@@ -26,6 +26,7 @@ import { View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, F } from '../../shared/design';
 import { useSellerDashboard } from '../../hooks/useSellerDashboard';
+import { useSellerNetworkEnabled } from '../../config/remoteFlags';
 import {
   describeSellerError,
   type SellerWalletSummary,
@@ -41,7 +42,10 @@ const fmtMnt = (n: number | null | undefined) =>
 // ─── Top-level section ───────────────────────────────────────────────────
 
 export function SellerNetworkSection() {
-  const q = useSellerDashboard();
+  const enabled = useSellerNetworkEnabled();
+  const q = useSellerDashboard({ enabled });
+
+  if (!enabled) return null;
 
   return (
     <View style={{ margin: 12, marginTop: 4 }}>
@@ -184,7 +188,7 @@ function WalletCard({ wallet }: { wallet: SellerWalletSummary }) {
 function DisabledPayableBucket({ value }: { value: string }) {
   // The payable bucket is INTENTIONALLY disabled. PR97 era: payableMnt
   // is sourced ONLY from effective=true rows, of which there are zero.
-  // Showing a "Withdraw" button here is forbidden by PR103 spec.
+  // Showing a cash-out button here is forbidden by PR103 spec.
   return (
     <View
       style={{

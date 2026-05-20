@@ -4,6 +4,7 @@ import { get } from '../../src/services/api'
 import { C, R, F } from '../../src/shared/design'
 import { useSellerCommissionSummary } from '../../src/hooks/useSellerDashboard'
 import { describeSellerError } from '../../src/api/sellerDashboard'
+import { useSellerNetworkEnabled } from '../../src/config/remoteFlags'
 import { EmptyState } from '../../src/shared/ui/EmptyState'
 
 export default function SellerEarningsScreen() {
@@ -40,7 +41,7 @@ export default function SellerEarningsScreen() {
 
       {/* Seller-network commission (PR103) — read-only, dry-run only.
           Sourced from Sarana BFF /api/seller/commission-summary, which
-          proxies Negd's S2S adapter. NOT payable. NO withdraw. */}
+          proxies Negd's S2S adapter. NOT payable. No cash-out action. */}
       <SellerNetworkCommissionSection />
 
       {/* Commission list */}
@@ -72,11 +73,14 @@ export default function SellerEarningsScreen() {
 }
 
 // ─── Seller-network commission summary (PR103) ─────────────────────────
-// Read-only. Dry-run amounts only. NOT payable. NO withdraw button.
+// Read-only. Dry-run amounts only. NOT payable. No cash-out action.
 
 function SellerNetworkCommissionSection() {
-  const q = useSellerCommissionSummary()
+  const enabled = useSellerNetworkEnabled()
+  const q = useSellerCommissionSummary({ enabled })
   const fmt = (n: number) => n.toLocaleString() + '₮'
+
+  if (!enabled) return null
 
   return (
     <View style={{ margin: 12, marginBottom: 4 }}>

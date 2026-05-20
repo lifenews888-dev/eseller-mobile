@@ -11,7 +11,7 @@
 // All endpoints are GET-only and read-only. There are no mutation
 // helpers in this file — PR103 mobile MUST NOT mutate seller dashboard
 // data, MUST NOT compute wallet/commission client-side, MUST NOT show
-// payout/withdraw UI.
+// cash-out UI.
 //
 // Response shape (PR98/PR101/PR102 envelope):
 //
@@ -94,29 +94,77 @@ export class SellerApiError extends Error {
   }
 }
 
-function unwrap<T>(envelope: unknown): T {
-  // Fallback messages are user-facing — errorMessageForCode() returns
-  // err.message verbatim for INTERNAL_ERROR, so these strings can reach
-  // the UI. Keep them in Mongolian to stay consistent with the rest of
-  // the seller shell copy.
-  if (!envelope || typeof envelope !== 'object') {
+type PayloadGuard<T> = (value: unknown) => value is T;
+type RecordValue = Record<string, unknown>;
+
+function isRecord(value: unknown): value is RecordValue {
+  return !!value && typeof value === 'object';
+}
+
+function isStringOrNull(value: unknown): value is string | null {
+  return typeof value === 'string' || value === null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isNumberRecord(value: unknown, keys: readonly string[]): boolean {
+  if (!isRecord(value)) return false;
+  return keys.every((key) => typeof value[key] === 'number');
+}
+
+function toSellerErrorDetail(value: unknown): SellerErrorDetail {
+  if (isRecord(value) && typeof value.code === 'string' && typeof value.message === 'string') {
+    return {
+      code: value.code as SellerErrorCode,
+      message: value.message,
+      retryable: typeof value.retryable === 'boolean' ? value.retryable : undefined,
+      supportHint: isStringOrNull(value.supportHint) ? value.supportHint : undefined,
+    };
+  }
+  return { code: 'INTERNAL_ERROR', message: 'Серверийн алдаа гарлаа.' };
+}
+
+function malformedPayload(name: string): SellerApiError {
+  return new SellerApiError(
+    { code: 'INTERNAL_ERROR', message: `Серверийн өгөгдөл буруу байна. (${name})` },
+    undefined,
+  );
+}
+
+function unwrap<T>(envelope: unknown, isPayload: PayloadGuard<T>, payloadName: string): T {
+  if (!isRecord(envelope)) {
     throw new SellerApiError(
-      { code: 'INTERNAL_ERROR', message: 'Сервэрийн хариу хоосон байна.' },
+      { code: 'INTERNAL_ERROR', message: 'Серверийн хариу хоосон байна.' },
       undefined,
     );
   }
-  const e = envelope as SellerEnvelope<T>;
-  if (e.ok && 'data' in e) return e.data;
-  if (!e.ok) {
-    throw new SellerApiError(
-      e.error ?? { code: 'INTERNAL_ERROR', message: 'Сервэрийн алдаа гарлаа.' },
-      e.correlationId,
-    );
+
+  if ('ok' in envelope) {
+    if (envelope.ok === true && 'data' in envelope) {
+      if (isPayload(envelope.data)) return envelope.data;
+      throw malformedPayload(payloadName);
+    }
+    if (envelope.ok === false) {
+      throw new SellerApiError(
+        toSellerErrorDetail(envelope.error),
+        typeof envelope.correlationId === 'string' ? envelope.correlationId : undefined,
+      );
+    }
+    throw malformedPayload(payloadName);
   }
-  throw new SellerApiError(
-    { code: 'INTERNAL_ERROR', message: 'Сервэрийн өгөгдөл буруу байна.' },
-    undefined,
-  );
+
+  // Temporary compatibility: Sarana's legacy `{ success:true, data }`
+  // interceptor may hand this client the direct payload. Canonical seller BFF
+  // `{ ok:true, data }` is preferred; direct payloads must match the expected
+  // route shape or they fail loudly.
+  if (isPayload(envelope)) {
+    if (__DEV__) console.warn('[sellerDashboard] accepted direct payload; canonical { ok, data } envelope is preferred');
+    return envelope;
+  }
+
+  throw malformedPayload(payloadName);
 }
 
 // ─── Response shapes (mirror PR98/PR101 helper return types) ─────────────
@@ -147,7 +195,7 @@ export interface SellerWalletSummary {
   inReviewMnt: number;
   approvedNotPayableMnt: number;
   payableMnt: number; // ALWAYS 0 in PR97 era (effective=true rows only)
-  paidOutMnt: number; // ALWAYS 0 (no payout flow exists)
+  paidOutMnt: number; // ALWAYS 0 (no cash-out flow exists)
   excludedMnt: number;
   sourceCounts: {
     dryRun: number;
@@ -262,34 +310,205 @@ export interface SellerDashboardResponse {
 
 // ─── API helpers (GET-only, no mutations) ────────────────────────────────
 
+const WALLET_COUNT_KEYS = [
+  'dryRun',
+  'needsReview',
+  'approvedForFuturePosting',
+  'excluded',
+  'cancelled',
+  'effective',
+] as const;
+
+const LEAD_TOTAL_KEYS = [
+  'new',
+  'qualified',
+  'contacted',
+  'convertedToRequest',
+  'rejected',
+  'expired',
+  'duplicate',
+  'spam',
+] as const;
+
+function isIdentityLink(value: unknown): value is SellerMeResponse['identityLink'] {
+  if (value === null) return true;
+  return (
+    isRecord(value) &&
+    typeof value.provider === 'string' &&
+    typeof value.status === 'string' &&
+    isStringOrNull(value.verifiedAt)
+  );
+}
+
+function isSellerMeResponse(value: unknown): value is SellerMeResponse {
+  if (!isRecord(value) || !isRecord(value.user) || !isRecord(value.resellerProfile)) return false;
+  return (
+    typeof value.user.id === 'string' &&
+    typeof value.user.role === 'string' &&
+    isStringOrNull(value.user.displayName) &&
+    typeof value.resellerProfile.id === 'string' &&
+    isStringOrNull(value.resellerProfile.displayName) &&
+    typeof value.resellerProfile.status === 'string' &&
+    typeof value.resellerProfile.kycStatus === 'string' &&
+    typeof value.financeEligibility === 'string' &&
+    isIdentityLink(value.identityLink) &&
+    isStringArray(value.warnings)
+  );
+}
+
+function isSellerWalletSummary(value: unknown): value is SellerWalletSummary {
+  if (!isRecord(value) || !isRecord(value.invariants)) return false;
+  return (
+    typeof value.estimatedMnt === 'number' &&
+    typeof value.inReviewMnt === 'number' &&
+    typeof value.approvedNotPayableMnt === 'number' &&
+    typeof value.payableMnt === 'number' &&
+    typeof value.paidOutMnt === 'number' &&
+    typeof value.excludedMnt === 'number' &&
+    isNumberRecord(value.sourceCounts, WALLET_COUNT_KEYS) &&
+    typeof value.invariants.effectiveZeroExpected === 'boolean' &&
+    value.invariants.payableSourcedOnlyFromEffectiveTrue === true &&
+    isStringArray(value.warnings) &&
+    typeof value.lastComputedAt === 'string'
+  );
+}
+
+function isActiveReferralCode(value: unknown): value is SellerReferralSummary['activeReferralCode'] {
+  if (value === null) return true;
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.code === 'string' &&
+    typeof value.activeFrom === 'string' &&
+    typeof value.rotationCount === 'number' &&
+    typeof value.abuseFlag === 'boolean'
+  );
+}
+
+function isSellerReferralSummary(value: unknown): value is SellerReferralSummary {
+  return (
+    isRecord(value) &&
+    isActiveReferralCode(value.activeReferralCode) &&
+    isNumberRecord(value.referralCodeCounts, ['active', 'rotated', 'revoked', 'disabledForAbuse']) &&
+    isNumberRecord(value.inviteLinkCounts, ['active', 'expired', 'revoked', 'disabledForAbuse', 'totalUseCount']) &&
+    isStringArray(value.warnings)
+  );
+}
+
+function leadHasForbiddenPii(value: RecordValue): boolean {
+  return [
+    'phone',
+    'email',
+    'name',
+    'note',
+    'customerPhone',
+    'customerEmail',
+    'customerName',
+    'customerNote',
+  ].some((key) => key in value);
+}
+
+function isLeadItem(value: unknown): value is SellerLeadSummary['recentLeads'][number] {
+  if (!isRecord(value) || leadHasForbiddenPii(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.status === 'string' &&
+    typeof value.intent === 'string' &&
+    typeof value.source === 'string' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.hasRegisteredCustomer === 'boolean' &&
+    typeof value.hasConvertedRequest === 'boolean'
+  );
+}
+
+function isSellerLeadSummary(value: unknown): value is SellerLeadSummary {
+  return (
+    isRecord(value) &&
+    isNumberRecord(value.totals, LEAD_TOTAL_KEYS) &&
+    Array.isArray(value.recentLeads) &&
+    value.recentLeads.every(isLeadItem) &&
+    isStringArray(value.warnings)
+  );
+}
+
+function isCommissionTransaction(value: unknown): value is SellerCommissionSummary['recentTransactions'][number] {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.status === 'string' &&
+    typeof value.type === 'string' &&
+    isStringOrNull(value.eligibilityReason) &&
+    isStringOrNull(value.exclusionReason) &&
+    typeof value.amountMnt === 'number' &&
+    typeof value.effective === 'boolean' &&
+    typeof value.createdAt === 'string'
+  );
+}
+
+function isSellerCommissionSummary(value: unknown): value is SellerCommissionSummary {
+  return (
+    isRecord(value) &&
+    typeof value.effectiveZeroInvariant === 'boolean' &&
+    isNumberRecord(value.totals, WALLET_COUNT_KEYS) &&
+    isNumberRecord(value.proposedAmountsMnt, ['dryRun', 'inReview', 'approvedNotPayable']) &&
+    typeof value.payableAmountMnt === 'number' &&
+    Array.isArray(value.recentTransactions) &&
+    value.recentTransactions.every(isCommissionTransaction) &&
+    isStringArray(value.warnings)
+  );
+}
+
+function isSellerDashboardResponse(value: unknown): value is SellerDashboardResponse {
+  if (!isRecord(value) || !isRecord(value.notificationsSummary)) return false;
+  return (
+    isSellerMeResponse(value.me) &&
+    isSellerReferralSummary(value.referralSummary) &&
+    isSellerLeadSummary(value.leadSummary) &&
+    isSellerCommissionSummary(value.commissionSummary) &&
+    isSellerWalletSummary(value.walletSummary) &&
+    typeof value.notificationsSummary.deferred === 'boolean' &&
+    (
+      value.notificationsSummary.reason === undefined ||
+      typeof value.notificationsSummary.reason === 'string'
+    ) &&
+    isStringArray(value.warnings) &&
+    Array.isArray(value.nextActions) &&
+    value.nextActions.every((item) =>
+      isRecord(item) &&
+      typeof item.code === 'string' &&
+      typeof item.message === 'string'
+    )
+  );
+}
+
 export async function getSellerMe(): Promise<SellerMeResponse> {
   const env = await get('/seller/me');
-  return unwrap<SellerMeResponse>(env);
+  return unwrap<SellerMeResponse>(env, isSellerMeResponse, 'seller/me');
 }
 
 export async function getSellerDashboard(): Promise<SellerDashboardResponse> {
   const env = await get('/seller/dashboard');
-  return unwrap<SellerDashboardResponse>(env);
+  return unwrap<SellerDashboardResponse>(env, isSellerDashboardResponse, 'seller/dashboard');
 }
 
 export async function getSellerWalletSummary(): Promise<SellerWalletSummary> {
   const env = await get('/seller/wallet-summary');
-  return unwrap<SellerWalletSummary>(env);
+  return unwrap<SellerWalletSummary>(env, isSellerWalletSummary, 'seller/wallet-summary');
 }
 
 export async function getSellerReferralSummary(): Promise<SellerReferralSummary> {
   const env = await get('/seller/referral-summary');
-  return unwrap<SellerReferralSummary>(env);
+  return unwrap<SellerReferralSummary>(env, isSellerReferralSummary, 'seller/referral-summary');
 }
 
 export async function getSellerLeadSummary(): Promise<SellerLeadSummary> {
   const env = await get('/seller/lead-summary');
-  return unwrap<SellerLeadSummary>(env);
+  return unwrap<SellerLeadSummary>(env, isSellerLeadSummary, 'seller/lead-summary');
 }
 
 export async function getSellerCommissionSummary(): Promise<SellerCommissionSummary> {
   const env = await get('/seller/commission-summary');
-  return unwrap<SellerCommissionSummary>(env);
+  return unwrap<SellerCommissionSummary>(env, isSellerCommissionSummary, 'seller/commission-summary');
 }
 
 // ─── Helpers for UI error mapping ────────────────────────────────────────
@@ -306,6 +525,8 @@ export interface SellerUIError {
   message: string;
   /** correlationId from the BFF if the response carried one. */
   correlationId?: string;
+  /** Retry hint from the BFF if available. */
+  retryable?: boolean;
   /** True when the device appears to be offline (no HTTP response). */
   isOffline: boolean;
 }
@@ -316,11 +537,22 @@ export function describeSellerError(err: unknown): SellerUIError {
       code: err.code,
       message: errorMessageForCode(err.code, err.message),
       correlationId: err.correlationId,
+      retryable: err.retryable,
       isOffline: false,
     };
   }
   const apiErr = err as ApiError | undefined;
   const isOffline = !!apiErr?.isOffline;
+  if (apiErr?.code) {
+    const code = apiErr.code as SellerErrorCode;
+    return {
+      code,
+      message: errorMessageForCode(code, apiErr.message),
+      correlationId: apiErr.correlationId,
+      retryable: apiErr.retryable,
+      isOffline,
+    };
+  }
   if (isOffline) {
     return {
       code: 'BFF_UPSTREAM_UNAVAILABLE',
