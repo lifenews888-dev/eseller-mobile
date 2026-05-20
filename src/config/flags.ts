@@ -30,6 +30,13 @@ function csvFlag(name: string, fallback: readonly string[]): readonly string[] {
 export const MALCHNAAS_ENABLED_DEFAULT = boolFlag('EXPO_PUBLIC_MALCHNAAS_ENABLED', true);
 
 /**
+ * Build-time default for the seller-network read-only dashboard kill-switch.
+ * Default ON for dev/internal builds so the PR103 UI is visible before remote
+ * config loads. Production can flip it off from Sarana BFF `/config/mobile`.
+ */
+export const SELLER_NETWORK_ENABLED_DEFAULT = boolFlag('EXPO_PUBLIC_SELLER_NETWORK_ENABLED', true);
+
+/**
  * Build-time default pilot aimag list. Overridable via
  * `EXPO_PUBLIC_MALCHNAAS_PILOT_AIMAGS="AKH,TOV,SEL"` (comma-separated codes).
  */

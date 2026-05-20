@@ -17,6 +17,28 @@ const apiLog = (...args: unknown[]) => {
   if (__DEV__) console.log('[api]', ...args);
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
+function buildSellerStructuredError(
+  data: unknown,
+  status: number | undefined,
+  isOffline: boolean,
+): ApiError | null {
+  if (!isRecord(data) || data.ok !== false || !isRecord(data.error)) return null;
+  const { code, message, retryable } = data.error;
+  if (typeof code !== 'string' || typeof message !== 'string') return null;
+
+  const wrapped = new Error(message) as ApiError;
+  wrapped.status = status;
+  wrapped.isOffline = isOffline;
+  wrapped.code = code;
+  wrapped.correlationId = typeof data.correlationId === 'string' ? data.correlationId : undefined;
+  wrapped.retryable = typeof retryable === 'boolean' ? retryable : undefined;
+  return wrapped;
+}
+
 /** URLs that legitimately produce 401 responses without it meaning "session
  *  expired" — wrong password or bad OTP code. The interceptor must NOT wipe
  *  state or set the expired-session flag for these. */
@@ -28,6 +50,10 @@ function isCredentialEndpoint(url: string | undefined): boolean {
     url.includes('/auth/otp/verify') ||
     url.includes('/auth/otp/send')
   );
+}
+
+function isSellerEndpoint(url: string | undefined): boolean {
+  return !!url && url.includes('/seller/');
 }
 
 // DEV: override with EXPO_PUBLIC_API_BASE_URL for physical devices (LAN IP)
@@ -87,8 +113,8 @@ api.interceptors.response.use(
     return body;
   },
   async (err) => {
+    const url = err.config?.url as string | undefined;
     if (err.response?.status === 401) {
-      const url = err.config?.url as string | undefined;
       // Wrong password / bad OTP also returns 401, but it's NOT session
       // expiry — the user has no session yet. Treat those as plain
       // request errors (let the caller render its own alert).
@@ -116,7 +142,11 @@ api.interceptors.response.use(
       }
     }
     const data = err.response?.data;
-    const message = data?.message || data?.error || 'Сервертэй холбогдож чадсангүй';
+    const sellerError = isSellerEndpoint(url)
+      ? buildSellerStructuredError(data, err.response?.status, !err.response)
+      : null;
+    if (sellerError) throw sellerError;
+    const message = data?.message || (typeof data?.error === 'string' ? data.error : undefined) || 'Сервертэй холбогдож чадсангүй';
     const wrapped = new Error(message) as ApiError;
     wrapped.status = err.response?.status;
     // No response at all → network down / timeout / DNS. Preserve for
@@ -131,6 +161,9 @@ api.interceptors.response.use(
 export interface ApiError extends Error {
   status?:    number;
   isOffline?: boolean;
+  code?: string;
+  correlationId?: string;
+  retryable?: boolean;
 }
 
 export function isOfflineError(e: unknown): boolean {

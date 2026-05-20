@@ -18,6 +18,9 @@
  *         pilotAimags?:    string[];
  *         aimagDelivery?:  Record<string, string>;  // code → "7-10"
  *       }
+ *       sellerNetwork?: {
+ *         enabled?:        boolean;
+ *       }
  *     }
  *
  * This is a public endpoint — no auth required. It must never return
@@ -30,6 +33,7 @@ import { get, isOfflineError } from '../services/api';
 import {
   MALCHNAAS_ENABLED_DEFAULT,
   MALCHNAAS_PILOT_AIMAGS_DEFAULT,
+  SELLER_NETWORK_ENABLED_DEFAULT,
 } from './flags';
 
 const CACHE_KEY  = 'remote-config:v1';
@@ -53,8 +57,13 @@ export interface MalchnaasConfig {
   aimagDelivery: Readonly<Record<string, string>>;
 }
 
+export interface SellerNetworkConfig {
+  enabled: boolean;
+}
+
 interface RemoteConfigState {
   malchnaas:    MalchnaasConfig;
+  sellerNetwork: SellerNetworkConfig;
   source:       'default' | 'cache' | 'remote';
   lastFetched?: number;
   hydrate:      () => Promise<void>;
@@ -68,9 +77,16 @@ const DEFAULT_MALCHNAAS: MalchnaasConfig = {
   aimagDelivery: {},
 };
 
+const DEFAULT_SELLER_NETWORK: SellerNetworkConfig = {
+  enabled: SELLER_NETWORK_ENABLED_DEFAULT,
+};
+
 interface CachedEnvelope {
   t: number;
-  v: { malchnaas: MalchnaasConfig };
+  v: {
+    malchnaas: MalchnaasConfig;
+    sellerNetwork?: SellerNetworkConfig;
+  };
 }
 
 function coerceAimagDelivery(raw: unknown): Record<string, string> {
@@ -99,8 +115,18 @@ function coerceMalchnaas(raw: unknown): MalchnaasConfig {
   return { enabled, pilotAimags, aimagDelivery };
 }
 
+function coerceSellerNetwork(raw: unknown): SellerNetworkConfig {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    enabled: typeof r.enabled === 'boolean'
+      ? r.enabled
+      : SELLER_NETWORK_ENABLED_DEFAULT,
+  };
+}
+
 export const useRemoteConfig = create<RemoteConfigState>((set, getState) => ({
   malchnaas: DEFAULT_MALCHNAAS,
+  sellerNetwork: DEFAULT_SELLER_NETWORK,
   source:    'default',
 
   // Read the most-recent cached payload (if any) into the store. Cheap,
@@ -114,6 +140,7 @@ export const useRemoteConfig = create<RemoteConfigState>((set, getState) => ({
       if (!env?.v?.malchnaas) return;
       set({
         malchnaas:    coerceMalchnaas(env.v.malchnaas),
+        sellerNetwork: coerceSellerNetwork(env.v.sellerNetwork),
         source:       'cache',
         lastFetched:  env.t,
       });
@@ -133,9 +160,10 @@ export const useRemoteConfig = create<RemoteConfigState>((set, getState) => ({
       const res = await get('/config/mobile');
       const data = (res && typeof res === 'object' ? res : {}) as Record<string, unknown>;
       const malchnaas = coerceMalchnaas((data as { malchnaas?: unknown }).malchnaas);
+      const sellerNetwork = coerceSellerNetwork((data as { sellerNetwork?: unknown }).sellerNetwork);
       const now = Date.now();
-      set({ malchnaas, source: 'remote', lastFetched: now });
-      const env: CachedEnvelope = { t: now, v: { malchnaas } };
+      set({ malchnaas, sellerNetwork, source: 'remote', lastFetched: now });
+      const env: CachedEnvelope = { t: now, v: { malchnaas, sellerNetwork } };
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(env)).catch(() => {});
       log('remote fetched');
     } catch (e: unknown) {
@@ -153,6 +181,9 @@ export const useRemoteConfig = create<RemoteConfigState>((set, getState) => ({
 
 export const useMalchnaasEnabled = (): boolean =>
   useRemoteConfig((s) => s.malchnaas.enabled);
+
+export const useSellerNetworkEnabled = (): boolean =>
+  useRemoteConfig((s) => s.sellerNetwork.enabled);
 
 export const usePilotAimags = (): readonly string[] =>
   useRemoteConfig((s) => s.malchnaas.pilotAimags);
@@ -180,6 +211,10 @@ export const useAimagDeliveryMap = (): Readonly<Record<string, string>> =>
 
 export function getMalchnaasEnabled(): boolean {
   return useRemoteConfig.getState().malchnaas.enabled;
+}
+
+export function getSellerNetworkEnabled(): boolean {
+  return useRemoteConfig.getState().sellerNetwork.enabled;
 }
 
 export function getPilotAimags(): readonly string[] {

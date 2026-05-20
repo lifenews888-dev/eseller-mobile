@@ -17,6 +17,7 @@ import {
 } from '../components/profile-ui';
 import { getReferralLink, getReferralCode, getTierLabel } from '../../src/utils/profile';
 import { useSellerMe } from '../../src/hooks/useSellerDashboard';
+import { useSellerNetworkEnabled } from '../../src/config/remoteFlags';
 
 function statusToBadgeState(status?: string): 'ok' | 'pending' | 'missing' {
   if (status === 'ACTIVE') return 'ok';
@@ -49,7 +50,8 @@ export default function SellerProfile() {
   const { user } = useAuth();
   const refLink = getReferralLink(user?.id ?? user?._id);
   const refCode = getReferralCode(user?.id ?? user?._id);
-  const me = useSellerMe();
+  const sellerNetworkEnabled = useSellerNetworkEnabled();
+  const me = useSellerMe({ enabled: sellerNetworkEnabled });
 
   async function copyReferral() {
     try {
@@ -88,6 +90,8 @@ export default function SellerProfile() {
           {/* Seller-network status (PR103). Read-only. Sourced from
               Sarana BFF /api/seller/me, which proxies Negd's S2S
               adapter. NOT mutable from mobile. */}
+          {sellerNetworkEnabled && (
+            <>
           <SectionTitle>Худалдагчийн сүлжээний статус</SectionTitle>
           <Card>
             {me.isLoading ? (
@@ -121,6 +125,8 @@ export default function SellerProfile() {
               </>
             ) : null}
           </Card>
+            </>
+          )}
 
           <SectionTitle>Самбар</SectionTitle>
           <Card>
