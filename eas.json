@@ -4,11 +4,17 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://eseller.mn/api" }
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://eseller.mn/api",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://eseller.mn/api" }
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://eseller.mn/api",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "production": {
       "env": { "EXPO_PUBLIC_API_BASE_URL": "https://eseller.mn/api" }
