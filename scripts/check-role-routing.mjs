@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   authRoleHintForPublicPath,
   buildRoleReturnTo,
@@ -14,6 +17,7 @@ import {
   normalizePublicRouteParam,
 } from '../src/shared/routeNormalization.ts';
 
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checks = [];
 
 function check(name, actual, expected) {
@@ -122,6 +126,16 @@ const normalizedHerderReturnTo = normalizePublicRouteParam('/(herder)/dashboard'
 check('auth hint normalized seller returnTo', authRoleHintForPublicPath(normalizedSellerReturnTo), 'affiliate');
 check('auth hint normalized owner returnTo', authRoleHintForPublicPath(normalizedOwnerReturnTo), 'seller');
 check('auth hint normalized herder returnTo', authRoleHintForPublicPath(normalizedHerderReturnTo), 'seller');
+
+const rootLayoutSource = fs.readFileSync(path.join(root, 'app/_layout.tsx'), 'utf8');
+check('root auth entry helper exists', rootLayoutSource.includes('function isAuthEntryPath'), true);
+check('root auto-route resets when logged out', rootLayoutSource.includes('hasAutoRouted.current = false'), true);
+check('root auto-route runs once per session', rootLayoutSource.includes('if (hasAutoRouted.current) return'), true);
+check(
+  'root auto-route skips non-entry paths',
+  rootLayoutSource.includes("pathname !== '/' && !isAuthEntryPath(pathname)"),
+  true,
+);
 
 const failed = checks.filter((item) => !item.pass);
 for (const item of checks) {

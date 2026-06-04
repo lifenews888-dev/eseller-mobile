@@ -58,6 +58,12 @@ const queryClient = new QueryClient({
   },
 })
 
+const AUTH_ENTRY_PATHS = new Set(['/login', '/register', '/otp', '/forgot-password'])
+
+function isAuthEntryPath(pathname: string) {
+  return AUTH_ENTRY_PATHS.has(pathname) || pathname.startsWith('/(auth)')
+}
+
 function AppContent() {
   const [showSplash,     setSplash]      =
     useState(true)
@@ -146,12 +152,7 @@ function AppContent() {
   // Push token бүртгэх + foreground/tap listeners (нэвтэрсэн үед)
   useEffect(() => {
     if (!user) return
-    const isAuthEntry =
-      pathname === '/login' ||
-      pathname === '/register' ||
-      pathname === '/otp' ||
-      pathname === '/forgot-password' ||
-      pathname.startsWith('/(auth)')
+    const isAuthEntry = isAuthEntryPath(pathname)
     if (pathname !== '/' && !isAuthEntry) return
 
     registerPushToken()
@@ -174,15 +175,23 @@ function AppContent() {
   // BUYER + STORE keep the default (tabs) entry so role-branching / legacy
   // screens continue to work for them.
   useEffect(() => {
+    if (!user) {
+      hasAutoRouted.current = false
+      return
+    }
     if (showSplash || showOnboarding) return
-    if (!user) return
+    if (gateRunning) return
+    if (hasAutoRouted.current) return
+    if (pathname !== '/' && !isAuthEntryPath(pathname)) return
+
+    hasAutoRouted.current = true
     // Stack navigator mount болсны дараа route хийх
     const timer = setTimeout(() => {
       const role = (user.role ?? '').toLowerCase()
       routeByRole(role)
     }, 100)
     return () => clearTimeout(timer)
-  }, [user, showSplash, showOnboarding, pathname])
+  }, [user, showSplash, showOnboarding, gateRunning, pathname])
 
   const finishOnboarding = async () => {
     try {
