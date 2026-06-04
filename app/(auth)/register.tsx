@@ -1,223 +1,320 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TextInput,
-  TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert,
-} from 'react-native'
-import { router }   from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
-import { post }     from '../../src/services/api'
-import { useAuth }  from '../../src/store/auth'
-import { C, R, F }  from '../../src/shared/design'
-import { routeByRole } from '../../src/shared/routing'
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { post } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { C, F, R, UI } from '../../src/shared/design';
+import { inferAuthRoleFromReturnTo, normalizeAuthRoleParam, routeAfterAuth } from '../../src/shared/routing';
+import { AuthValueIntro } from '../../src/components/AuthValueIntro';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+
+const ROLE_OPTIONS = [
+  {
+    key: 'buyer',
+    icon: 'cart-outline' as const,
+    label: 'Худалдан авагч',
+    desc: 'Бараа захиалах',
+    color: C.primary,
+  },
+  {
+    key: 'seller',
+    icon: 'storefront-outline' as const,
+    label: 'Дэлгүүр эзэн',
+    desc: 'Дэлгүүр удирдах',
+    color: C.store,
+  },
+  {
+    key: 'affiliate',
+    icon: 'megaphone-outline' as const,
+    label: 'Борлуулагч',
+    desc: 'Комисс олох',
+    color: C.seller,
+  },
+  {
+    key: 'delivery',
+    icon: 'car-outline' as const,
+    label: 'Жолооч',
+    desc: 'Хүргэлт хийх',
+    color: C.driver,
+  },
+];
+
+function normalizeRoleParam(role?: string | string[], returnTo?: string | string[] | null) {
+  return normalizeAuthRoleParam(role) ?? inferAuthRoleFromReturnTo(returnTo) ?? 'buyer';
+}
 
 export default function RegisterScreen() {
-  const { login }              = useAuth()
-  const [name,     setName]    = useState('')
-  const [email,    setEmail]   = useState('')
-  const [phone,    setPhone]   = useState('')
-  const [pass,     setPass]    = useState('')
-  const [pass2,    setPass2]   = useState('')
-  const [role,     setRole]    = useState('buyer')
-  const [loading,  setLoading] = useState(false)
-  const [showPass, setShowPass]= useState(false)
+  const params = useLocalSearchParams<{ role?: string; returnTo?: string; next?: string }>();
+  const authReturnTo = params.returnTo || params.next;
+  const { login } = useAuth();
 
-  const ROLES = [
-    { key: 'buyer',    icon: 'cart-outline' as const,       label: 'Худалдан авагч', desc: 'Бараа захиалах', color: C.primary },
-    { key: 'seller',   icon: 'storefront-outline' as const, label: 'Дэлгүүр эзэн',  desc: 'Дэлгүүр удирдах', color: '#0D652D' },
-    { key: 'affiliate',icon: 'megaphone-outline' as const,  label: 'Борлуулагч',    desc: 'Комисс олох',    color: '#E37400' },
-    { key: 'delivery', icon: 'car-outline' as const,        label: 'Жолооч',        desc: 'Хүргэлт хийх',   color: '#C62828' },
-  ]
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [pass, setPass] = useState('');
+  const [pass2, setPass2] = useState('');
+  const [role, setRole] = useState(normalizeRoleParam(params.role, authReturnTo));
+  const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+
+  const authLinkParams = {
+    ...(authReturnTo ? { returnTo: authReturnTo } : {}),
+    ...(role !== 'buyer' ? { role } : {}),
+  };
+
+  useEffect(() => {
+    setRole(normalizeRoleParam(params.role, authReturnTo));
+  }, [authReturnTo, params.role]);
 
   const handleRegister = async () => {
-    if (!name || !email || !pass) {
-      Alert.alert('Анхаар', 'Бүх талбарыг бөглөнө үү')
-      return
+    if (!name.trim() || !email.trim() || !pass) {
+      Alert.alert('Анхаар', 'Нэр, имэйл болон нууц үгээ оруулна уу.');
+      return;
     }
     if (pass !== pass2) {
-      Alert.alert('Анхаар', 'Нууц үг таарахгүй байна')
-      return
+      Alert.alert('Анхаар', 'Нууц үг давталттайгаа таарахгүй байна.');
+      return;
     }
     if (pass.length < 6) {
-      Alert.alert('Анхаар', 'Нууц үг 6+ тэмдэгт байх ёстой')
-      return
+      Alert.alert('Анхаар', 'Нууц үг хамгийн багадаа 6 тэмдэгт байна.');
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
-      // Register буцааж token + user өгдөг
       const res: any = await post('/auth/register', {
-        name, email, phone: phone || undefined, password: pass, role,
-      })
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        password: pass,
+        role,
+      });
 
       if (res?.token) {
-        // Token-ийг /auth/me-ээр баталгаажуулаад, canonical user-ийг ачаална.
-        // Шууд setState хийвэл token хүчингүй / user shape дутуу бол
-        // tabs руу ороход UI эвдэрч магадгүй.
-        await useAuth.getState().restoreSession(res.token)
+        await useAuth.getState().restoreSession(res.token);
       } else {
-        // Token буцаагаагүй бол login хийх
-        await login(email, pass)
+        await login(email.trim(), pass);
       }
-      const user = useAuth.getState().user
-      routeByRole(user?.role)
+
+      const user = useAuth.getState().user;
+      routeAfterAuth(user?.role, authReturnTo);
     } catch (e: any) {
-      Alert.alert('Алдаа',
-        e.message || 'Бүртгэл үүсгэхэд алдаа гарлаа')
+      Alert.alert('Алдаа', e?.message || 'Бүртгэл үүсгэхэд алдаа гарлаа.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <ScrollView style={{
-      flex: 1, backgroundColor: C.bg,
-    }}>
-      <View style={{ padding: 24, paddingTop: 60 }}>
+    <AppScreen keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <AppTopBar eyebrow="eSeller" title="Бүртгүүлэх" />
+      <AppHeader
+        title="Шинэ бүртгэл"
+        subtitle="Өөрийн үүргээ сонгоод нэг аккаунтаар бүх боломжийг ашиглаарай."
+        icon="person-add-outline"
+        accent={C.brand}
+      />
 
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ marginBottom: 32 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={C.text} />
-        </TouchableOpacity>
+      <AuthValueIntro />
 
-        <Text style={{ ...F.h1, color: C.text, marginBottom: 6 }}>
-          Бүртгүүлэх
-        </Text>
-        <Text style={{
-          color: C.textMuted, marginBottom: 32, fontSize: 14,
-        }}>
-          Eseller.mn-д тавтай морил
-        </Text>
-
-        {/* Role picker */}
-        <Text style={{
-          color: C.textSub, fontSize: 13,
-          fontWeight: '600', marginBottom: 8,
-        }}>Ролл сонгох</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-          {ROLES.map(r => (
-            <TouchableOpacity key={r.key} onPress={() => setRole(r.key)}
-              style={{
-                width: '47%' as any, flexDirection: 'row', alignItems: 'center', gap: 8,
-                backgroundColor: role === r.key ? r.color + '18' : C.bgSection,
-                borderRadius: R.lg, padding: 12,
-                borderWidth: 1.5, borderColor: role === r.key ? r.color : C.border,
-              }}>
-              <Ionicons name={r.icon} size={20} color={role === r.key ? r.color : C.textMuted} />
-              <View>
-                <Text style={{ color: role === r.key ? C.text : C.textSub, fontSize: 12, fontWeight: '700' }}>{r.label}</Text>
-                <Text style={{ color: C.textMuted, fontSize: 10 }}>{r.desc}</Text>
+      <Text style={styles.sectionLabel}>Үүрэг сонгох</Text>
+      <View style={styles.roleGrid}>
+        {ROLE_OPTIONS.map((option) => {
+          const selected = role === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              activeOpacity={0.86}
+              onPress={() => setRole(option.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              style={[
+                styles.roleCard,
+                selected && {
+                  borderColor: option.color,
+                  backgroundColor: `${option.color}14`,
+                },
+              ]}
+            >
+              <Ionicons
+                name={option.icon}
+                size={20}
+                color={selected ? option.color : C.textMuted}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.roleTitle, selected && { color: C.text }]} numberOfLines={1}>
+                  {option.label}
+                </Text>
+                <Text style={styles.roleDesc} numberOfLines={1}>
+                  {option.desc}
+                </Text>
               </View>
             </TouchableOpacity>
-          ))}
-        </View>
+          );
+        })}
+      </View>
 
-        {[
-          { label:'Нэр', value: name, set: setName,
-            ph: 'Таны нэр', type: 'default' },
-          { label:'Имэйл', value: email, set: setEmail,
-            ph: 'example@gmail.com', type: 'email-address' },
-          { label:'Утасны дугаар', value: phone, set: setPhone,
-            ph: '99XXXXXX', type: 'phone-pad' },
-        ].map((f, i) => (
-          <View key={i} style={{ marginBottom: 16 }}>
-            <Text style={{
-              color: C.textSub, fontSize: 13,
-              fontWeight: '600', marginBottom: 6,
-            }}>
-              {f.label}
-            </Text>
+      <AppCard style={styles.formCard}>
+        <Field label="Нэр">
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Таны нэр"
+            placeholderTextColor={C.textMuted}
+            style={styles.input}
+          />
+        </Field>
+        <Field label="Имэйл">
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="example@gmail.com"
+            placeholderTextColor={C.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
+          />
+        </Field>
+        <Field label="Утасны дугаар">
+          <TextInput
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="99XXXXXX"
+            placeholderTextColor={C.textMuted}
+            keyboardType="phone-pad"
+            style={styles.input}
+          />
+        </Field>
+
+        <Field label="Нууц үг">
+          <View style={styles.passwordBox}>
             <TextInput
-              value={f.value}
-              onChangeText={f.set}
-              placeholder={f.ph}
+              value={pass}
+              onChangeText={setPass}
+              placeholder="••••••••"
               placeholderTextColor={C.textMuted}
-              keyboardType={f.type as any}
-              autoCapitalize="none"
-              style={{
-                backgroundColor: C.bgSection, borderRadius: R.lg,
-                padding: 14, color: C.text, fontSize: 15,
-                borderWidth: 1, borderColor: C.border,
-              }}
+              secureTextEntry={!showPass}
+              style={styles.passwordInput}
             />
+            <TouchableOpacity
+              onPress={() => setShowPass((v) => !v)}
+              hitSlop={8}
+              accessibilityLabel={showPass ? 'Нууц үг нуух' : 'Нууц үг харах'}
+              style={styles.eyeButton}
+            >
+              <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={C.textMuted} />
+            </TouchableOpacity>
           </View>
-        ))}
+        </Field>
 
-        {['Нууц үг', 'Нууц үг давтах'].map((label, i) => (
-          <View key={label} style={{ marginBottom: 16 }}>
-            <Text style={{
-              color: C.textSub, fontSize: 13,
-              fontWeight: '600', marginBottom: 6,
-            }}>
-              {label}
-            </Text>
-            <View style={{
-              flexDirection: 'row', alignItems: 'center',
-              backgroundColor: C.bgSection, borderRadius: R.lg,
-              borderWidth: 1, borderColor: C.border,
-            }}>
-              <TextInput
-                value={i === 0 ? pass : pass2}
-                onChangeText={i === 0 ? setPass : setPass2}
-                placeholder="••••••••"
-                placeholderTextColor={C.textMuted}
-                secureTextEntry={!showPass}
-                style={{
-                  flex: 1, padding: 14,
-                  color: C.text, fontSize: 15,
-                }}
-              />
-              {i === 0 && (
-                <TouchableOpacity
-                  onPress={() => setShowPass(!showPass)}
-                  style={{ paddingRight: 14 }}
-                >
-                  <Ionicons
-                    name={showPass ? 'eye-off' : 'eye'}
-                    size={20} color={C.textMuted}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        ))}
+        <Field label="Нууц үг давтах">
+          <TextInput
+            value={pass2}
+            onChangeText={setPass2}
+            placeholder="••••••••"
+            placeholderTextColor={C.textMuted}
+            secureTextEntry={!showPass}
+            style={styles.input}
+          />
+        </Field>
 
-        <TouchableOpacity
+        <AppButton
+          label={loading ? 'Бүртгэж байна' : 'Бүртгүүлэх'}
+          icon="person-add-outline"
           onPress={handleRegister}
           disabled={loading}
-          style={{
-            backgroundColor: loading ? C.bgSection : C.brand,
-            borderRadius: R.xl, padding: 17,
-            alignItems: 'center', marginTop: 8, marginBottom: 20,
-          }}
+          style={styles.submit}
+        />
+      </AppCard>
+
+      <View style={styles.inlineLinkRow}>
+        <Text style={styles.inlineText}>Бүртгэл байгаа юу?</Text>
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={() => router.push({ pathname: '/login', params: authLinkParams } as any)}
         >
-          {loading
-            ? <ActivityIndicator color={C.white} />
-            : <Text style={{
-                color: C.white, fontWeight: '800', fontSize: 16,
-              }}>Бүртгүүлэх</Text>
-          }
+          <Text style={styles.inlineLink}>Нэвтрэх</Text>
         </TouchableOpacity>
-
-        <View style={{
-          flexDirection: 'row', justifyContent: 'center', gap: 6,
-        }}>
-          <Text style={{ color: C.textMuted, fontSize: 14 }}>
-            Бүртгэл байгаа юу?
-          </Text>
-          <TouchableOpacity
-            onPress={() => router.push('/(auth)/login' as any)}
-          >
-            <Text style={{
-              color: C.brand, fontSize: 14, fontWeight: '600',
-            }}>Нэвтрэх</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 40 }} />
       </View>
-    </ScrollView>
-  )
+    </AppScreen>
+  );
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  sectionLabel: { ...F.small, color: C.textSub, fontWeight: '900', marginBottom: R.sm },
+  roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.lg },
+  roleCard: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgCard,
+    borderRadius: UI.controlRadius,
+    padding: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  roleTitle: { ...F.tiny, color: C.textSub, fontWeight: '900' },
+  roleDesc: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  formCard: { gap: R.sm },
+  field: { gap: R.xs },
+  fieldLabel: { ...F.small, color: C.textSub, fontWeight: '800' },
+  input: {
+    minHeight: 48,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    color: C.text,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  passwordBox: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    color: C.text,
+    fontSize: 15,
+  },
+  eyeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  submit: { marginTop: R.sm },
+  inlineLinkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: R.xs,
+    marginTop: R.lg,
+  },
+  inlineText: { ...F.small, color: C.textMuted },
+  inlineLink: { ...F.small, color: C.primary, fontWeight: '900' },
+});

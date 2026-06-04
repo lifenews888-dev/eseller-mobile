@@ -9,19 +9,41 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { HerderAPI } from '../../src/features/herder/api';
 import * as HerderQueue from '../../src/features/herder/queue';
 import type { MyHerderProduct } from '../../src/features/herder/types';
-import { C, R } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { shadowStyle } from '../../src/shared/shadow';
+import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type Filter = 'active' | 'all';
 
+function normalizeListingFilter(value?: string | string[] | null): Filter {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === 'all' ? 'all' : 'active';
+}
+
 export default function HerderListings() {
-  const [filter, setFilter] = useState<Filter>('active');
+  const params = useLocalSearchParams<{ status?: string }>();
+  const [filter, setFilter] = useState<Filter>(() => normalizeListingFilter(params.status));
+  const layout = useAppLayoutMetrics();
   const qc = useQueryClient();
+
+  useEffect(() => {
+    setFilter(normalizeListingFilter(params.status));
+  }, [params.status]);
+
+  const selectFilter = (nextFilter: Filter) => {
+    setFilter(nextFilter);
+    router.replace(
+      nextFilter === 'active'
+        ? ('/herder-admin/listings' as any)
+        : ({ pathname: '/herder-admin/listings' as any, params: { status: nextFilter } } as any),
+    );
+  };
 
   const { data, refetch, isRefetching, isLoading } = useQuery({
     queryKey: ['herder', 'my', 'products', filter],
@@ -93,21 +115,26 @@ export default function HerderListings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Бүтээгдэхүүн</Text>
-        <Text style={{ color: C.textSub, fontSize: 13, marginTop: 4 }}>
-          Нийт {data?.total ?? 0}
-        </Text>
-      </View>
+      <View style={{ paddingHorizontal: UI.screenPad, paddingTop: layout.screenTop, paddingBottom: R.sm }}>
+        <AppTopBar eyebrow="Малчин" title="Бараа" showBack={false} />
+        <AppHeader
+          title="Бүтээгдэхүүн"
+          subtitle={`Нийт ${data?.total ?? 0} бараа. Идэвхтэй жагсаалт, offline хүсэлтээ хянана.`}
+          icon="leaf-outline"
+          accent={C.herder}
+          style={{ marginBottom: R.md }}
+        />
 
-      <View style={{ flexDirection: 'row', paddingHorizontal: 12, gap: 8, marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.sm }}>
         {(['active', 'all'] as Filter[]).map((f) => (
           <TouchableOpacity
             key={f}
-            onPress={() => setFilter(f)}
+            activeOpacity={0.84}
+            onPress={() => selectFilter(f)}
             style={{
-              paddingHorizontal: 14,
-              paddingVertical: 7,
+              minHeight: 38,
+              paddingHorizontal: R.md,
+              paddingVertical: R.sm,
               borderRadius: R.full,
               backgroundColor: filter === f ? C.herder : C.bgSection,
               borderWidth: 1,
@@ -116,9 +143,9 @@ export default function HerderListings() {
           >
             <Text
               style={{
-                color: filter === f ? '#fff' : C.text,
-                fontSize: 12,
-                fontWeight: '700',
+                ...F.tiny,
+                color: filter === f ? C.bgCard : C.textSub,
+                fontWeight: '900',
               }}
             >
               {f === 'active' ? 'Идэвхтэй' : 'Бүгд'}
@@ -126,24 +153,21 @@ export default function HerderListings() {
           </TouchableOpacity>
         ))}
       </View>
+      </View>
 
       {(queue.data?.length ?? 0) > 0 && (
-        <View
+        <AppCard
           style={{
-            marginHorizontal: 12,
-            marginBottom: 10,
-            backgroundColor: C.bgCard,
-            borderRadius: R.lg,
-            borderWidth: 1,
+            marginHorizontal: UI.screenPad,
+            marginBottom: R.md,
             borderColor: C.gold,
-            padding: 12,
-            gap: 8,
+            gap: R.sm,
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <Ionicons name="cloud-offline-outline" size={18} color={C.gold} />
-              <Text style={{ color: C.text, fontWeight: '800', fontSize: 13, flex: 1 }}>
+              <Text style={{ ...F.small, color: C.text, fontWeight: '900', flex: 1 }}>
                 Офлайнд хадгалсан {queue.data!.length}
               </Text>
             </View>
@@ -153,7 +177,7 @@ export default function HerderListings() {
               style={{
                 backgroundColor: drain.isPending ? C.textMuted : C.herder,
                 borderRadius: R.full,
-                paddingHorizontal: 12,
+                paddingHorizontal: R.md,
                 paddingVertical: 6,
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -161,11 +185,11 @@ export default function HerderListings() {
               }}
             >
               {drain.isPending ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={C.bgCard} size="small" />
               ) : (
-                <Ionicons name="sync" size={14} color="#fff" />
+                <Ionicons name="sync" size={14} color={C.bgCard} />
               )}
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>Дахин илгээх</Text>
+              <Text style={{ ...F.tiny, color: C.bgCard, fontWeight: '900' }}>Дахин илгээх</Text>
             </TouchableOpacity>
           </View>
           {queue.data!.map((q) => (
@@ -199,13 +223,13 @@ export default function HerderListings() {
               </TouchableOpacity>
             </View>
           ))}
-        </View>
+        </AppCard>
       )}
 
       <FlatList
         data={products}
         keyExtractor={(p) => p.id}
-        contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: UI.screenPad, paddingBottom: layout.screenBottom }}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -216,7 +240,7 @@ export default function HerderListings() {
         renderItem={({ item: p }) => (
           <TouchableOpacity
             onPress={() => router.push({
-              pathname: '/(herder)/listing-form',
+              pathname: '/herder-admin/listing-form',
               params:   { id: p.id },
             } as never)}
             style={{
@@ -282,9 +306,12 @@ export default function HerderListings() {
                       paddingVertical: 3,
                     }}
                   >
-                    <Text style={{ color: C.primary, fontSize: 11, fontWeight: '700' }}>
-                      ❄ Хүйтэн
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <Ionicons name="snow-outline" size={11} color={C.primary} />
+                      <Text style={{ color: C.primary, fontSize: 11, fontWeight: '700' }}>
+                        Хүйтэн
+                      </Text>
+                    </View>
                   </View>
                 )}
                 {!p.isActive && (
@@ -314,46 +341,40 @@ export default function HerderListings() {
         )}
         ListEmptyComponent={
           !isLoading ? (
-            <View style={{ alignItems: 'center', marginTop: 60 }}>
+            <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
               <Ionicons name="leaf-outline" size={48} color={C.textMuted} />
-              <Text style={{ color: C.textSub, marginTop: 12 }}>Бараа байхгүй байна</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(herder)/listing-form' as never)}
-                style={{
-                  marginTop: 16,
-                  backgroundColor: C.herder,
-                  borderRadius: R.full,
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Эхний бараа нэмэх</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={{ ...F.body, color: C.textSub, textAlign: 'center' }}>
+                Бараа байхгүй байна
+              </Text>
+              <AppButton
+                label="Эхний бараа нэмэх"
+                icon="add"
+                variant="success"
+                onPress={() => router.push('/herder-admin/listing-form' as never)}
+                style={{ backgroundColor: C.herder, borderColor: C.herder }}
+              />
+            </AppCard>
           ) : null
         }
       />
 
       <TouchableOpacity
-        onPress={() => router.push('/(herder)/listing-form' as never)}
+        accessibilityLabel="Бараа нэмэх"
+        onPress={() => router.push('/herder-admin/listing-form' as never)}
         style={{
           position: 'absolute',
           right: 18,
-          bottom: 90,
+          bottom: layout.floatingBottom,
           width: 56,
           height: 56,
-          borderRadius: 28,
+          borderRadius: R.full,
           backgroundColor: C.herder,
           alignItems: 'center',
           justifyContent: 'center',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.25,
-          shadowRadius: 6,
-          elevation: 6,
+          ...shadowStyle({ y: 2, blur: 6, opacity: 0.25, elevation: 6 }),
         }}
       >
-        <Ionicons name="add" size={28} color="#fff" />
+        <Ionicons name="add" size={28} color={C.bgCard} />
       </TouchableOpacity>
     </View>
   );

@@ -1,41 +1,50 @@
-import React, { useState } from 'react'
+import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  ScrollView, Image, Alert, ActivityIndicator,
-} from 'react-native'
-import { router } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
-import * as ImagePicker from 'expo-image-picker'
-import * as Haptics from 'expo-haptics'
-import { post } from '../../src/services/api'
-import { useAuth } from '../../src/store/auth'
-import { C, R, F } from '../../src/shared/design'
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
+import { post } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { C, F, R, UI } from '../../src/shared/design';
+import { LIVE_FEED_POST_CATEGORIES } from '../../src/shared/liveCategories';
+import { AppButton, AppCard, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
-const FEED_CATS = [
-  { slug: 'auto-moto',       name: 'Авто' },
-  { slug: 'real-estate-feed', name: 'Үл хөдлөх' },
-  { slug: 'electronics',     name: 'Электроник' },
-  { slug: 'fashion',         name: 'Хувцас' },
-  { slug: 'services-feed',   name: 'Үйлчилгээ' },
-  { slug: 'jobs-feed',       name: 'Ажлын зар' },
-  { slug: 'furniture',       name: 'Тавилга' },
-  { slug: 'other',           name: 'Бусад' },
-]
+const FEED_CATS = LIVE_FEED_POST_CATEGORIES;
 
 const DISTRICTS = [
-  'СБД', 'ХУД', 'БЗД', 'ЧД', 'БГД', 'СХД', 'НД', 'БНД',
-]
+  'СБД',
+  'ХУД',
+  'БЗД',
+  'ЧД',
+  'БГД',
+  'СХД',
+  'НД',
+  'БНД',
+];
 
 export default function CreateFeedScreen() {
-  const { user } = useAuth()
-  const [title,    setTitle]    = useState('')
-  const [desc,     setDesc]     = useState('')
-  const [price,    setPrice]    = useState('')
-  const [phone,    setPhone]    = useState(user?.phone || '')
-  const [category, setCategory] = useState('')
-  const [district, setDistrict] = useState('')
-  const [images,   setImages]   = useState<string[]>([])
-  const [loading,  setLoading]  = useState(false)
+  const { user } = useAuth();
+  const layout = useAppLayoutMetrics();
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const [price, setPrice] = useState('');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [category, setCategory] = useState('');
+  const [district, setDistrict] = useState('');
+  const [images, setImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -43,324 +52,355 @@ export default function CreateFeedScreen() {
       allowsMultipleSelection: true,
       selectionLimit: 5,
       quality: 0.8,
-    })
+    });
     if (!result.canceled) {
-      setImages(prev => [
-        ...prev,
-        ...result.assets.map(a => a.uri),
-      ].slice(0, 5))
+      setImages((current) => [...current, ...result.assets.map((asset) => asset.uri)].slice(0, 5));
     }
-  }
+  };
 
   const removeImage = (idx: number) => {
-    setImages(prev => prev.filter((_, i) => i !== idx))
-  }
+    setImages((current) => current.filter((_, index) => index !== idx));
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      Alert.alert('Анхаар', 'Гарчиг оруулна уу')
-      return
+      Alert.alert('Анхаар', 'Гарчиг оруулна уу');
+      return;
     }
     if (!category) {
-      Alert.alert('Анхаар', 'Ангилал сонгоно уу')
-      return
+      Alert.alert('Анхаар', 'Ангилал сонгоно уу');
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
-      const formData = new FormData()
-      formData.append('title', title.trim())
-      formData.append('description', desc.trim())
-      formData.append('category', category)
-      if (price) formData.append('price', price)
-      if (phone) formData.append('phone', phone)
-      if (district) formData.append('district', district)
+      const formData = new FormData();
+      formData.append('title', title.trim());
+      formData.append('description', desc.trim());
+      formData.append('category', category);
+      if (price) formData.append('price', price);
+      if (phone) formData.append('phone', phone);
+      if (district) formData.append('district', district);
 
-      images.forEach((uri, i) => {
+      images.forEach((uri, index) => {
         formData.append('images', {
           uri,
-          name: `photo_${i}.jpg`,
+          name: `photo_${index}.jpg`,
           type: 'image/jpeg',
-        } as any)
-      })
+        } as any);
+      });
 
-      await post('/feed', formData)
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      await post('/feed', formData);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert('Амжилттай', 'Зар нийтлэгдлээ!', [
         { text: 'OK', onPress: () => router.back() },
-      ])
-    } catch (e: any) {
-      Alert.alert('Алдаа', e.message || 'Зар нийтлэхэд алдаа гарлаа')
+      ]);
+    } catch (error: any) {
+      Alert.alert('Алдаа', error?.message || 'Зар нийтлэхэд алдаа гарлаа');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   if (!user) {
     return (
-      <View style={{
-        flex: 1, backgroundColor: C.bg,
-        alignItems: 'center', justifyContent: 'center', padding: 32,
-      }}>
-        <Ionicons name="lock-closed-outline" size={64} color={C.border} />
-        <Text style={{ ...F.h3, color: C.text, marginTop: 16 }}>
-          Нэвтрэх шаардлагатай
-        </Text>
-        <Text style={{ color: C.textMuted, marginTop: 8, textAlign: 'center' }}>
-          Зар нийтлэхийн тулд нэвтэрнэ үү
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.push('/(auth)/login' as any)}
-          style={{
-            backgroundColor: C.brand, borderRadius: R.lg,
-            padding: 16, paddingHorizontal: 40, marginTop: 24,
-          }}
-        >
-          <Text style={{ color: C.white, fontWeight: '700', fontSize: 15 }}>
-            Нэвтрэх
-          </Text>
-        </TouchableOpacity>
-      </View>
-    )
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Зар" title="Зар нэмэх" />
+        <View style={styles.center}>
+          <Ionicons name="lock-closed-outline" size={58} color={C.border2} />
+          <Text style={styles.centerTitle}>Нэвтрэх шаардлагатай</Text>
+          <Text style={styles.centerText}>Зар нийтлэхийн тулд нэвтэрнэ үү.</Text>
+          <AppButton
+            label="Нэвтрэх"
+            icon="log-in-outline"
+            onPress={() => router.push({ pathname: '/login', params: { returnTo: '/feed/create' } } as any)}
+            style={{ marginTop: R.lg }}
+          />
+        </View>
+      </AppScreen>
+    );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center',
-        paddingTop: 52, paddingHorizontal: 16, paddingBottom: 14,
-        borderBottomWidth: 1, borderBottomColor: C.border, gap: 12,
-      }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={26} color={C.text} />
-        </TouchableOpacity>
-        <Text style={{ ...F.h3, color: C.text, flex: 1 }}>
-          Зар нэмэх
-        </Text>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          disabled={loading}
-          style={{
-            backgroundColor: loading ? C.bgSection : C.brand,
-            borderRadius: R.lg, paddingHorizontal: 20, paddingVertical: 10,
-          }}
-        >
-          {loading
-            ? <ActivityIndicator color={C.white} size="small" />
-            : <Text style={{ color: C.white, fontWeight: '700', fontSize: 14 }}>
-                Нийтлэх
-              </Text>
-          }
-        </TouchableOpacity>
+    <View style={styles.screen}>
+      <View style={[styles.topBarWrap, { paddingTop: layout.screenTop }]}>
+        <AppTopBar
+          eyebrow="Зар"
+          title="Зар нэмэх"
+          style={{ marginBottom: 0 }}
+        />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-
-        {/* Зурагнууд */}
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 10 }}>
-          Зурагнууд (5 хүртэл)
-        </Text>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: layout.screenBottom + 96 }]}>
+        <Text style={styles.sectionTitle}>Зурагнууд (5 хүртэл)</Text>
         <ScrollView
-          horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 10, marginBottom: 20 }}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.photoRow}
         >
-          {images.map((uri, i) => (
-            <View key={i} style={{ position: 'relative' }}>
-              <Image
-                source={{ uri }}
-                style={{
-                  width: 100, height: 100, borderRadius: R.lg,
-                  backgroundColor: C.bgSection,
-                }}
-              />
+          {images.map((uri, index) => (
+            <View key={`${uri}-${index}`} style={styles.photoWrap}>
+              <Image source={{ uri }} style={styles.photo} />
               <TouchableOpacity
-                onPress={() => removeImage(i)}
-                style={{
-                  position: 'absolute', top: -6, right: -6,
-                  backgroundColor: C.error, borderRadius: R.full,
-                  width: 22, height: 22, alignItems: 'center', justifyContent: 'center',
-                }}
+                activeOpacity={0.84}
+                accessibilityRole="button"
+                accessibilityLabel={`${index + 1}-р зургийг устгах`}
+                onPress={() => removeImage(index)}
+                style={styles.removePhoto}
               >
-                <Ionicons name="close" size={14} color={C.white} />
+                <Ionicons name="close" size={14} color={C.bgCard} />
               </TouchableOpacity>
             </View>
           ))}
-          {images.length < 5 && (
+          {images.length < 5 ? (
             <TouchableOpacity
+              activeOpacity={0.84}
+              accessibilityRole="button"
+              accessibilityLabel="Зураг нэмэх"
               onPress={pickImage}
-              style={{
-                width: 100, height: 100, borderRadius: R.lg,
-                backgroundColor: C.bgSection, borderWidth: 1.5,
-                borderColor: C.border, borderStyle: 'dashed',
-                alignItems: 'center', justifyContent: 'center',
-              }}
+              style={styles.addPhoto}
             >
               <Ionicons name="camera-outline" size={28} color={C.textMuted} />
-              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 4 }}>
-                Зураг
-              </Text>
+              <Text style={styles.addPhotoText}>Зураг</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </ScrollView>
 
-        {/* Гарчиг */}
-        <Text style={{ color: C.textSub, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
-          Гарчиг *
-        </Text>
-        <TextInput
-          value={title} onChangeText={setTitle}
-          placeholder="Жнь: Toyota Prius 2018 он" placeholderTextColor={C.textMuted}
-          style={{
-            backgroundColor: C.bgSection, borderRadius: R.lg,
-            padding: 14, color: C.text, fontSize: 15,
-            borderWidth: 1, borderColor: C.border, marginBottom: 16,
-          }}
-        />
+        <FormField label="Гарчиг *">
+          <TextInput
+            accessibilityLabel="Зарын гарчиг"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Жнь: Toyota Prius 2018 он"
+            placeholderTextColor={C.textMuted}
+            style={styles.input}
+          />
+        </FormField>
 
-        {/* Тайлбар */}
-        <Text style={{ color: C.textSub, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
-          Тайлбар
-        </Text>
-        <TextInput
-          value={desc} onChangeText={setDesc}
-          placeholder="Дэлгэрэнгүй мэдээлэл..." placeholderTextColor={C.textMuted}
-          multiline numberOfLines={4} textAlignVertical="top"
-          style={{
-            backgroundColor: C.bgSection, borderRadius: R.lg,
-            padding: 14, color: C.text, fontSize: 15,
-            borderWidth: 1, borderColor: C.border, marginBottom: 16,
-            minHeight: 100,
-          }}
-        />
+        <FormField label="Тайлбар">
+          <TextInput
+            accessibilityLabel="Зарын тайлбар"
+            value={desc}
+            onChangeText={setDesc}
+            placeholder="Дэлгэрэнгүй мэдээлэл..."
+            placeholderTextColor={C.textMuted}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            style={[styles.input, styles.textArea]}
+          />
+        </FormField>
 
-        {/* Үнэ + Утас */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: C.textSub, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
-              Үнэ (₮)
-            </Text>
+        <View style={styles.twoCol}>
+          <FormField label="Үнэ (₮)" style={{ flex: 1 }}>
             <TextInput
-              value={price} onChangeText={setPrice}
-              placeholder="0" placeholderTextColor={C.textMuted}
+              accessibilityLabel="Зарын үнэ"
+              value={price}
+              onChangeText={setPrice}
+              placeholder="0"
+              placeholderTextColor={C.textMuted}
               keyboardType="number-pad"
-              style={{
-                backgroundColor: C.bgSection, borderRadius: R.lg,
-                padding: 14, color: C.text, fontSize: 15,
-                borderWidth: 1, borderColor: C.border,
-              }}
+              style={styles.input}
             />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: C.textSub, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
-              Утас
-            </Text>
+          </FormField>
+          <FormField label="Утас" style={{ flex: 1 }}>
             <TextInput
-              value={phone} onChangeText={setPhone}
-              placeholder="99XXXXXX" placeholderTextColor={C.textMuted}
+              accessibilityLabel="Холбогдох утас"
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="99XXXXXX"
+              placeholderTextColor={C.textMuted}
               keyboardType="phone-pad"
-              style={{
-                backgroundColor: C.bgSection, borderRadius: R.lg,
-                padding: 14, color: C.text, fontSize: 15,
-                borderWidth: 1, borderColor: C.border,
-              }}
+              style={styles.input}
             />
-          </View>
+          </FormField>
         </View>
 
-        {/* Ангилал */}
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 10 }}>
-          Ангилал *
-        </Text>
-        <View style={{
-          flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20,
-        }}>
-          {FEED_CATS.map(c => {
-            const active = category === c.slug
-            return (
-              <TouchableOpacity
-                key={c.slug}
-                onPress={() => setCategory(active ? '' : c.slug)}
-                style={{
-                  paddingHorizontal: 14, paddingVertical: 9,
-                  borderRadius: R.full,
-                  backgroundColor: active ? C.primary : C.bgSection,
-                  borderWidth: 1,
-                  borderColor: active ? C.primary : C.border,
-                }}
-              >
-                <Text style={{
-                  color: active ? C.white : C.textSub,
-                  fontSize: 13, fontWeight: active ? '700' : '500',
-                }}>
-                  {c.name}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
+        <Text style={styles.sectionTitle}>Ангилал *</Text>
+        <View style={styles.chips}>
+          {FEED_CATS.map((item) => (
+            <Chip
+              key={item.slug}
+              label={item.name}
+              active={category === item.slug}
+              activeColor={C.primary}
+              onPress={() => setCategory(category === item.slug ? '' : item.slug)}
+            />
+          ))}
         </View>
 
-        {/* Байршил */}
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 10 }}>
-          Байршил
-        </Text>
-        <View style={{
-          flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20,
-        }}>
-          {DISTRICTS.map(d => {
-            const active = district === d
-            return (
-              <TouchableOpacity
-                key={d}
-                onPress={() => setDistrict(active ? '' : d)}
-                style={{
-                  paddingHorizontal: 14, paddingVertical: 9,
-                  borderRadius: R.full,
-                  backgroundColor: active ? C.secondary : C.bgSection,
-                  borderWidth: 1,
-                  borderColor: active ? C.secondary : C.border,
-                }}
-              >
-                <Text style={{
-                  color: active ? C.white : C.textSub,
-                  fontSize: 13, fontWeight: active ? '700' : '500',
-                }}>
-                  {d}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
+        <Text style={styles.sectionTitle}>Байршил</Text>
+        <View style={styles.chips}>
+          {DISTRICTS.map((item) => (
+            <Chip
+              key={item}
+              label={item}
+              active={district === item}
+              activeColor={C.secondary}
+              onPress={() => setDistrict(district === item ? '' : item)}
+            />
+          ))}
         </View>
 
-        {/* Онцлох сонголт */}
-        <TouchableOpacity
-          style={{
-            backgroundColor: C.gold + '10', borderRadius: R.lg,
-            padding: 16, borderWidth: 1, borderColor: C.gold + '30',
-            flexDirection: 'row', alignItems: 'center', gap: 12,
-          }}
-        >
-          <View style={{
-            width: 40, height: 40, borderRadius: 20,
-            backgroundColor: C.gold + '20',
-            alignItems: 'center', justifyContent: 'center',
-          }}>
+        <AppCard style={styles.featureCard}>
+          <View style={styles.featureIcon}>
             <Ionicons name="flash" size={20} color={C.gold} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: C.gold, fontWeight: '700', fontSize: 14 }}>
-              Зараа онцлох
-            </Text>
-            <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>
-              Нүүр хуудсанд гарч илүү олон хүнд хүрнэ
-            </Text>
+            <Text style={styles.featureTitle}>Зараа онцлох</Text>
+            <Text style={styles.featureText}>Нүүр хуудсанд гарч илүү олон хүнд хүрнэ.</Text>
           </View>
-          <Text style={{ color: C.gold, fontWeight: '800', fontSize: 14 }}>
-            2,900₮
-          </Text>
-        </TouchableOpacity>
-
+          <Text style={styles.featurePrice}>2,900₮</Text>
+        </AppCard>
       </ScrollView>
+
+      <View style={[styles.fixedActions, { paddingBottom: layout.insets.bottom + R.lg }]}>
+        <AppButton
+          label={loading ? 'Нийтэлж байна' : 'Зар нийтлэх'}
+          icon="send-outline"
+          disabled={loading}
+          onPress={handleSubmit}
+        />
+      </View>
     </View>
-  )
+  );
 }
+
+function FormField({
+  label,
+  children,
+  style,
+}: {
+  label: string;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.field, style]}>
+      <Text style={styles.label}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Chip({
+  label,
+  active,
+  activeColor,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  activeColor: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.84}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} сонгох`}
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[
+        styles.chip,
+        {
+          backgroundColor: active ? activeColor : C.bgSection,
+          borderColor: active ? activeColor : C.border,
+        },
+      ]}
+    >
+      <Text style={[styles.chipText, { color: active ? C.bgCard : C.textSub, fontWeight: active ? '800' : '600' }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  topBarWrap: {
+    paddingHorizontal: R.lg,
+    paddingBottom: R.md,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    backgroundColor: C.bg,
+  },
+  content: { padding: R.lg, paddingTop: R.md },
+  fixedActions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: C.bgCard,
+    padding: UI.screenPad,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  centerTitle: { ...F.h3, color: C.text, marginTop: R.lg, textAlign: 'center' },
+  centerText: { ...F.small, color: C.textMuted, marginTop: R.sm, textAlign: 'center', lineHeight: 20 },
+  sectionTitle: { ...F.h4, color: C.text, marginBottom: R.sm },
+  photoRow: { gap: R.sm, marginBottom: R.xl },
+  photoWrap: { position: 'relative' },
+  photo: { width: 100, height: 100, borderRadius: UI.cardRadius, backgroundColor: C.bgSection },
+  removePhoto: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: R.full,
+    backgroundColor: C.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhoto: {
+    width: 100,
+    height: 100,
+    borderRadius: UI.cardRadius,
+    backgroundColor: C.bgSection,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhotoText: { ...F.tiny, color: C.textMuted, marginTop: R.xs },
+  field: { marginBottom: R.lg },
+  label: { ...F.small, color: C.textSub, fontWeight: '800', marginBottom: R.xs },
+  input: {
+    minHeight: 48,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    color: C.text,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  textArea: { minHeight: 104 },
+  twoCol: { flexDirection: 'row', gap: R.md },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.xl },
+  chip: {
+    minHeight: 38,
+    borderRadius: R.full,
+    borderWidth: 1,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    justifyContent: 'center',
+  },
+  chipText: { ...F.small },
+  featureCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, backgroundColor: `${C.gold}10` },
+  featureIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: R.full,
+    backgroundColor: `${C.gold}22`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureTitle: { ...F.small, color: C.gold, fontWeight: '900' },
+  featureText: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  featurePrice: { ...F.small, color: C.gold, fontWeight: '900' },
+});

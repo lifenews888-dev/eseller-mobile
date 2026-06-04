@@ -1,7 +1,9 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../shared/secureStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { API_BASE_URL } from '../config/apiBase';
+import { normalizePublicRouteParam } from '../shared/routing';
 
 /**
  * One-shot flag set by the 401 interceptor when a *real* session expires
@@ -56,13 +58,19 @@ function isSellerEndpoint(url: string | undefined): boolean {
   return !!url && url.includes('/seller/');
 }
 
+function getCurrentReturnTo(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const { pathname, search, hash } = window.location;
+  if (!pathname || pathname === '/login' || pathname === '/register' || pathname.startsWith('/(auth)')) {
+    return undefined;
+  }
+  return normalizePublicRouteParam(`${pathname}${search || ''}${hash || ''}`) ?? undefined;
+}
+
 // DEV: override with EXPO_PUBLIC_API_BASE_URL for physical devices (LAN IP)
 // Default falls back to 10.0.2.2 (Android emulator → host loopback)
-const BASE = process.env.EXPO_PUBLIC_API_BASE_URL
-  ?? (__DEV__ ? 'http://10.0.2.2:3000/api' : 'https://eseller.mn/api');
-
 export const api = axios.create({
-  baseURL: BASE,
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -133,7 +141,14 @@ api.interceptors.response.use(
           try {
             onUnauthorized?.();
             // Auth screen руу чиглүүлэх — router mount болсон үед л ажиллана
-            try { router.replace('/(auth)/login' as never); } catch {}
+            try {
+              const returnTo = getCurrentReturnTo();
+              if (returnTo) {
+                router.replace({ pathname: '/login', params: { returnTo } } as never);
+              } else {
+                router.replace('/login' as never);
+              }
+            } catch {}
           } finally {
             // Дараагийн 401-ийг хүлээж авахын тулд жаахан хугацааны дараа дахин тэнцүүлнэ
             setTimeout(() => { unauthorizedHandling = false; }, 1000);

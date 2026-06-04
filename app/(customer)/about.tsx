@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { C, R } from '../../src/shared/design';
+import { Stack } from 'expo-router';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 export default function AboutScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
@@ -15,120 +16,180 @@ export default function AboutScreen() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ padding: 20, paddingTop: 40, paddingBottom: 60, alignItems: 'center' }}
-    >
-      {/* Logo */}
-      <View
-        style={{
-          width: 88,
-          height: 88,
-          borderRadius: 22,
-          backgroundColor: C.brand,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 16,
-        }}
-      >
-        <Text style={{ fontSize: 42 }}>🛍️</Text>
-      </View>
+    <AppScreen>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppTopBar eyebrow="eSeller" title="Тухай" showBack={false} />
+      <AppHeader
+        title="eSeller.mn"
+        subtitle="Монголын нэгдсэн цахим зах."
+        icon="storefront-outline"
+        accent={C.brand}
+      />
 
-      <Text style={{ fontSize: 28, fontWeight: '900', color: C.text, letterSpacing: -0.5 }}>
-        eseller<Text style={{ color: C.brand }}>.mn</Text>
-      </Text>
-      <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
-        Монголын нэгдсэн цахим зах
-      </Text>
+      <AppCard elevated style={st.hero}>
+        <View style={st.logoBox}>
+          <Ionicons name="storefront-outline" size={34} color={C.brand} />
+        </View>
+        <Text style={st.brand}>
+          eseller<Text style={{ color: C.brand }}>.mn</Text>
+        </Text>
+        <Text style={st.tagline}>Нэг апп дотор худалдаа, хүргэлт, борлуулалт, үйлчилгээ.</Text>
+      </AppCard>
 
-      {/* Description */}
-      <View
-        style={{
-          marginTop: 28,
-          backgroundColor: C.bgCard,
-          borderRadius: R.lg,
-          padding: 18,
-          borderWidth: 0.5,
-          borderColor: C.border,
-          gap: 12,
-        }}
-      >
-        <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20 }}>
-          eSeller.mn бол Монголын анхны super-app e-commerce платформ.
-          Авагч, дэлгүүрийн эзэн, борлуулагч, жолооч — бүгдийг нэг апп-д нэгтгэсэн.
+      <AppCard style={st.card}>
+        <Text style={st.sectionTitle}>Бидний тухай</Text>
+        <Text style={st.paragraph}>
+          eSeller.mn нь худалдан авагч, дэлгүүрийн эзэн, борлуулагч, жолооч болон хамтрагчдыг
+          нэг платформд холбосон цахим худалдааны үйлчилгээ юм.
         </Text>
-        <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20 }}>
-          Бид escrow (3 хоногийн баталгаа), QPay/SocialPay төлбөр, live commerce,
-          loyalty оноо, BNPL зэрэг орчин үеийн тоглолтуудыг Монголын зах зээлд нэвтрүүлж байна.
+        <Text style={st.paragraph}>
+          Escrow баталгаа, QPay/SocialPay төлбөр, live commerce, loyalty оноо, BNPL зэрэг
+          шийдлээр Монголын жижиг, дунд бизнесийн цахим шилжилтийг дэмжинэ.
         </Text>
-        <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 20 }}>
-          Манай зорилго — Монголын жижиг, дунд бизнесийг цахим шилжилтэнд туслах,
-          хэрэглэгчдэд цаг хугацаа хэмнэсэн, найдвартай худалдан авалтын туршлагыг олгох.
+        <Text style={st.paragraph}>
+          Манай зорилго бол хэрэглэгчид найдвартай худалдан авалт хийх, бизнесүүд илүү хурдан
+          борлуулах, үйлчилгээний багууд нэг системээр ажиллах боломж бүрдүүлэх явдал.
         </Text>
-      </View>
+      </AppCard>
 
-      {/* Meta */}
-      <View
-        style={{
-          marginTop: 20,
-          alignSelf: 'stretch',
-          backgroundColor: C.bgCard,
-          borderRadius: R.lg,
-          padding: 14,
-          borderWidth: 0.5,
-          borderColor: C.border,
-          gap: 8,
-        }}
-      >
+      <AppCard style={st.card}>
         <MetaRow label="Байгуулагдсан" value="2024" />
         <MetaRow label="Хувилбар" value={`v${version}`} />
         <MetaRow label="Runtime" value={runtime} />
-        <MetaRow label="Платформ" value="iOS · Android" />
+        <MetaRow label="Платформ" value="iOS / Android / Web" />
+      </AppCard>
+
+      <View style={st.links}>
+        <SocialButton icon="globe-outline" label="Вэб" onPress={() => openLink('https://eseller.mn')} />
+        <SocialButton
+          icon="logo-facebook"
+          label="Facebook"
+          onPress={() => openLink('https://facebook.com/eseller.mn')}
+        />
+        <SocialButton
+          icon="logo-instagram"
+          label="Instagram"
+          onPress={() => openLink('https://instagram.com/eseller.mn')}
+        />
       </View>
 
-      {/* Links */}
-      <View style={{ marginTop: 24, flexDirection: 'row', gap: 12 }}>
-        <SocialBtn icon="globe-outline" label="Вэб" onPress={() => openLink('https://eseller.mn')} />
-        <SocialBtn icon="logo-facebook" label="Facebook" onPress={() => openLink('https://facebook.com/eseller.mn')} />
-        <SocialBtn icon="logo-instagram" label="Instagram" onPress={() => openLink('https://instagram.com/eseller.mn')} />
-      </View>
-
-      <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 30 }}>
-        © 2024–2026 eSeller LLC · Бүх эрх хуулиар хамгаалагдсан
-      </Text>
-    </ScrollView>
+      <Text style={st.footer}>© 2024-2026 eSeller LLC. Бүх эрх хуулиар хамгаалагдсан.</Text>
+    </AppScreen>
   );
 }
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-      <Text style={{ color: C.textSub, fontSize: 12 }}>{label}</Text>
-      <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{value}</Text>
+    <View style={st.metaRow}>
+      <Text style={st.metaLabel}>{label}</Text>
+      <Text style={st.metaValue}>{value}</Text>
     </View>
   );
 }
 
-function SocialBtn({
-  icon, label, onPress,
-}: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void }) {
+function SocialButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <TouchableOpacity
+      activeOpacity={0.86}
       onPress={onPress}
-      style={{
-        backgroundColor: C.bgCard,
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        alignItems: 'center',
-        gap: 4,
-        borderWidth: 0.5,
-        borderColor: C.border,
-        minWidth: 80,
-      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} холбоос нээх`}
+      style={st.socialButton}
     >
-      <Ionicons name={icon} size={20} color={C.brand} />
-      <Text style={{ fontSize: 11, color: C.text, fontWeight: '600' }}>{label}</Text>
+      <Ionicons name={icon} size={20} color={C.primary} />
+      <Text style={st.socialText}>{label}</Text>
     </TouchableOpacity>
   );
 }
+
+const st = StyleSheet.create({
+  hero: {
+    alignItems: 'center',
+    marginBottom: R.md,
+  },
+  logoBox: {
+    width: 82,
+    height: 82,
+    borderRadius: R.xl,
+    backgroundColor: C.brandDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: R.md,
+  },
+  brand: {
+    ...F.h1,
+    color: C.text,
+  },
+  tagline: {
+    ...F.small,
+    color: C.textSub,
+    textAlign: 'center',
+    marginTop: R.xs,
+    lineHeight: 18,
+  },
+  card: {
+    marginBottom: R.md,
+    gap: R.sm,
+  },
+  sectionTitle: {
+    ...F.h4,
+    color: C.text,
+  },
+  paragraph: {
+    ...F.small,
+    color: C.textSub,
+    lineHeight: 20,
+  },
+  metaRow: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: R.md,
+  },
+  metaLabel: {
+    ...F.small,
+    color: C.textSub,
+  },
+  metaValue: {
+    ...F.small,
+    color: C.text,
+    fontWeight: '800',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  links: {
+    flexDirection: 'row',
+    gap: R.sm,
+  },
+  socialButton: {
+    flex: 1,
+    minHeight: 52,
+    backgroundColor: C.bgCard,
+    borderRadius: UI.controlRadius,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: R.xs,
+  },
+  socialText: {
+    ...F.tiny,
+    color: C.text,
+    fontWeight: '800',
+  },
+  footer: {
+    ...F.tiny,
+    color: C.textMuted,
+    textAlign: 'center',
+    marginTop: R.lg,
+  },
+});

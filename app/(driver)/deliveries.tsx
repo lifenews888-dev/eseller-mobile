@@ -1,25 +1,65 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
-  RefreshControl, StyleSheet, Alert, ActivityIndicator,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { get, post } from '../../src/services/api';
-import { LogoutButton } from '../components/LogoutButton';
+import { LogoutButton } from '../../src/components/LogoutButton';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+
+type DeliveryTab = 'available' | 'mine';
+
+const TABS: Array<{ key: DeliveryTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: 'available', label: 'Авах боломжтой', icon: 'cube-outline' },
+  { key: 'mine', label: 'Миний хүргэлт', icon: 'car-outline' },
+];
+
+function normalizeDeliveryTab(value?: string | string[] | null): DeliveryTab {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === 'mine' ? 'mine' : 'available';
+}
+
+function money(value?: number | null) {
+  return `${(value ?? 0).toLocaleString('mn-MN')}₮`;
+}
 
 export default function DriverDeliveriesScreen() {
-  const [tab, setTab] = useState<'available' | 'mine'>('available');
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<DeliveryTab>(() => normalizeDeliveryTab(params.tab));
+  const [isFocused, setIsFocused] = useState(true);
+  const layout = useAppLayoutMetrics();
   const qc = useQueryClient();
 
-  const [isFocused, setIsFocused] = useState(true);
   useFocusEffect(
     useCallback(() => {
       setIsFocused(true);
       return () => setIsFocused(false);
     }, []),
   );
+
+  useEffect(() => {
+    setTab(normalizeDeliveryTab(params.tab));
+  }, [params.tab]);
+
+  const selectTab = (nextTab: DeliveryTab) => {
+    setTab(nextTab);
+    router.replace(
+      nextTab === 'available'
+        ? ('/driver/deliveries' as any)
+        : ({ pathname: '/driver/deliveries' as any, params: { tab: nextTab } } as any),
+    );
+  };
 
   const { data, isRefetching, refetch, isLoading } = useQuery<any>({
     queryKey: ['driver-orders', tab],
@@ -30,150 +70,243 @@ export default function DriverDeliveriesScreen() {
   const accept = useMutation({
     mutationFn: (id: string) => post(`/driver/orders/${id}/accept`),
     onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       qc.invalidateQueries({ queryKey: ['driver-orders'] });
-      setTab('mine');
+      selectTab('mine');
     },
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
+    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Захиалга авч чадсангүй.'),
   });
 
   const deliver = useMutation({
     mutationFn: (id: string) => post(`/driver/orders/${id}/deliver`),
     onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅', 'Хүргэлт амжилттай дуусгалаа!');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Амжилттай', 'Хүргэлт амжилттай дууслаа.');
       qc.invalidateQueries({ queryKey: ['driver-orders'] });
-      setTab('available');
+      selectTab('available');
     },
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
+    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Хүргэлт дуусгаж чадсангүй.'),
   });
 
   const orders: any[] = data?.data?.orders || data?.orders || [];
 
   return (
-    <View style={s.screen}>
-      {/* Top spacer — was a wrapper around RoleSwitcherBar; the bar was
-          removed for the production shell. Spacer kept for status-bar
-          clearance. */}
-      <View style={{ paddingTop: 44 }} />
-      <View style={[s.header, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-        <Text style={s.headerTitle}>🚚 Хүргэлтийн самбар</Text>
-        <LogoutButton variant="icon" />
+    <View style={styles.screen}>
+      <View style={[styles.headerShell, { paddingTop: layout.screenTop }]}>
+        <AppTopBar
+          eyebrow="Жолооч"
+          title="Самбар"
+          showBack={false}
+          right={<LogoutButton variant="icon" />}
+        />
+        <AppHeader
+          title="Хүргэлтийн самбар"
+          subtitle="Авах боломжтой болон өөрийн хүргэлтийн захиалгаа хянана."
+          icon="car-outline"
+          accent={C.driver}
+          style={styles.headerCard}
+        />
       </View>
 
-      <View style={s.tabs}>
-        <TouchableOpacity onPress={() => setTab('available')} style={[s.tab, tab === 'available' && s.tabActive]}>
-          <Text style={[s.tabText, tab === 'available' && s.tabTextActive]}>📦 Авах боломжтой</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setTab('mine')} style={[s.tab, tab === 'mine' && s.tabActive]}>
-          <Text style={[s.tabText, tab === 'mine' && s.tabTextActive]}>🚚 Миний хүргэлт</Text>
-        </TouchableOpacity>
+      <View style={styles.tabs}>
+        {TABS.map((item) => {
+          const active = tab === item.key;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              activeOpacity={0.86}
+              onPress={() => selectTab(item.key)}
+              style={[styles.tab, active && styles.tabActive]}
+            >
+              <Ionicons name={item.icon} size={16} color={active ? C.driver : C.textMuted} />
+              <Text style={[styles.tabText, active && styles.tabTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {isLoading ? (
-        <View style={s.center}>
-          <ActivityIndicator size="large" color="#1B3A5C" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={C.driver} />
         </View>
       ) : (
         <FlatList
           data={orders}
-          keyExtractor={(o: any) => o.id}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+          keyExtractor={(order: any, index) => String(order.id || order._id || index)}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.driver} />}
           contentContainerStyle={
             orders.length === 0
-              ? { flex: 1, alignItems: 'center', justifyContent: 'center' }
-              : { padding: 12, gap: 10 }
+              ? [styles.emptyList, { paddingBottom: layout.screenBottom }]
+              : [styles.listContent, { paddingBottom: layout.screenBottom }]
           }
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>{tab === 'available' ? '📭' : '✅'}</Text>
-              <Text style={{ color: '#888', fontSize: 14 }}>
-                {tab === 'available' ? 'Авах захиалга байхгүй' : 'Идэвхтэй хүргэлт байхгүй'}
-              </Text>
-            </View>
-          }
-          renderItem={({ item: o }: any) => {
-            const items: any[] = Array.isArray(o.items) ? o.items : [];
-            const buyer = o.buyer;
-            const shop = o.shop;
-            return (
-              <View style={s.card}>
-                <View style={s.cardHeader}>
-                  <Text style={s.orderId}>#{o.id.toString().slice(-6).toUpperCase()}</Text>
-                  <Text style={s.total}>{(o.total || 0).toLocaleString()}₮</Text>
-                </View>
-
-                {shop && <Text style={s.info}>🏪 {shop.name}</Text>}
-                {buyer && <Text style={s.info}>👤 {buyer.name || 'Хэрэглэгч'}</Text>}
-                {buyer?.phone && <Text style={s.info}>📞 {buyer.phone}</Text>}
-                {o.deliveryAddress && <Text style={s.info} numberOfLines={2}>📍 {o.deliveryAddress}</Text>}
-
-                <Text style={s.items} numberOfLines={2}>
-                  {items.map((i: any) => `${i.name || 'Бараа'} ×${i.quantity || 1}`).join(', ')}
-                </Text>
-
-                {tab === 'available' && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      Alert.alert(
-                        'Захиалга авах уу?',
-                        `#${o.id.toString().slice(-6).toUpperCase()}`,
-                        [
-                          { text: 'Болих', style: 'cancel' },
-                          { text: 'Авах', onPress: () => accept.mutate(o.id) },
-                        ]
-                      )
-                    }
-                    disabled={accept.isPending}
-                    style={s.acceptBtn}
-                  >
-                    <Text style={s.acceptBtnText}>📦 Захиалга авах</Text>
-                  </TouchableOpacity>
-                )}
-
-                {tab === 'mine' && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      Alert.alert(
-                        'Хүргэлт дуусгах уу?',
-                        'Хэрэглэгч хүлээн авсан уу?',
-                        [
-                          { text: 'Болих', style: 'cancel' },
-                          { text: 'Тийм, хүргэлээ', onPress: () => deliver.mutate(o.id) },
-                        ]
-                      )
-                    }
-                    disabled={deliver.isPending}
-                    style={[s.acceptBtn, { backgroundColor: '#3B6D11' }]}
-                  >
-                    <Text style={s.acceptBtnText}>✅ Хүргэлт дуусгах</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }}
+          ListEmptyComponent={<EmptyState tab={tab} />}
+          renderItem={({ item }) => (
+            <DeliveryCard
+              order={item}
+              tab={tab}
+              acceptPending={accept.isPending}
+              deliverPending={deliver.isPending}
+              onAccept={(id) => {
+                Alert.alert('Захиалга авах уу?', `#${id.toString().slice(-6).toUpperCase()}`, [
+                  { text: 'Болих', style: 'cancel' },
+                  { text: 'Авах', onPress: () => accept.mutate(id) },
+                ]);
+              }}
+              onDeliver={(id) => {
+                Alert.alert('Хүргэлт дуусгах уу?', 'Хэрэглэгч захиалгаа хүлээн авсан уу?', [
+                  { text: 'Болих', style: 'cancel' },
+                  { text: 'Тийм, хүргэлээ', onPress: () => deliver.mutate(id) },
+                ]);
+              }}
+            />
+          )}
         />
       )}
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F5F7FA' },
+function EmptyState({ tab }: { tab: DeliveryTab }) {
+  const available = tab === 'available';
+  return (
+    <AppCard style={styles.emptyCard}>
+      <Ionicons
+        name={available ? 'cube-outline' : 'checkmark-done-outline'}
+        size={42}
+        color={available ? C.textMuted : C.secondary}
+      />
+      <Text style={styles.emptyTitle}>
+        {available ? 'Авах захиалга байхгүй' : 'Идэвхтэй хүргэлт байхгүй'}
+      </Text>
+      <Text style={styles.emptyText}>
+        {available ? 'Шинэ хүргэлт орж ирэхэд энд харагдана.' : 'Авсан захиалгууд энэ хэсэгт байрлана.'}
+      </Text>
+    </AppCard>
+  );
+}
+
+function DeliveryCard({
+  order,
+  tab,
+  acceptPending,
+  deliverPending,
+  onAccept,
+  onDeliver,
+}: {
+  order: any;
+  tab: DeliveryTab;
+  acceptPending: boolean;
+  deliverPending: boolean;
+  onAccept: (id: string) => void;
+  onDeliver: (id: string) => void;
+}) {
+  const items: any[] = Array.isArray(order.items) ? order.items : [];
+  const buyer = order.buyer;
+  const shop = order.shop;
+  const id = String(order.id || order._id || '');
+
+  return (
+    <AppCard style={styles.orderCard}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.orderId}>#{id.slice(-6).toUpperCase()}</Text>
+        <Text style={styles.total}>{money(order.total)}</Text>
+      </View>
+
+      {shop ? <InfoLine icon="storefront-outline" label={shop.name} /> : null}
+      {buyer ? <InfoLine icon="person-outline" label={buyer.name || 'Хэрэглэгч'} /> : null}
+      {buyer?.phone ? <InfoLine icon="call-outline" label={buyer.phone} /> : null}
+      {order.deliveryAddress ? <InfoLine icon="location-outline" label={order.deliveryAddress} lines={2} /> : null}
+
+      <Text style={styles.items} numberOfLines={2}>
+        {items.length
+          ? items.map((item) => `${item.name || 'Бараа'} x${item.quantity || 1}`).join(', ')
+          : 'Барааны мэдээлэл байхгүй'}
+      </Text>
+
+      {tab === 'available' ? (
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={() => onAccept(id)}
+          disabled={acceptPending}
+          style={styles.acceptBtn}
+        >
+          <Ionicons name="cube-outline" size={16} color={C.bgCard} />
+          <Text style={styles.acceptBtnText}>{acceptPending ? 'Авч байна' : 'Захиалга авах'}</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={() => onDeliver(id)}
+          disabled={deliverPending}
+          style={[styles.acceptBtn, styles.deliverBtn]}
+        >
+          <Ionicons name="checkmark-done-outline" size={16} color={C.bgCard} />
+          <Text style={styles.acceptBtnText}>{deliverPending ? 'Дуусгаж байна' : 'Хүргэлт дуусгах'}</Text>
+        </TouchableOpacity>
+      )}
+    </AppCard>
+  );
+}
+
+function InfoLine({ icon, label, lines = 1 }: { icon: keyof typeof Ionicons.glyphMap; label: string; lines?: number }) {
+  return (
+    <View style={styles.infoLine}>
+      <Ionicons name={icon} size={14} color={C.textMuted} />
+      <Text style={styles.info} numberOfLines={lines}>{label}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { backgroundColor: '#1B3A5C', padding: 16, paddingTop: 52 },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#e5e5e5' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#1B3A5C' },
-  tabText: { fontSize: 12, color: '#888' },
-  tabTextActive: { color: '#1B3A5C', fontWeight: '600' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 0.5, borderColor: '#e5e5e5' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  orderId: { fontSize: 13, fontWeight: '600', color: '#1B3A5C' },
-  total: { fontSize: 14, fontWeight: '700', color: '#1B3A5C' },
-  info: { fontSize: 12, color: '#555', marginBottom: 3 },
-  items: { fontSize: 12, color: '#888', marginTop: 4, marginBottom: 10 },
-  acceptBtn: { backgroundColor: '#1B3A5C', borderRadius: 8, padding: 12, alignItems: 'center' },
-  acceptBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  headerShell: {
+    paddingHorizontal: UI.screenPad,
+    paddingBottom: R.sm,
+    backgroundColor: C.bg,
+  },
+  headerCard: { marginBottom: 0 },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: C.bgCard,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: C.border,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 46,
+    paddingVertical: R.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: R.xs,
+  },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: C.driver },
+  tabText: { ...F.tiny, color: C.textSub, fontWeight: '800' },
+  tabTextActive: { color: C.driver },
+  emptyList: { flexGrow: 1, padding: UI.screenPad, justifyContent: 'center' },
+  listContent: { padding: UI.screenPad, gap: R.sm },
+  emptyCard: { alignItems: 'center', paddingVertical: R.xxl },
+  emptyTitle: { ...F.body, color: C.text, fontWeight: '900', marginTop: R.sm },
+  emptyText: { ...F.small, color: C.textMuted, textAlign: 'center', marginTop: R.xs },
+  orderCard: { gap: R.xs },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: R.md },
+  orderId: { ...F.small, fontWeight: '900', color: C.driver },
+  total: { ...F.small, fontWeight: '900', color: C.driver },
+  infoLine: { flexDirection: 'row', alignItems: 'center', gap: R.xs },
+  info: { flex: 1, ...F.tiny, color: C.textSub },
+  items: { ...F.tiny, color: C.textMuted, lineHeight: 16, marginTop: R.xs },
+  acceptBtn: {
+    minHeight: 42,
+    backgroundColor: C.driver,
+    borderRadius: UI.controlRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: R.xs,
+    marginTop: R.sm,
+  },
+  deliverBtn: { backgroundColor: C.secondary },
+  acceptBtnText: { ...F.small, color: C.bgCard, fontWeight: '900' },
 });

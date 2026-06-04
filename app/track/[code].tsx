@@ -1,186 +1,226 @@
-import React, { useState, useCallback } from 'react'
-import {
-  View, Text, ScrollView,
-  TouchableOpacity,
-} from 'react-native'
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router'
-import { useQuery }   from '@tanstack/react-query'
-import { Ionicons }   from '@expo/vector-icons'
-import { get }        from '../../src/services/api'
-import { C, R, F }    from '../../src/shared/design'
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Linking, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { get } from '../../src/services/api';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const STEPS = [
-  { key:'PENDING',    label:'Захиалга хүлээгдэж байна',
-    icon:'time-outline' },
-  { key:'CONFIRMED',  label:'Захиалга баталгаажсан',
-    icon:'checkmark-circle-outline' },
-  { key:'PREPARING',  label:'Бараа бэлдэж байна',
-    icon:'cube-outline' },
-  { key:'DELIVERING', label:'Хүргэлтэнд гарсан',
-    icon:'car-outline' },
-  { key:'DELIVERED',  label:'Хүргэгдсэн',
-    icon:'checkmark-done-outline' },
-]
+  { key: 'PENDING', label: 'Захиалга хүлээгдэж байна', icon: 'time-outline' },
+  { key: 'CONFIRMED', label: 'Захиалга баталгаажсан', icon: 'checkmark-circle-outline' },
+  { key: 'PREPARING', label: 'Бараа бэлдэж байна', icon: 'cube-outline' },
+  { key: 'DELIVERING', label: 'Хүргэлтэнд гарсан', icon: 'car-outline' },
+  { key: 'DELIVERED', label: 'Хүргэгдсэн', icon: 'checkmark-done-outline' },
+] as const;
 
 export default function TrackScreen() {
-  const { code } = useLocalSearchParams()
+  const { code } = useLocalSearchParams();
+  const layout = useAppLayoutMetrics();
+  const [isFocused, setIsFocused] = useState(true);
 
-  const [isFocused, setIsFocused] = useState(true)
   useFocusEffect(
     useCallback(() => {
-      setIsFocused(true)
-      return () => setIsFocused(false)
+      setIsFocused(true);
+      return () => setIsFocused(false);
     }, []),
-  )
+  );
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['track', code],
-    queryFn:  () => get(`/tracking/${code}`),
+    queryFn: () => get(`/tracking/${code}`),
     refetchInterval: isFocused ? 30000 : false,
-  })
+    enabled: !!code,
+  });
 
-  const order       = data as any
-  const currentStep = STEPS.findIndex(
-    s => s.key === order?.status
-  )
+  const order = (data as any)?.data?.order || (data as any)?.order || data;
+  const rawStep = STEPS.findIndex((step) => step.key === String(order?.status || '').toLocaleUpperCase('en-US'));
+  const currentStep = rawStep >= 0 ? rawStep : 0;
+  const activeStep = STEPS[currentStep];
+  const orderKey = getOrderKey(order);
+
+  if (isLoading) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Захиалга" title={`#${String(code || '')}`} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={C.driver} />
+          <Text style={{ ...F.small, color: C.textSub, marginTop: R.md }}>Хүргэлтийн явц ачаалж байна...</Text>
+        </View>
+      </AppScreen>
+    );
+  }
+
+  if (!code || !order) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Хүргэлт" title="Хүргэлт шалгах" />
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+            <Ionicons name="navigate-circle-outline" size={48} color={C.textMuted} />
+            <Text style={{ ...F.h4, color: C.text, textAlign: 'center' }}>Хүргэлтийн мэдээлэл олдсонгүй</Text>
+            <Text style={{ ...F.small, color: C.textSub, textAlign: 'center' }}>
+              Tracking кодоо шалгаад дахин оруулна уу.
+            </Text>
+            <AppButton
+              label="Код дахин оруулах"
+              icon="search-outline"
+              style={{ backgroundColor: C.driver, borderColor: C.driver }}
+              onPress={() => router.replace('/track/search' as any)}
+            />
+          </AppCard>
+        </View>
+      </AppScreen>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <AppScreen contentContainerStyle={{ paddingBottom: layout.screenBottom + 96 }}>
+        <AppTopBar eyebrow="Захиалга" title={`#${String(code || '')}`} />
 
-      {/* Header */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center',
-        paddingTop: 52, paddingHorizontal: 16,
-        paddingBottom: 16, borderBottomWidth: 1,
-        borderBottomColor: C.border, gap: 12,
-      }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={C.text} />
-        </TouchableOpacity>
-        <Text style={{ ...F.h3, color: C.text }}>
-          Захиалга #{code}
-        </Text>
-      </View>
+        <AppHeader
+          title={`Захиалга #${String(code || '')}`}
+          subtitle="Хүргэлтийн явц 30 секунд тутам шинэчлэгдэнэ."
+          icon="navigate-circle-outline"
+          accent={C.driver}
+        />
 
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
-
-        {/* Status card */}
-        <View style={{
-          backgroundColor: C.bgCard, borderRadius: R.xl,
-          padding: 20, marginBottom: 24,
-          borderWidth: 1, borderColor: C.border, alignItems: 'center',
-        }}>
-          <View style={{
-            width: 72, height: 72, borderRadius: 36,
-            backgroundColor: C.secondary + '15',
-            alignItems: 'center', justifyContent: 'center',
-            marginBottom: 12,
-          }}>
-            <Ionicons
-              name={(STEPS[currentStep]?.icon || 'cube-outline') as any}
-              size={32} color={C.secondary}
-            />
-          </View>
-          <Text style={{ ...F.h3, color: C.text, textAlign: 'center' }}>
-            {STEPS[currentStep]?.label || 'Хүлээгдэж байна'}
-          </Text>
-          {order?.estimatedDelivery && (
-            <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 6 }}>
-              Тооцоолсон цаг:{' '}
-              {new Date(order.estimatedDelivery).toLocaleTimeString('mn-MN', {
-                hour: '2-digit', minute: '2-digit',
-              })}
-            </Text>
-          )}
+        <AppCard style={{ alignItems: 'center', gap: R.sm, marginBottom: R.md }}>
+        <View
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: R.full,
+            backgroundColor: C.driver + '16',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name={activeStep.icon} size={32} color={C.driver} />
         </View>
-
-        {/* Timeline */}
-        <View style={{
-          backgroundColor: C.bgCard, borderRadius: R.xl,
-          padding: 20, borderWidth: 1, borderColor: C.border,
-        }}>
-          <Text style={{ ...F.h4, color: C.text, marginBottom: 20 }}>
-            Хүргэлтийн явц
+        <Text style={{ ...F.h3, color: C.text, textAlign: 'center' }}>{activeStep.label}</Text>
+        {order?.estimatedDelivery ? (
+          <Text style={{ ...F.small, color: C.textMuted, textAlign: 'center' }}>
+            Тооцоолсон цаг: {new Date(order.estimatedDelivery).toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit' })}
           </Text>
+        ) : null}
+        </AppCard>
 
-          {STEPS.map((step, i) => {
-            const done    = i <= currentStep
-            const current = i === currentStep
-            return (
-              <View key={step.key} style={{ flexDirection: 'row' }}>
-                <View style={{
-                  alignItems: 'center', marginRight: 16, width: 24,
-                }}>
-                  <View style={{
-                    width: 24, height: 24, borderRadius: 12,
-                    backgroundColor: done ? C.secondary : C.bgSection,
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: done ? 0 : 1, borderColor: C.border, zIndex: 1,
-                  }}>
-                    {done && (
-                      <Ionicons name="checkmark" size={14} color={C.white} />
-                    )}
-                  </View>
-                  {i < STEPS.length - 1 && (
-                    <View style={{
-                      width: 2, flex: 1, minHeight: 32,
-                      backgroundColor: i < currentStep ? C.secondary : C.border,
-                      marginVertical: 4,
-                    }} />
-                  )}
+        <AppCard style={{ marginBottom: R.md }}>
+        <Text style={{ ...F.h4, color: C.text, marginBottom: R.md }}>Хүргэлтийн явц</Text>
+        {STEPS.map((step, index) => {
+          const done = index <= currentStep;
+          const current = index === currentStep;
+          return (
+            <View key={step.key} style={{ flexDirection: 'row' }}>
+              <View style={{ alignItems: 'center', marginRight: R.md, width: 24 }}>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: R.full,
+                    backgroundColor: done ? C.driver : C.bgSection,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: done ? 0 : 1,
+                    borderColor: C.border,
+                    zIndex: 1,
+                  }}
+                >
+              {done ? <Ionicons name="checkmark" size={14} color={C.bgCard} /> : null}
                 </View>
-                <View style={{
-                  flex: 1, paddingBottom: i < STEPS.length - 1 ? 24 : 0,
-                }}>
-                  <Text style={{
-                    color: done ? C.text : C.textMuted,
-                    fontWeight: current ? '700' : '400', fontSize: 14,
-                  }}>
-                    {step.label}
-                  </Text>
-                  {current && (
-                    <Text style={{ color: C.secondary, fontSize: 12, marginTop: 2 }}>
-                      Одоогийн төлөв
-                    </Text>
-                  )}
-                </View>
+                {index < STEPS.length - 1 ? (
+                  <View
+                    style={{
+                      width: 2,
+                      flex: 1,
+                      minHeight: 32,
+                      backgroundColor: index < currentStep ? C.driver : C.border,
+                      marginVertical: R.xs,
+                    }}
+                  />
+                ) : null}
               </View>
-            )
-          })}
-        </View>
+              <View style={{ flex: 1, paddingBottom: index < STEPS.length - 1 ? R.xl : 0 }}>
+                <Text style={{ ...F.small, color: done ? C.text : C.textMuted, fontWeight: current ? '900' : '500' }}>
+                  {step.label}
+                </Text>
+                {current ? <Text style={{ ...F.tiny, color: C.driver, marginTop: 2 }}>Одоогийн төлөв</Text> : null}
+              </View>
+            </View>
+          );
+        })}
+        </AppCard>
 
-        {/* Driver info */}
-        {order?.driver && (
-          <View style={{
-            backgroundColor: C.bgCard, borderRadius: R.xl,
-            padding: 16, marginTop: 16,
-            borderWidth: 1, borderColor: C.border,
-            flexDirection: 'row', alignItems: 'center', gap: 12,
-          }}>
-            <View style={{
-              width: 48, height: 48, borderRadius: 24,
-              backgroundColor: C.driver + '20',
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Ionicons name="person" size={24} color={C.driver} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontWeight: '700' }}>
-                {order.driver.name}
-              </Text>
-              <Text style={{ color: C.textMuted, fontSize: 13 }}>
-                Жолооч
-              </Text>
-            </View>
-            <TouchableOpacity style={{
-              backgroundColor: C.secondary + '15', borderRadius: R.full,
-              padding: 10, borderWidth: 1, borderColor: C.secondary + '30',
-            }}>
-              <Ionicons name="call" size={20} color={C.secondary} />
-            </TouchableOpacity>
+        {order?.driver ? (
+          <AppCard style={{ flexDirection: 'row', alignItems: 'center', gap: R.md }}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: R.full,
+              backgroundColor: C.driver + '18',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="person-outline" size={24} color={C.driver} />
           </View>
-        )}
-      </ScrollView>
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>{order.driver.name}</Text>
+            <Text style={{ ...F.tiny, color: C.textMuted }}>Жолооч</Text>
+          </View>
+          {order.driver.phone ? (
+            <AppButton
+              label="Залгах"
+              icon="call-outline"
+              variant="ghost"
+              onPress={() => Linking.openURL(`tel:${order.driver.phone}`)}
+              style={{ minHeight: 38, paddingVertical: 6 }}
+            />
+          ) : null}
+          </AppCard>
+        ) : null}
+      </AppScreen>
+
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          flexDirection: 'row',
+          gap: R.sm,
+          backgroundColor: C.bgCard,
+          padding: UI.screenPad,
+          paddingBottom: layout.insets.bottom + R.lg,
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+        }}
+      >
+        <AppButton
+          label="Өөр код"
+          icon="search-outline"
+          variant="ghost"
+          style={{ flex: 1 }}
+          onPress={() => router.push('/track/search' as any)}
+        />
+        {orderKey ? (
+          <AppButton
+            label="Захиалга"
+            icon="receipt-outline"
+            style={{ flex: 1.2, backgroundColor: C.driver, borderColor: C.driver }}
+            onPress={() => router.push(`/order/${orderKey}` as any)}
+          />
+        ) : null}
+      </View>
     </View>
-  )
+  );
+}
+
+function getOrderKey(order: any) {
+  const key = order?._id ?? order?.id ?? order?.orderId;
+  return key ? String(key) : '';
 }

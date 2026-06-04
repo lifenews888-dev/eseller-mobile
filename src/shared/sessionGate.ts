@@ -20,7 +20,7 @@
 //
 // All steps log under [gate] in __DEV__.
 
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secureStore';
 import {
   authenticateWithBiometric,
   isBiometricAvailable,

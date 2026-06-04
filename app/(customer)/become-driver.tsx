@@ -1,64 +1,82 @@
 import React, { useState } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native'
-import { Stack, router } from 'expo-router'
+import { Stack } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { post } from '../../src/services/api'
-import { useAuth } from '../../src/store/auth'
-import { C, R } from '../../src/shared/design'
+import * as Haptics from 'expo-haptics'
+import { C, R, F, UI } from '../../src/shared/design'
+import { AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
 
 const VEHICLE_TYPES = [
-  { id: 'motorbike', label: 'Мотоцикл', icon: '🏍' },
-  { id: 'car',       label: 'Авто',     icon: '🚗' },
-  { id: 'van',       label: 'Ван',      icon: '🚐' },
-  { id: 'truck',     label: 'Ачааны',   icon: '🚚' },
+  { id: 'car', label: 'Машин', icon: 'car-outline' },
+  { id: 'motorbike', label: 'Мото', icon: 'bicycle-outline' },
+  { id: 'bike', label: 'Дугуй', icon: 'walk-outline' },
+]
+
+const REQUIREMENTS = [
+  'Монгол иргэний үнэмлэх',
+  'Тээврийн хэрэгсэл',
+  'Ухаалаг утас',
+  '18 нас хүрсэн',
+  'Цагдаагийн тодорхойлолт',
+]
+
+const STATS = [
+  { value: '3,000₮', label: 'Хүргэлт бүрт' },
+  { value: '10+', label: 'Хүргэлт/өдөр' },
+  { value: '900,000₮', label: 'Сарын боломжит орлого' },
 ]
 
 export default function BecomeDriver() {
-  const { restoreSession } = useAuth() as any
-  const [name, setName]       = useState('')
-  const [phone, setPhone]     = useState('')
-  const [password, setPass]   = useState('')
-  const [licenseNumber, setLicense] = useState('')
-  const [vehicle, setVehicle] = useState('motorbike')
+  const layout = useAppLayoutMetrics()
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [plate, setPlate] = useState('')
+  const [vehicle, setVehicle] = useState(VEHICLE_TYPES[0].id)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {
-    if (!name.trim() || !phone.trim() || !password) {
-      Alert.alert('Дутуу', 'Нэр, утас, нууц үг оруулна уу')
+    if (!name.trim() || !phone.trim() || !email.trim() || !plate.trim()) {
+      Alert.alert('Анхаар', 'Нэр, утас, имэйл, улсын дугаараа бөглөнө үү.')
       return
     }
-    if (password.length < 6) {
-      Alert.alert('Алдаа', 'Нууц үг 6+ тэмдэгт байх ёстой')
-      return
-    }
-    if (!licenseNumber.trim()) {
-      Alert.alert('Дутуу', 'Жолооны үнэмлэхний дугаар оруулна уу')
-      return
-    }
+
+    const selectedVehicle =
+      VEHICLE_TYPES.find((item) => item.id === vehicle)?.label ?? vehicle
+    const body = encodeURIComponent(
+      [
+        `Нэр: ${name.trim()}`,
+        `Утас: ${phone.trim()}`,
+        `Имэйл: ${email.trim()}`,
+        `Улсын дугаар: ${plate.trim().toUpperCase()}`,
+        `Тээврийн хэрэгсэл: ${selectedVehicle}`,
+      ].join('\n'),
+    )
+
     setSubmitting(true)
     try {
-      const res: any = await post('/auth/register', {
-        name: name.trim(),
-        phone: phone.trim(),
-        password,
-        role: 'delivery',
-        // Driver-specific (backend хадгалахгүй ч ирээдүйд хадгалах боломжтой)
-        licenseNumber: licenseNumber.trim(),
-        vehicleType: vehicle,
-      })
-      if (res?.token) {
-        await restoreSession(res.token)
-        Alert.alert('Амжилттай', 'Жолооч бүртгэгдлээ. Захиалга хүлээн авах боломжтой.', [
-          { text: 'OK', onPress: () => router.replace('/(driver)/deliveries' as any) },
-        ])
-      } else {
-        throw new Error('Token буцаагдсангүй')
-      }
+      await Linking.openURL(
+        `mailto:info@eseller.mn?subject=eSeller%20жолооч%20болох%20хүсэлт&body=${body}`,
+      )
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      setName('')
+      setPhone('')
+      setEmail('')
+      setPlate('')
+      setVehicle(VEHICLE_TYPES[0].id)
     } catch (e: any) {
-      Alert.alert('Алдаа', e?.message || 'Бүртгэл амжилтгүй')
+      Alert.alert('Алдаа', e?.message || 'Хүсэлт илгээх боломжгүй байна.')
     } finally {
       setSubmitting(false)
     }
@@ -66,159 +84,183 @@ export default function BecomeDriver() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Жолооч болох', headerBackTitle: '' }} />
+      <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: C.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+        <ScrollView
+          contentContainerStyle={{ padding: R.lg, paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }}
+        >
+          <AppTopBar eyebrow="Хүргэлт" title="Жолооч болох" showBack={false} />
+          <AppHeader
+            title="Жолооч болох"
+            subtitle="Чөлөөт цагтаа хүргэлт хийж нэмэлт орлого олох хүсэлт илгээнэ."
+            icon="car-outline"
+            accent={C.driver}
+          />
 
-          {/* Header */}
-          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <Text style={{ fontSize: 48 }}>🚚</Text>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: C.text, marginTop: 8 }}>
-              Жолооч болох
-            </Text>
-            <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4, textAlign: 'center' }}>
-              Хүргэлт бүрт 3,000₮+, өдөр бүр payout
-            </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            {STATS.map((item) => (
+              <View
+                key={item.label}
+                style={{
+                  flex: 1,
+                  backgroundColor: C.bgCard,
+                  borderRadius: R.lg,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  padding: 12,
+                }}
+              >
+                <Text style={{ color: C.driver, fontSize: 15, fontWeight: '900' }}>
+                  {item.value}
+                </Text>
+                <Text style={{ color: C.textMuted, fontSize: 10, marginTop: 3 }}>
+                  {item.label}
+                </Text>
+              </View>
+            ))}
           </View>
 
-          {/* Name */}
-          <View>
-            <Text style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>Овог нэр *</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Б. Болд"
-              placeholderTextColor={C.textMuted}
-              style={{
-                backgroundColor: C.bgCard, borderRadius: R.lg,
-                paddingHorizontal: 14, height: 46,
-                color: C.text, fontSize: 14,
-                borderWidth: 0.5, borderColor: C.border,
-              }}
-            />
+          <Text style={{ ...F.h3, color: C.text, marginBottom: 10 }}>Шаардлага</Text>
+          <View style={{ gap: 8, marginBottom: 18 }}>
+            {REQUIREMENTS.map((item) => (
+              <View
+                key={item}
+                style={{
+                  backgroundColor: C.bgCard,
+                  borderRadius: R.lg,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  padding: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={19} color={C.driver} />
+                <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>
+                  {item}
+                </Text>
+              </View>
+            ))}
           </View>
 
-          {/* Phone */}
-          <View>
-            <Text style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>Утас *</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="99001122"
-              placeholderTextColor={C.textMuted}
-              keyboardType="number-pad"
-              maxLength={8}
-              style={{
-                backgroundColor: C.bgCard, borderRadius: R.lg,
-                paddingHorizontal: 14, height: 46,
-                color: C.text, fontSize: 14,
-                borderWidth: 0.5, borderColor: C.border,
-              }}
-            />
-          </View>
+          <Text style={{ ...F.h3, color: C.text, marginBottom: 10 }}>
+            Жолооч болох хүсэлт
+          </Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Нэр"
+            placeholderTextColor={C.textMuted}
+            style={inputStyle}
+          />
+          <TextInput
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Утас"
+            placeholderTextColor={C.textMuted}
+            keyboardType="phone-pad"
+            maxLength={8}
+            style={inputStyle}
+          />
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Имэйл"
+            placeholderTextColor={C.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={inputStyle}
+          />
+          <TextInput
+            value={plate}
+            onChangeText={setPlate}
+            placeholder="Улсын дугаар"
+            placeholderTextColor={C.textMuted}
+            autoCapitalize="characters"
+            style={inputStyle}
+          />
 
-          {/* Password */}
-          <View>
-            <Text style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>Нууц үг (6+ тэмдэгт) *</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPass}
-              placeholder="••••••"
-              placeholderTextColor={C.textMuted}
-              secureTextEntry
-              style={{
-                backgroundColor: C.bgCard, borderRadius: R.lg,
-                paddingHorizontal: 14, height: 46,
-                color: C.text, fontSize: 14,
-                borderWidth: 0.5, borderColor: C.border,
-              }}
-            />
-          </View>
-
-          {/* License */}
-          <View>
-            <Text style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>Жолооны үнэмлэх *</Text>
-            <TextInput
-              value={licenseNumber}
-              onChangeText={setLicense}
-              placeholder="AA12345678"
-              placeholderTextColor={C.textMuted}
-              autoCapitalize="characters"
-              style={{
-                backgroundColor: C.bgCard, borderRadius: R.lg,
-                paddingHorizontal: 14, height: 46,
-                color: C.text, fontSize: 14,
-                borderWidth: 0.5, borderColor: C.border,
-              }}
-            />
-          </View>
-
-          {/* Vehicle type */}
-          <View>
-            <Text style={{ fontSize: 12, color: C.textSub, marginBottom: 8 }}>Тээврийн хэрэгсэл</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {VEHICLE_TYPES.map(v => (
+          <Text style={{ color: C.textSub, fontSize: 13, fontWeight: '800', marginBottom: 8 }}>
+            Тээврийн хэрэгсэл
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            {VEHICLE_TYPES.map((item) => {
+              const active = vehicle === item.id
+              return (
                 <TouchableOpacity
-                  key={v.id}
-                  onPress={() => setVehicle(v.id)}
+                  key={item.id}
+                  onPress={() => setVehicle(item.id)}
                   style={{
-                    flex: 1, minWidth: '46%',
-                    paddingVertical: 14,
+                    flex: 1,
+                    backgroundColor: active ? C.driver + '18' : C.bgCard,
                     borderRadius: R.lg,
-                    backgroundColor: vehicle === v.id ? '#EA580C' : C.bgCard,
+                    borderWidth: 1,
+                    borderColor: active ? C.driver : C.border,
+                    padding: 12,
                     alignItems: 'center',
-                    borderWidth: 0.5,
-                    borderColor: vehicle === v.id ? '#EA580C' : C.border,
-                    gap: 4,
+                    gap: 6,
                   }}
                 >
-                  <Text style={{ fontSize: 24 }}>{v.icon}</Text>
-                  <Text style={{
-                    fontSize: 12, fontWeight: '700',
-                    color: vehicle === v.id ? '#fff' : C.textSub,
-                  }}>
-                    {v.label}
+                  <Ionicons
+                    name={item.icon as any}
+                    size={22}
+                    color={active ? C.driver : C.textMuted}
+                  />
+                  <Text
+                    style={{
+                      color: active ? C.driver : C.textSub,
+                      fontSize: 12,
+                      fontWeight: '800',
+                    }}
+                  >
+                    {item.label}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              )
+            })}
           </View>
 
-          {/* Submit */}
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={submitting}
             style={{
-              backgroundColor: submitting ? C.border : '#EA580C',
+              backgroundColor: submitting ? C.textMuted : C.driver,
               borderRadius: R.lg,
-              height: 50,
+              minHeight: 52,
               alignItems: 'center',
               justifyContent: 'center',
-              marginTop: 8,
               flexDirection: 'row',
               gap: 8,
             }}
           >
             {submitting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={C.bgCard} />
             ) : (
               <>
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>
-                  Бүртгүүлэх
+                <Text style={{ color: C.bgCard, fontSize: 15, fontWeight: '900' }}>
+                  Хүсэлт илгээх
                 </Text>
+                <Ionicons name="arrow-forward" size={18} color={C.bgCard} />
               </>
             )}
           </TouchableOpacity>
-
-          <Text style={{ fontSize: 11, color: C.textMuted, textAlign: 'center', marginTop: 4 }}>
-            24 цагт баталгаажуулалт хийгдэж, захиалга хүлээн авч эхэлнэ
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </>
   )
+}
+
+const inputStyle = {
+  backgroundColor: C.bgCard,
+  borderRadius: R.lg,
+  padding: 14,
+  color: C.text,
+  fontSize: 14,
+  borderWidth: 1,
+  borderColor: C.border,
+  marginBottom: 10,
 }

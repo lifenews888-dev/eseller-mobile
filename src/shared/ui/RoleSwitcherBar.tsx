@@ -2,31 +2,34 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth, type AppRole } from '../../store/auth';
 import { useMalchnaasEnabled } from '../../config/remoteFlags';
-import { C, R } from '../design';
+import { C, R, UI } from '../design';
+
+type IconName = keyof typeof Ionicons.glyphMap;
 
 type RolePill = {
   key:   AppRole;
-  icon:  string;
+  icon:  IconName;
   label: string;
   color: string;
   route: string;
 };
 
 const BASE_ROLES: readonly RolePill[] = [
-  { key: 'BUYER',  icon: '🛍️', label: 'Авагч',      color: C.buyer,  route: '/(tabs)'              },
-  { key: 'STORE',  icon: '🏪', label: 'Дэлгүүр',    color: C.store,  route: '/(owner)/dashboard'   },
-  { key: 'SELLER', icon: '📢', label: 'Борлуулагч', color: C.seller, route: '/(seller)/dashboard'  },
-  { key: 'DRIVER', icon: '🚚', label: 'Жолооч',     color: C.driver, route: '/(driver)/deliveries' },
+  { key: 'BUYER',  icon: 'bag-handle-outline', label: 'Авагч',      color: C.buyer,  route: '/'              },
+  { key: 'STORE',  icon: 'storefront-outline',  label: 'Дэлгүүр',    color: C.store,  route: '/owner/dashboard'   },
+  { key: 'SELLER', icon: 'megaphone-outline',   label: 'Борлуулагч', color: C.seller, route: '/seller/dashboard'  },
+  { key: 'DRIVER', icon: 'car-outline',         label: 'Жолооч',     color: C.driver, route: '/driver/deliveries' },
 ];
 
 const HERDER_PILL: RolePill = {
-  key: 'HERDER', icon: '🐑', label: 'Малчин', color: C.herder, route: '/(herder)/dashboard',
+  key: 'HERDER', icon: 'leaf-outline', label: 'Малчин', color: C.herder, route: '/herder-admin/dashboard',
 };
 
 const COORDINATOR_PILL: RolePill = {
-  key: 'COORDINATOR', icon: '🧭', label: 'Координатор', color: C.herder, route: '/(coordinator)/dashboard',
+  key: 'COORDINATOR', icon: 'compass-outline', label: 'Координатор', color: C.herder, route: '/coordinator/dashboard',
 };
 
 /**
@@ -59,16 +62,17 @@ export function RoleSwitcherBar() {
     <View
       style={{
         flexDirection: 'row',
-        gap: 6,
-        paddingHorizontal: 12,
+        gap: R.xs,
+        paddingHorizontal: UI.screenPad,
         paddingVertical: 8,
         backgroundColor: C.bgCard,
-        borderBottomWidth: 0.5,
+        borderBottomWidth: 1,
         borderBottomColor: C.border,
       }}
     >
       {ROLES.map((r) => {
         const active = role === r.key;
+        const foreground = active ? C.bgCard : r.color;
         return (
           <TouchableOpacity
             key={r.key}
@@ -76,22 +80,25 @@ export function RoleSwitcherBar() {
             activeOpacity={0.75}
             style={{
               flex: 1,
+              minHeight: 54,
               backgroundColor: active ? r.color : C.bgSection,
               borderWidth: 1,
               borderColor: active ? r.color : C.border,
               borderRadius: R.full,
-              paddingVertical: 8,
+              paddingVertical: 7,
               alignItems: 'center',
-              gap: 2,
+              justifyContent: 'center',
+              gap: 3,
             }}
           >
-            <Text style={{ fontSize: 16 }}>{r.icon}</Text>
+            <Ionicons name={r.icon} size={18} color={foreground} />
             <Text
               style={{
-                color: active ? '#fff' : C.textSub,
+                color: active ? C.bgCard : C.textSub,
                 fontSize: 10,
-                fontWeight: '700',
+                fontWeight: '800',
               }}
+              numberOfLines={1}
             >
               {r.label}
             </Text>

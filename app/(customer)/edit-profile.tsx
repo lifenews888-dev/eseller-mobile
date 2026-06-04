@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Stack } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { put } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
-import { C, R, F } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 export default function EditProfileScreen() {
   const { user } = useAuth();
@@ -15,44 +17,164 @@ export default function EditProfileScreen() {
 
   const saveMut = useMutation({
     mutationFn: (data: any) => put('/user/profile', data),
-    onSuccess: () => Alert.alert('Амжилттай', 'Профайл хадгалагдлаа'),
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
+    onSuccess: () => Alert.alert('Амжилттай', 'Профайл хадгалагдлаа.'),
+    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Профайл хадгалж чадсангүй.'),
   });
 
   const pickAvatar = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: true, aspect: [1, 1] });
-    if (!r.canceled) setAvatar(r.assets[0].uri);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (!result.canceled) setAvatar(result.assets[0].uri);
+  };
+
+  const save = () => {
+    if (!name.trim()) {
+      Alert.alert('Нэр оруулна уу');
+      return;
+    }
+    saveMut.mutate({ name: name.trim(), phone: phone.trim() });
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: R.lg, paddingBottom: 60 }}>
-      <TouchableOpacity style={st.avatarWrap} onPress={pickAvatar}>
-        {avatar ? <Image source={{ uri: avatar }} style={st.avatarImg} /> : <Ionicons name="person" size={40} color={C.textMuted} />}
-        <View style={st.cameraIcon}><Ionicons name="camera" size={14} color={C.white} /></View>
-      </TouchableOpacity>
+    <AppScreen keyboardShouldPersistTaps="handled">
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppTopBar eyebrow="Профайл" title="Профайл засах" showBack={false} />
+      <AppHeader
+        title="Профайл засах"
+        subtitle="Нэр, утас болон зураг зэрэг үндсэн мэдээллээ шинэчилнэ."
+        icon="person-outline"
+        accent={C.primary}
+      />
 
-      <Text style={st.label}>Нэр</Text>
-      <TextInput style={st.input} value={name} onChangeText={setName} placeholderTextColor={C.textMuted} />
+      <AppCard style={styles.avatarCard}>
+        <TouchableOpacity activeOpacity={0.86} style={styles.avatarWrap} onPress={pickAvatar}>
+          {avatar ? (
+            <Image source={{ uri: avatar }} style={styles.avatarImg} />
+          ) : (
+            <Ionicons name="person-outline" size={40} color={C.textMuted} />
+          )}
+          <View style={styles.cameraIcon}>
+                <Ionicons name="camera-outline" size={15} color={C.bgCard} />
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.avatarTitle}>{user?.name || 'Хэрэглэгч'}</Text>
+        <Text style={styles.avatarSub}>{user?.email || user?.phone || 'Профайлын мэдээлэл'}</Text>
+      </AppCard>
 
-      <Text style={st.label}>Утас</Text>
-      <TextInput style={st.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholderTextColor={C.textMuted} />
+      <AppCard style={styles.formCard}>
+        <Field label="Нэр" icon="person-outline" value={name} onChangeText={setName} placeholder="Таны нэр" />
+        <Field label="Утас" icon="call-outline" value={phone} onChangeText={setPhone} placeholder="Утасны дугаар" keyboardType="phone-pad" />
 
-      <Text style={st.label}>Имэйл</Text>
-      <View style={[st.input, { backgroundColor: C.bgSection }]}><Text style={{ color: C.textMuted }}>{user?.email || '-'}</Text></View>
+        <Text style={styles.label}>Имэйл</Text>
+        <View style={styles.readonlyField}>
+          <Ionicons name="mail-outline" size={18} color={C.textMuted} />
+          <Text style={styles.readonlyText}>{user?.email || '-'}</Text>
+        </View>
+      </AppCard>
 
-      <TouchableOpacity style={[st.saveBtn, saveMut.isPending && { opacity: 0.5 }]}
-        onPress={() => saveMut.mutate({ name, phone })} disabled={saveMut.isPending}>
-        {saveMut.isPending ? <ActivityIndicator color={C.white} /> : <Text style={{ ...F.body, color: C.white, fontWeight: '800' }}>Хадгалах</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+      <AppButton
+        label={saveMut.isPending ? 'Хадгалж байна' : 'Хадгалах'}
+        icon="checkmark"
+        disabled={saveMut.isPending}
+        onPress={save}
+      />
+
+      {saveMut.isPending ? <ActivityIndicator color={C.brand} style={styles.saving} /> : null}
+    </AppScreen>
   );
 }
 
-const st = StyleSheet.create({
-  avatarWrap: { width: 100, height: 100, borderRadius: 50, backgroundColor: C.bgCard, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: R.xxl, borderWidth: 2, borderColor: C.border },
-  avatarImg: { width: 100, height: 100, borderRadius: 50 },
-  cameraIcon: { position: 'absolute', bottom: 0, right: 0, backgroundColor: C.primary, borderRadius: 12, padding: 4 },
-  label: { ...F.small, color: C.textSub, fontWeight: '600', marginBottom: 6, marginTop: R.md },
-  input: { backgroundColor: C.bgCard, borderRadius: R.md, padding: 14, color: C.white, fontSize: 14, borderWidth: 0.5, borderColor: C.border },
-  saveBtn: { backgroundColor: C.brand, borderRadius: 14, padding: R.lg, alignItems: 'center', marginTop: R.xxl },
+function Field({
+  label,
+  icon,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  keyboardType?: 'default' | 'phone-pad';
+}) {
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.inputWrap}>
+        <Ionicons name={icon} size={18} color={C.textMuted} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={C.textMuted}
+          keyboardType={keyboardType}
+          style={styles.input}
+        />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  avatarCard: { alignItems: 'center', marginBottom: R.md },
+  avatarWrap: {
+    width: 104,
+    height: 104,
+    borderRadius: R.full,
+    backgroundColor: C.bgSection,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  avatarImg: { width: 104, height: 104, borderRadius: R.full },
+  cameraIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: R.full,
+    backgroundColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: C.bgCard,
+  },
+  avatarTitle: { ...F.h4, color: C.text, marginTop: R.md },
+  avatarSub: { ...F.small, color: C.textMuted, marginTop: 2 },
+  formCard: { marginBottom: R.md },
+  fieldBlock: { marginBottom: R.md },
+  label: { ...F.small, color: C.textSub, fontWeight: '900', marginBottom: R.sm },
+  inputWrap: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  input: { flex: 1, color: C.text, fontSize: 14, paddingVertical: R.sm },
+  readonlyField: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  readonlyText: { ...F.small, color: C.textMuted },
+  saving: { marginTop: R.md },
 });

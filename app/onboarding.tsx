@@ -1,111 +1,198 @@
-import { useState, useRef } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native'
-import { router } from 'expo-router'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Ionicons } from '@expo/vector-icons'
-import * as Haptics from 'expo-haptics'
-import { R } from '../src/shared/design'
-
-const { width } = Dimensions.get('window')
+import { useRef, useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { C, F, R, UI } from '../src/shared/design';
 
 const SLIDES = [
   {
     icon: 'storefront' as const,
-    color: '#E8242C',
-    title: 'Монголын хамгийн том зах зээл',
-    desc: '10,000+ бараа, 500+ дэлгүүр нэг дор. Хурдан хайж, аюулгүй худалдаа хий.',
-    bg: '#1a0505',
+    color: C.brand,
+    title: 'Монголын нэгдсэн зах зээл',
+    desc: 'Бараа, дэлгүүр, зар, хүргэлт нэг дор. Хурдан хайж, найдвартай худалдан авалт хийнэ.',
+    bg: C.brandDim,
   },
   {
     icon: 'people' as const,
-    color: '#1A73E8',
-    title: '4 дүрийн систем',
-    desc: 'Худалдан авагч, дэлгүүрийн эзэн, борлуулагч, жолооч — нэг аппаас бүгдийг удирд.',
-    bg: '#05101a',
+    color: C.primary,
+    title: 'Нэг аккаунт, олон үүрэг',
+    desc: 'Худалдан авагч, дэлгүүр эзэн, борлуулагч, жолооч нэг апп дотроо уялдан ажиллана.',
+    bg: C.primaryDim,
   },
   {
     icon: 'shield-checkmark' as const,
-    color: '#34A853',
-    title: 'Аюулгүй Escrow төлбөр',
-    desc: '3 өдрийн дундын данс хамгаалалт. Бараа хүргэгдсэний дараа л мөнгө шилждэг.',
-    bg: '#05150a',
+    color: C.secondary,
+    title: 'Ил тод төлбөр ба захиалга',
+    desc: 'Захиалгын төлөв, төлбөр, хүргэлтийн мэдээлэл ойлгомжтой, нэг стандарт урсгалтай.',
+    bg: C.secondaryDim,
   },
   {
     icon: 'car' as const,
-    color: '#7C3AED',
-    title: '2-4 цагт хүргэлт',
-    desc: 'Өөрийн жолооч систем. 50,000₮-с дээш захиалгад үнэгүй хүргэлт.',
-    bg: '#0d0520',
+    color: C.driver,
+    title: 'Хүргэлтээ хянахад амар',
+    desc: 'Хот доторх хүргэлт, жолоочийн урсгал, худалдан авагчийн мэдээлэл нэг системд харагдана.',
+    bg: `${C.driver}14`,
   },
-]
+];
 
 export default function Onboarding() {
-  const scrollRef = useRef<ScrollView>(null)
-  const [idx, setIdx] = useState(0)
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const [idx, setIdx] = useState(0);
+
+  const finish = async () => {
+    await AsyncStorage.setItem('onboarded', 'true');
+    router.replace('/login');
+  };
 
   const next = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (idx < SLIDES.length - 1) {
-      scrollRef.current?.scrollTo({ x: (idx + 1) * width, animated: true })
-      setIdx(idx + 1)
-    } else {
-      await AsyncStorage.setItem('onboarded', 'true')
-      router.replace('/(auth)/login')
+      scrollRef.current?.scrollTo({ x: (idx + 1) * width, animated: true });
+      setIdx((value) => value + 1);
+      return;
     }
-  }
+    await finish();
+  };
 
   const skip = async () => {
-    await AsyncStorage.setItem('onboarded', 'true')
-    router.replace('/(auth)/login')
-  }
+    await finish();
+  };
+
+  const active = SLIDES[idx];
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
-      <ScrollView ref={scrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEnabled={false}>
-        {SLIDES.map((s, i) => (
-          <View key={i} style={{ width, flex: 1, backgroundColor: s.bg, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-            <View
-              style={{
-                width: 120, height: 120, borderRadius: 60,
-                backgroundColor: s.color + '20', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 32, borderWidth: 2, borderColor: s.color + '40',
-              }}
-            >
-              <Ionicons name={s.icon} size={52} color={s.color} />
+    <View style={styles.screen}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + R.sm, R.lg) }]}>
+        <Text style={styles.logo}>
+          eseller<Text style={{ color: C.brand }}>.mn</Text>
+        </Text>
+        {idx < SLIDES.length - 1 ? (
+          <TouchableOpacity activeOpacity={0.86} onPress={skip} style={styles.skipButton}>
+            <Text style={styles.skipText}>Алгасах</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEnabled={false}
+        style={styles.slider}
+      >
+        {SLIDES.map((slide) => (
+          <View key={slide.title} style={[styles.slide, { width, backgroundColor: slide.bg }]}>
+            <View style={[styles.iconWrap, { backgroundColor: `${slide.color}18`, borderColor: `${slide.color}33` }]}>
+              <Ionicons name={slide.icon} size={52} color={slide.color} />
             </View>
-            <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 16, lineHeight: 34 }}>{s.title}</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 16, textAlign: 'center', lineHeight: 26 }}>{s.desc}</Text>
+            <Text style={styles.title}>{slide.title}</Text>
+            <Text style={styles.desc}>{slide.desc}</Text>
           </View>
         ))}
       </ScrollView>
 
-      {/* Dots */}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 24 }}>
-        {SLIDES.map((_, i) => (
-          <View
-            key={i}
-            style={{
-              height: 6, borderRadius: 3,
-              backgroundColor: i === idx ? '#fff' : 'rgba(255,255,255,0.3)',
-              width: i === idx ? 24 : 8,
-            }}
-          />
-        ))}
-      </View>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + R.lg, R.xxl) }]}>
+        <View style={styles.dots}>
+          {SLIDES.map((slide, i) => (
+            <View
+              key={slide.title}
+              style={[
+                styles.dot,
+                {
+                  width: i === idx ? 26 : 8,
+                  backgroundColor: i === idx ? active.color : C.border2,
+                },
+              ]}
+            />
+          ))}
+        </View>
 
-      {/* Buttons */}
-      <View style={{ paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 48 : 32, gap: 12 }}>
-        <TouchableOpacity onPress={next} style={{ backgroundColor: SLIDES[idx].color, borderRadius: R.lg, padding: 18, alignItems: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 17 }}>
-            {idx === SLIDES.length - 1 ? 'Эхлэх →' : 'Үргэлжлүүлэх →'}
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={next}
+          style={[styles.primaryButton, { backgroundColor: active.color }]}
+        >
+          <Text style={styles.primaryText}>
+            {idx === SLIDES.length - 1 ? 'Эхлэх' : 'Үргэлжлүүлэх'}
           </Text>
+          <Ionicons name="arrow-forward" size={18} color={C.bgCard} />
         </TouchableOpacity>
-        {idx < SLIDES.length - 1 && (
-          <TouchableOpacity onPress={skip} style={{ alignItems: 'center', padding: 12 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14 }}>Алгасах</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
-  )
+  );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  topBar: {
+    minHeight: UI.headerMinHeight - 28,
+    paddingHorizontal: UI.screenPad,
+    paddingBottom: R.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.bgCard,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  logo: { fontSize: 24, fontWeight: '900', color: C.text, letterSpacing: 0 },
+  skipButton: {
+    minHeight: 38,
+    paddingHorizontal: R.md,
+    borderRadius: UI.controlRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.bgSection,
+  },
+  skipText: { ...F.small, color: C.textSub, fontWeight: '900' },
+  slider: { flex: 1 },
+  slide: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: R.xxl,
+  },
+  iconWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: R.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: R.xxxl,
+    borderWidth: 2,
+  },
+  title: { ...F.h1, color: C.text, textAlign: 'center', lineHeight: 34, marginBottom: R.md },
+  desc: { ...F.body, color: C.textSub, textAlign: 'center', lineHeight: 24, maxWidth: 360 },
+  footer: {
+    paddingHorizontal: UI.screenPad,
+    paddingTop: R.lg,
+    gap: R.lg,
+    backgroundColor: C.bgCard,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: R.sm },
+  dot: { height: 8, borderRadius: R.full },
+  primaryButton: {
+    minHeight: 50,
+    borderRadius: UI.controlRadius,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: R.xs,
+  },
+  primaryText: { ...F.body, color: C.bgCard, fontWeight: '900' },
+});

@@ -1,24 +1,25 @@
 import { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
 import { HerderAPI } from '../../src/features/herder/api';
 import type { ApplicationStatus } from '../../src/features/herder/types';
-import { C, R } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const STATUS_LABEL: Record<ApplicationStatus, string> = {
-  pending:      'Хүлээгдэж',
+  pending: 'Хүлээгдэж',
   under_review: 'Хянагдаж',
-  approved:     'Баталгаажсан',
-  rejected:     'Татгалзсан',
+  approved: 'Баталгаажсан',
+  rejected: 'Татгалзсан',
 };
 
 const STATUS_COLOR: Record<ApplicationStatus, string> = {
-  pending:      C.gold,
+  pending: C.gold,
   under_review: C.primary,
-  approved:     C.success,
-  rejected:     C.error,
+  approved: C.success,
+  rejected: C.error,
 };
 
 const FILTERS: Array<ApplicationStatus | 'all'> = ['pending', 'under_review', 'approved', 'rejected', 'all'];
@@ -29,103 +30,127 @@ const FILTER_LABEL: Record<ApplicationStatus | 'all', string> = {
 
 export default function CoordinatorApplications() {
   const [filter, setFilter] = useState<ApplicationStatus | 'all'>('pending');
+  const layout = useAppLayoutMetrics();
 
   const { data, refetch, isRefetching, isLoading } = useQuery({
     queryKey: ['coordinator', 'applications', filter],
-    queryFn:  () => HerderAPI.coordinator.applications.list({ status: filter }),
+    queryFn: () => HerderAPI.coordinator.applications.list({ status: filter }),
   });
 
   const apps = data?.applications ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Өргөдөл</Text>
-        <Text style={{ color: C.textSub, fontSize: 13, marginTop: 4 }}>Нийт {data?.total ?? 0}</Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', paddingHorizontal: 12, gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-        {FILTERS.map((f) => (
-          <TouchableOpacity
-            key={f}
-            onPress={() => setFilter(f)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: R.full,
-              backgroundColor: filter === f ? C.herder : C.bgSection,
-              borderWidth: 1,
-              borderColor: filter === f ? C.herder : C.border,
-            }}
-          >
-            <Text
-              style={{
-                color: filter === f ? '#fff' : C.text,
-                fontSize: 11,
-                fontWeight: '700',
-              }}
-            >
-              {FILTER_LABEL[f]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <FlatList
         data={apps}
-        keyExtractor={(a) => a.id}
-        contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{
+          padding: UI.screenPad,
+          paddingTop: layout.screenTop,
+          paddingBottom: layout.screenBottom,
+        }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.herder} />}
-        renderItem={({ item: a }) => (
+        ListHeaderComponent={
+          <>
+            <AppTopBar eyebrow="Координатор" title="Өргөдөл" showBack={false} />
+            <AppHeader
+              title="Өргөдөл"
+              subtitle={`Нийт ${data?.total ?? 0} малчны хүсэлт`}
+              icon="document-text-outline"
+              accent={C.herder}
+              style={{ marginBottom: R.md }}
+            />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.md }}>
+              {FILTERS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  activeOpacity={0.84}
+                  onPress={() => setFilter(item)}
+                  style={{
+                    paddingHorizontal: R.md,
+                    paddingVertical: R.sm,
+                    borderRadius: R.full,
+                    backgroundColor: filter === item ? C.herder : C.bgSection,
+                    borderWidth: 1,
+                    borderColor: filter === item ? C.herder : C.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      ...F.tiny,
+                    color: filter === item ? C.bgCard : C.text,
+                      fontWeight: '800',
+                    }}
+                  >
+                    {FILTER_LABEL[item]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        }
+        renderItem={({ item }) => (
           <TouchableOpacity
+            activeOpacity={0.86}
             onPress={() =>
-              router.push({ pathname: '/(coordinator)/application/[id]', params: { id: a.id } } as never)
+              router.push({ pathname: '/coordinator/application/[id]', params: { id: item.id } } as never)
             }
-            activeOpacity={0.7}
-            style={{
-              backgroundColor: C.bgCard,
-              borderRadius: R.lg,
-              padding: 14,
-              marginBottom: 10,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: C.text, fontWeight: '800', fontSize: 15 }}>{a.herderName}</Text>
-              <View
-                style={{
-                  backgroundColor: STATUS_COLOR[a.status] + '22',
-                  borderRadius: R.full,
-                  paddingHorizontal: 10,
-                  paddingVertical: 3,
-                }}
-              >
-                <Text style={{ color: STATUS_COLOR[a.status], fontSize: 11, fontWeight: '700' }}>
-                  {STATUS_LABEL[a.status]}
+            <AppCard style={{ padding: R.md, marginBottom: R.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: R.sm }}>
+                <Text style={{ ...F.body, color: C.text, fontWeight: '900', flex: 1 }} numberOfLines={1}>
+                  {item.herderName}
                 </Text>
+                <StatusBadge status={item.status} />
               </View>
-            </View>
-            <Text style={{ color: C.textSub, fontSize: 12, marginTop: 4 }}>
-              {a.provinceName} · {a.district} · {a.phone}
-            </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-              <Text style={{ color: C.textMuted, fontSize: 11 }}>
-                {new Date(a.createdAt).toLocaleDateString('mn-MN')}
+              <Text style={{ ...F.tiny, color: C.textSub, marginTop: R.xs }} numberOfLines={1}>
+                {item.provinceName} - {item.district} - {item.phone}
               </Text>
-              <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
-            </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: R.sm }}>
+                <Text style={{ ...F.tiny, color: C.textMuted }}>{formatDate(item.createdAt)}</Text>
+                <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+              </View>
+            </AppCard>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          !isLoading ? (
-            <View style={{ alignItems: 'center', marginTop: 60 }}>
-              <Ionicons name="document-text-outline" size={48} color={C.textMuted} />
-              <Text style={{ color: C.textSub, marginTop: 12 }}>Өргөдөл байхгүй</Text>
+          isLoading ? (
+            <View style={{ alignItems: 'center', padding: R.xxl }}>
+              <ActivityIndicator color={C.herder} />
             </View>
-          ) : null
+          ) : (
+            <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
+              <Ionicons name="document-text-outline" size={44} color={C.textMuted} />
+              <Text style={{ ...F.body, color: C.textSub }}>Өргөдөл байхгүй</Text>
+            </AppCard>
+          )
         }
       />
     </View>
   );
+}
+
+function StatusBadge({ status }: { status: ApplicationStatus }) {
+  return (
+    <View
+      style={{
+        backgroundColor: STATUS_COLOR[status] + '22',
+        borderRadius: R.full,
+        paddingHorizontal: R.sm,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: STATUS_COLOR[status] + '33',
+      }}
+    >
+      <Text style={{ ...F.tiny, color: STATUS_COLOR[status], fontWeight: '900' }}>{STATUS_LABEL[status]}</Text>
+    </View>
+  );
+}
+
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString('mn-MN');
+  } catch {
+    return iso;
+  }
 }

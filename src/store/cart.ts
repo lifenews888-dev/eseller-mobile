@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface CartItem {
+export interface CartItem {
   id:         string;
   name:       string;
   price:      number;
@@ -12,9 +12,11 @@ interface CartItem {
   entityName: string;
 }
 
+export type CartAddItem = Omit<CartItem, 'qty'>;
+
 interface CartStore {
   items:  CartItem[];
-  add:    (item: Omit<CartItem, 'qty'>, qty?: number) => void;
+  add:    (item: CartAddItem, qty?: number) => void;
   remove: (id: string) => void;
   update: (id: string, qty: number) => void;
   clear:  () => void;

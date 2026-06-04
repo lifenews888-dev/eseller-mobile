@@ -1,9 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, ScrollView,
-  Alert, ActivityIndicator, Image,
+  Alert, ActivityIndicator, Image, useWindowDimensions,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,20 +14,41 @@ import {
   type POSCartItem,
 } from '../../src/services/api';
 // HOTFIX: native modules not yet in production binary — temporarily unused
-// import { BarcodeScanner } from '../components/BarcodeScanner';
+// import { BarcodeScanner } from '../../src/components/BarcodeScanner';
 // import { printReceipt } from '../../src/utils/posReceipt';
-import { LogoutButton } from '../components/LogoutButton';
+import { LogoutButton } from '../../src/components/LogoutButton';
+import { C, R, UI } from '../../src/shared/design';
+import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type PayMethod = 'cash' | 'qpay' | 'card';
+type PosRoutePatch = {
+  method?: PayMethod;
+  search?: string;
+};
 
 function unwrap<T = any>(res: any): T {
   return (res?.data ?? res) as T;
 }
 
+function normalizeQueryParam(value?: string | string[] | null) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw?.trim() ?? '';
+}
+
+function normalizePayMethod(value?: string | string[] | null): PayMethod {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === 'qpay' || raw === 'card' ? raw : 'cash';
+}
+
 export default function POSTerminal() {
+  const params = useLocalSearchParams<{ method?: string; q?: string }>();
+  const layout = useAppLayoutMetrics();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 720;
+  const productColumns = isCompact ? 2 : 3;
 
   // ── Search + products ──
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => normalizeQueryParam(params.q));
   const [products, setProducts] = useState<POSProduct[]>([]);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,7 +57,7 @@ export default function POSTerminal() {
   const [cart, setCart] = useState<POSCartItem[]>([]);
 
   // ── Checkout state ──
-  const [payMethod, setPayMethod] = useState<PayMethod>('cash');
+  const [payMethod, setPayMethod] = useState<PayMethod>(() => normalizePayMethod(params.method));
   const [cashInput, setCashInput] = useState('');
   const [vatEnabled, setVatEnabled] = useState(true);
 
@@ -46,7 +67,23 @@ export default function POSTerminal() {
   const [polling, setPolling] = useState(false);
   const pollingRef = useRef(false);
 
-  useEffect(() => () => { pollingRef.current = false; }, []);
+  useEffect(
+    () => () => {
+      pollingRef.current = false;
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const nextSearch = normalizeQueryParam(params.q);
+    setSearch(nextSearch);
+    scheduleProductSearch(nextSearch);
+  }, [params.q]);
+
+  useEffect(() => {
+    setPayMethod(normalizePayMethod(params.method));
+  }, [params.method]);
 
   // ── Barcode scanner ──
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -59,17 +96,32 @@ export default function POSTerminal() {
   const change = payMethod === 'cash' ? Math.max(0, cashReceived - total) : 0;
 
   // ── Search with 400ms debounce ──
-  function onSearchChange(text: string) {
-    setSearch(text);
+  function replacePosRoute(patch: PosRoutePatch) {
+    const nextSearch = patch.search ?? search;
+    const nextMethod = patch.method ?? payMethod;
+    const routeParams: Record<string, string> = {};
+
+    if (nextSearch.trim()) routeParams.q = nextSearch.trim();
+    if (nextMethod !== 'cash') routeParams.method = nextMethod;
+
+    router.replace(
+      Object.keys(routeParams).length
+        ? ({ pathname: '/owner/pos' as any, params: routeParams } as any)
+        : ('/owner/pos' as any),
+    );
+  }
+
+  function scheduleProductSearch(query: string) {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!text.trim()) {
+    if (!query.trim()) {
       setProducts([]);
+      setSearching(false);
       return;
     }
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await POSAPI.searchProducts(text.trim());
+        const res = await POSAPI.searchProducts(query.trim());
         const body = unwrap<any>(res);
         // Backend /products returns { products: [...] } or wrapped
         const list: POSProduct[] = body?.products ?? (Array.isArray(body) ? body : []);
@@ -80,6 +132,17 @@ export default function POSTerminal() {
         setSearching(false);
       }
     }, 400);
+  }
+
+  function onSearchChange(text: string) {
+    setSearch(text);
+    replacePosRoute({ search: text });
+    scheduleProductSearch(text);
+  }
+
+  function selectPayMethod(method: PayMethod) {
+    setPayMethod(method);
+    replacePosRoute({ method });
   }
 
   // ── Cart ops ──
@@ -130,6 +193,7 @@ export default function POSTerminal() {
           setCashInput('');
           setSearch('');
           setProducts([]);
+          replacePosRoute({ search: '' });
         },
       },
     ]);
@@ -150,7 +214,7 @@ export default function POSTerminal() {
       const body = unwrap<{ orderId?: string; change?: number }>(res);
       const orderId = String(body?.orderId ?? '');
       Alert.alert(
-        '✅ Амжилттай',
+        'Амжилттай',
         `Захиалга #${orderId.slice(-6).toUpperCase()}\n` +
           `Нийт: ${total.toLocaleString()}₮\n` +
           `Хариулт: ${change.toLocaleString()}₮`,
@@ -227,7 +291,7 @@ export default function POSTerminal() {
             vatIncluded: vatEnabled,
           });
           Alert.alert(
-            '✅ Төлбөр амжилттай',
+            'Төлбөр амжилттай',
             `${total.toLocaleString()}₮ төлөгдлөө`,
             [{ text: 'OK', onPress: () => setCart([]) }],
           );
@@ -263,72 +327,95 @@ export default function POSTerminal() {
   }
 
   return (
-    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#0F172A' }}>
+    <View
+      style={{
+        flex: 1,
+        flexDirection: isCompact ? 'column' : 'row',
+        backgroundColor: C.bg,
+      }}
+    >
       {/* ─── LEFT: search + products ─── */}
-      <View style={{ flex: 3, borderRightWidth: 1, borderColor: '#1E293B' }}>
+      <View
+        style={{
+          flex: isCompact ? undefined : 3,
+          height: isCompact ? '58%' : undefined,
+          borderRightWidth: isCompact ? 0 : 1,
+          borderBottomWidth: isCompact ? 1 : 0,
+          borderColor: C.border,
+        }}
+      >
         {/* Header */}
         <View
           style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: 12,
-            gap: 10,
-            backgroundColor: '#1E293B',
+            minHeight: isCompact ? UI.headerMinHeight : 58,
+            paddingHorizontal: R.md,
+            paddingTop: isCompact ? layout.screenTop : R.md,
+            paddingBottom: R.md,
+            backgroundColor: C.bgCard,
+            borderBottomWidth: 1,
+            borderBottomColor: C.border,
           }}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{ padding: 6 }}
-          >
-            <Ionicons name="arrow-back" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', flex: 1 }}>
-            eSeller POS
-          </Text>
-          <TouchableOpacity
-            onPress={() => router.push('/(owner)/pos-history' as any)}
-            style={{
-              backgroundColor: '#334155',
-              borderRadius: 8,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            <Ionicons name="time-outline" size={12} color="#94A3B8" />
-            <Text style={{ color: '#94A3B8', fontSize: 12 }}>Түүх</Text>
-          </TouchableOpacity>
-          <LogoutButton variant="icon" />
+          <AppTopBar
+            eyebrow="POS"
+            title="eSeller POS"
+            showBack={false}
+            style={{ marginBottom: 0 }}
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm }}>
+                <TouchableOpacity
+                  accessibilityLabel="POS түүх"
+                  onPress={() => router.push('/owner/pos-history' as any)}
+                  style={{
+                    backgroundColor: C.bgSection,
+                    borderRadius: UI.controlRadius,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    borderWidth: 1,
+                    borderColor: C.border,
+                  }}
+                >
+                  <Ionicons name="time-outline" size={12} color={C.textSub} />
+                  <Text style={{ color: C.textSub, fontSize: 12 }}>Түүх</Text>
+                </TouchableOpacity>
+                <LogoutButton variant="icon" />
+              </View>
+            }
+          />
         </View>
 
         {/* Search + barcode scanner */}
-        <View style={{ padding: 12, flexDirection: 'row', gap: 8 }}>
+        <View style={{ padding: R.md, flexDirection: 'row', gap: R.sm }}>
           <View
             style={{
               flex: 1,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#1E293B',
-              borderRadius: 10,
+              backgroundColor: C.bgCard,
+              borderRadius: UI.controlRadius,
               paddingHorizontal: 12,
               height: 44,
               gap: 8,
+              borderWidth: 1,
+              borderColor: C.border,
             }}
           >
-            <Ionicons name="search" size={16} color="#64748B" />
+            <Ionicons name="search" size={16} color={C.textMuted} />
             <TextInput
               value={search}
               onChangeText={onSearchChange}
               placeholder="Барааны нэр эсвэл barcode..."
-              placeholderTextColor="#64748B"
-              style={{ flex: 1, color: '#fff', fontSize: 14 }}
+              placeholderTextColor={C.textMuted}
+              style={{ flex: 1, color: C.text, fontSize: 14 }}
               autoFocus
             />
-            {searching && <ActivityIndicator size="small" color="#94A3B8" />}
+            {searching && <ActivityIndicator size="small" color={C.store} />}
           </View>
           <TouchableOpacity
+            accessibilityLabel="Barcode сканнер"
             onPress={() =>
               Alert.alert(
                 'Шинэ билд шаардлагатай',
@@ -339,27 +426,30 @@ export default function POSTerminal() {
             style={{
               width: 44,
               height: 44,
-              backgroundColor: '#334155',
-              borderRadius: 10,
+              backgroundColor: C.bgSection,
+              borderRadius: UI.controlRadius,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: 0.5,
+              borderWidth: 1,
+              borderColor: C.border,
             }}
           >
-            <Ionicons name="barcode-outline" size={22} color="#94A3B8" />
+            <Ionicons name="barcode-outline" size={22} color={C.textMuted} />
           </TouchableOpacity>
         </View>
 
         {/* Product grid */}
         <FlatList
           data={products}
+          key={productColumns}
           keyExtractor={(p) => p.id}
-          numColumns={3}
-          contentContainerStyle={{ padding: 12, gap: 8 }}
-          columnWrapperStyle={{ gap: 8 }}
+          numColumns={productColumns}
+          contentContainerStyle={{ padding: R.md, gap: R.sm }}
+          columnWrapperStyle={{ gap: R.sm }}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 60 }}>
-              <Text style={{ color: '#475569', fontSize: 14 }}>
+              <Text style={{ color: C.textMuted, fontSize: 14 }}>
                 {search ? 'Бараа олдсонгүй' : 'Бараа хайж эхлэх...'}
               </Text>
             </View>
@@ -375,12 +465,12 @@ export default function POSTerminal() {
                 disabled={oos}
                 style={{
                   flex: 1,
-                  backgroundColor: '#1E293B',
-                  borderRadius: 10,
+                  backgroundColor: C.bgCard,
+                  borderRadius: UI.controlRadius,
                   padding: 10,
                   opacity: oos ? 0.4 : 1,
-                  borderWidth: inCart ? 1.5 : 0,
-                  borderColor: '#3B82F6',
+                  borderWidth: inCart ? 1.5 : 1,
+                  borderColor: inCart ? C.store : C.border,
                 }}
               >
                 {img ? (
@@ -390,23 +480,33 @@ export default function POSTerminal() {
                     resizeMode="cover"
                   />
                 ) : (
-                  <Text style={{ fontSize: 28, textAlign: 'center' }}>📦</Text>
+                  <View
+                    style={{
+                      height: 64,
+                      borderRadius: 6,
+                      backgroundColor: C.bgSection,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="cube-outline" size={28} color={C.textMuted} />
+                  </View>
                 )}
                 <Text
-                  style={{ color: '#fff', fontSize: 11, fontWeight: '500', marginTop: 6 }}
+                  style={{ color: C.text, fontSize: 11, fontWeight: '500', marginTop: 6 }}
                   numberOfLines={2}
                 >
                   {item.name}
                 </Text>
-                <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '700', marginTop: 4 }}>
+                <Text style={{ color: C.store, fontSize: 13, fontWeight: '700', marginTop: 4 }}>
                   {item.price.toLocaleString()}₮
                 </Text>
                 {lowStock && (
-                  <Text style={{ color: '#F59E0B', fontSize: 9, marginTop: 2 }}>
+                  <Text style={{ color: C.warning, fontSize: 9, marginTop: 2 }}>
                     {item.stock} үлдсэн
                   </Text>
                 )}
-                {oos && <Text style={{ color: '#EF4444', fontSize: 9, marginTop: 2 }}>Дууссан</Text>}
+                {oos && <Text style={{ color: C.error, fontSize: 9, marginTop: 2 }}>Дууссан</Text>}
               </TouchableOpacity>
             );
           }}
@@ -414,7 +514,7 @@ export default function POSTerminal() {
       </View>
 
       {/* ─── RIGHT: cart + checkout ─── */}
-      <View style={{ flex: 2, backgroundColor: '#1E293B' }}>
+      <View style={{ flex: isCompact ? 1 : 2, backgroundColor: C.bgCard }}>
         {/* Cart header */}
         <View
           style={{
@@ -423,15 +523,15 @@ export default function POSTerminal() {
             justifyContent: 'space-between',
             padding: 12,
             borderBottomWidth: 1,
-            borderColor: '#334155',
+            borderColor: C.border,
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+          <Text style={{ color: C.text, fontSize: 14, fontWeight: '600' }}>
             Сагс ({cart.reduce((s, i) => s + i.qty, 0)})
           </Text>
           {cart.length > 0 && (
             <TouchableOpacity onPress={clearCart}>
-              <Text style={{ color: '#EF4444', fontSize: 12 }}>Цэвэрлэх</Text>
+              <Text style={{ color: C.error, fontSize: 12 }}>Цэвэрлэх</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -440,7 +540,7 @@ export default function POSTerminal() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 8, gap: 6 }}>
           {cart.length === 0 ? (
             <Text
-              style={{ color: '#475569', textAlign: 'center', marginTop: 40, fontSize: 13 }}
+              style={{ color: C.textMuted, textAlign: 'center', marginTop: 40, fontSize: 13 }}
             >
               Бараа сонгоно уу
             </Text>
@@ -449,22 +549,24 @@ export default function POSTerminal() {
               <View
                 key={item.product.id}
                 style={{
-                  backgroundColor: '#0F172A',
-                  borderRadius: 8,
+                  backgroundColor: C.bgSection,
+                  borderRadius: UI.controlRadius,
                   padding: 8,
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 8,
+                  borderWidth: 1,
+                  borderColor: C.border,
                 }}
               >
                 <View style={{ flex: 1 }}>
                   <Text
-                    style={{ color: '#fff', fontSize: 11, fontWeight: '500' }}
+                    style={{ color: C.text, fontSize: 11, fontWeight: '500' }}
                     numberOfLines={1}
                   >
                     {item.product.name}
                   </Text>
-                  <Text style={{ color: '#64748B', fontSize: 10, marginTop: 2 }}>
+                  <Text style={{ color: C.textSub, fontSize: 10, marginTop: 2 }}>
                     {item.product.price.toLocaleString()}₮ × {item.qty}
                   </Text>
                 </View>
@@ -474,17 +576,19 @@ export default function POSTerminal() {
                     style={{
                       width: 24,
                       height: 24,
-                      borderRadius: 12,
-                      backgroundColor: '#334155',
+                      borderRadius: R.full,
+                      backgroundColor: C.bgCard,
                       alignItems: 'center',
                       justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: C.border,
                     }}
                   >
-                    <Text style={{ color: '#fff', fontSize: 14, lineHeight: 18 }}>−</Text>
+                    <Text style={{ color: C.text, fontSize: 14, lineHeight: 18 }}>−</Text>
                   </TouchableOpacity>
                   <Text
                     style={{
-                      color: '#fff',
+                      color: C.text,
                       fontSize: 13,
                       fontWeight: '600',
                       minWidth: 20,
@@ -498,18 +602,20 @@ export default function POSTerminal() {
                     style={{
                       width: 24,
                       height: 24,
-                      borderRadius: 12,
-                      backgroundColor: '#334155',
+                      borderRadius: R.full,
+                      backgroundColor: C.bgCard,
                       alignItems: 'center',
                       justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: C.border,
                     }}
                   >
-                    <Text style={{ color: '#fff', fontSize: 14, lineHeight: 18 }}>+</Text>
+                    <Text style={{ color: C.text, fontSize: 14, lineHeight: 18 }}>+</Text>
                   </TouchableOpacity>
                 </View>
                 <Text
                   style={{
-                    color: '#3B82F6',
+                    color: C.store,
                     fontSize: 12,
                     fontWeight: '700',
                     minWidth: 70,
@@ -527,14 +633,14 @@ export default function POSTerminal() {
         <View
           style={{
             borderTopWidth: 1,
-            borderColor: '#334155',
+            borderColor: C.border,
             padding: 12,
             gap: 6,
           }}
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: '#94A3B8', fontSize: 12 }}>Дүн</Text>
-            <Text style={{ color: '#fff', fontSize: 12 }}>{subtotal.toLocaleString()}₮</Text>
+            <Text style={{ color: C.textSub, fontSize: 12 }}>Дүн</Text>
+            <Text style={{ color: C.text, fontSize: 12 }}>{subtotal.toLocaleString()}₮</Text>
           </View>
 
           <TouchableOpacity
@@ -545,10 +651,15 @@ export default function POSTerminal() {
               alignItems: 'center',
             }}
           >
-            <Text style={{ color: '#94A3B8', fontSize: 12 }}>
-              НӨАТ 10% {vatEnabled ? '✓' : '○'}
-            </Text>
-            <Text style={{ color: vatEnabled ? '#F59E0B' : '#475569', fontSize: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons
+                name={vatEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                size={14}
+                color={vatEnabled ? C.warning : C.textMuted}
+              />
+              <Text style={{ color: C.textSub, fontSize: 12 }}>НӨАТ 10%</Text>
+            </View>
+            <Text style={{ color: vatEnabled ? C.warning : C.textMuted, fontSize: 12 }}>
               {vatEnabled ? vatAmount.toLocaleString() + '₮' : '—'}
             </Text>
           </TouchableOpacity>
@@ -559,11 +670,11 @@ export default function POSTerminal() {
               justifyContent: 'space-between',
               paddingTop: 6,
               borderTopWidth: 1,
-              borderColor: '#334155',
+              borderColor: C.border,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Нийт</Text>
-            <Text style={{ color: '#3B82F6', fontSize: 18, fontWeight: '700' }}>
+            <Text style={{ color: C.text, fontSize: 16, fontWeight: '700' }}>Нийт</Text>
+            <Text style={{ color: C.store, fontSize: 18, fontWeight: '700' }}>
               {total.toLocaleString()}₮
             </Text>
           </View>
@@ -575,21 +686,25 @@ export default function POSTerminal() {
               return (
                 <TouchableOpacity
                   key={m}
-                  onPress={() => setPayMethod(m)}
+                  onPress={() => selectPayMethod(m)}
                   style={{
                     flex: 1,
                     paddingVertical: 8,
-                    borderRadius: 8,
-                    backgroundColor: on ? '#3B82F6' : '#334155',
+                    borderRadius: UI.controlRadius,
+                    backgroundColor: on ? C.store : C.bgSection,
                     alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: on ? C.store : C.border,
                   }}
                 >
-                  <Text style={{ fontSize: 16 }}>
-                    {m === 'cash' ? '💵' : m === 'qpay' ? '📱' : '💳'}
-                  </Text>
+                  <Ionicons
+                    name={m === 'cash' ? 'cash-outline' : m === 'qpay' ? 'phone-portrait-outline' : 'card-outline'}
+                    size={18}
+                    color={on ? C.bgCard : C.textSub}
+                  />
                   <Text
                     style={{
-                      color: on ? '#fff' : '#94A3B8',
+                      color: on ? C.bgCard : C.textSub,
                       fontSize: 9,
                       marginTop: 2,
                     }}
@@ -608,21 +723,21 @@ export default function POSTerminal() {
                 value={cashInput}
                 onChangeText={setCashInput}
                 placeholder="Авсан мөнгө..."
-                placeholderTextColor="#475569"
+                placeholderTextColor={C.textMuted}
                 keyboardType="numeric"
                 style={{
-                  backgroundColor: '#0F172A',
-                  borderRadius: 8,
+                  backgroundColor: C.bgInput,
+                  borderRadius: UI.controlRadius,
                   paddingHorizontal: 12,
                   height: 40,
-                  color: '#fff',
+                  color: C.text,
                   fontSize: 14,
                   borderWidth: 1,
-                  borderColor: '#334155',
+                  borderColor: C.border,
                 }}
               />
               {change > 0 && (
-                <Text style={{ color: '#10B981', fontSize: 12, textAlign: 'right' }}>
+                <Text style={{ color: C.success, fontSize: 12, textAlign: 'right' }}>
                   Хариулт: {change.toLocaleString()}₮
                 </Text>
               )}
@@ -634,8 +749,8 @@ export default function POSTerminal() {
             onPress={handleCheckout}
             disabled={cart.length === 0 || cashMutation.isPending}
             style={{
-              backgroundColor: cart.length === 0 ? '#334155' : '#10B981',
-              borderRadius: 10,
+              backgroundColor: cart.length === 0 ? C.bgSection : C.success,
+              borderRadius: UI.controlRadius,
               height: 48,
               alignItems: 'center',
               justifyContent: 'center',
@@ -643,11 +758,11 @@ export default function POSTerminal() {
             }}
           >
             {cashMutation.isPending ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={C.bgCard} />
             ) : (
               <Text
                 style={{
-                  color: cart.length === 0 ? '#475569' : '#fff',
+                  color: cart.length === 0 ? C.textMuted : C.bgCard,
                   fontSize: 15,
                   fontWeight: '700',
                 }}
@@ -672,22 +787,24 @@ export default function POSTerminal() {
           style={{
             position: 'absolute',
             top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.8)',
+            backgroundColor: C.text + '73',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
           <View
             style={{
-              backgroundColor: '#1E293B',
-              borderRadius: 16,
-              padding: 24,
+              backgroundColor: C.bgCard,
+              borderRadius: UI.cardRadius,
+              padding: UI.screenPad,
               width: 340,
               alignItems: 'center',
               gap: 16,
+              borderWidth: 1,
+              borderColor: C.border,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>
+            <Text style={{ color: C.text, fontSize: 18, fontWeight: '700' }}>
               QPay — {total.toLocaleString()}₮
             </Text>
 
@@ -695,8 +812,8 @@ export default function POSTerminal() {
               style={{
                 width: 220,
                 height: 220,
-                backgroundColor: '#fff',
-                borderRadius: 12,
+                backgroundColor: C.bgCard,
+                borderRadius: R.md,
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: 8,
@@ -709,27 +826,29 @@ export default function POSTerminal() {
                   resizeMode="contain"
                 />
               ) : (
-                <ActivityIndicator size="large" color="#1B3A5C" />
+                <ActivityIndicator size="large" color={C.store} />
               )}
             </View>
 
             {polling && (
               <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="#3B82F6" />
-                <Text style={{ color: '#94A3B8', fontSize: 13 }}>Төлбөр хүлээж байна...</Text>
+                <ActivityIndicator size="small" color={C.store} />
+                <Text style={{ color: C.textSub, fontSize: 13 }}>Төлбөр хүлээж байна...</Text>
               </View>
             )}
 
             <TouchableOpacity
               onPress={cancelQPay}
               style={{
-                backgroundColor: '#334155',
-                borderRadius: 8,
+                backgroundColor: C.bgSection,
+                borderRadius: UI.controlRadius,
                 paddingHorizontal: 24,
                 paddingVertical: 10,
+                borderWidth: 1,
+                borderColor: C.border,
               }}
             >
-              <Text style={{ color: '#94A3B8', fontSize: 13 }}>Болих</Text>
+              <Text style={{ color: C.textSub, fontSize: 13 }}>Болих</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Switch, TouchableOpacity, StyleSheet, Alert, TextInput } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { C, R, F } from '../../src/shared/design';
+import { Stack } from 'expo-router';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 import {
+  authenticateWithBiometric,
+  disableBiometric,
+  enableBiometric,
   isBiometricAvailable,
   isBiometricEnabled,
-  enableBiometric,
-  disableBiometric,
-  authenticateWithBiometric,
 } from '../../src/shared/biometric';
 import { useAuth } from '../../src/store/auth';
 
@@ -21,13 +23,26 @@ export default function SecurityScreen() {
   const [newPw, setNewPw] = useState('');
 
   useEffect(() => {
+    let mounted = true;
+
     (async () => {
       const status = await isBiometricAvailable();
+      const enabled = await isBiometricEnabled();
+
+      if (!mounted) return;
       setBioAvailable(status.available);
       setBioReason(status.reason);
-      setBioEnabled(await isBiometricEnabled());
+      setBioEnabled(enabled);
     })();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  const unavailableMessage = bioReason === 'not-enrolled'
+    ? 'Хурууны хээ / Face ID-аа эхлээд утсандаа бүртгээрэй.'
+    : 'Энэ төхөөрөмж дээр биометр боломжгүй.';
 
   const toggleBio = async () => {
     if (bioEnabled) {
@@ -36,21 +51,14 @@ export default function SecurityScreen() {
       return;
     }
 
-    // Enabling — confirm hardware/enrollment, prompt biometric, then persist
-    // the phone hint via enableBiometric. The previous version stored only
-    // the flag in AsyncStorage, leaving getBiometricSession() unable to
-    // return a phone, so unlock silently failed even when "enabled".
     if (!bioAvailable) {
-      const msg = bioReason === 'not-enrolled'
-        ? 'Хурууны хээ / Face ID-аа эхлээд утсандаа бүртгээрэй'
-        : 'Энэ төхөөрөмж дээр биометр боломжгүй';
-      Alert.alert('Боломжгүй', msg);
+      Alert.alert('Боломжгүй', unavailableMessage);
       return;
     }
 
     const phone = user?.phone;
     if (!phone) {
-      Alert.alert('Алдаа', 'Биометр идэвхжүүлэхийн тулд утасны дугаартай профайл хэрэгтэй');
+      Alert.alert('Алдаа', 'Биометр идэвхжүүлэхийн тулд утасны дугаартай профайл хэрэгтэй.');
       return;
     }
 
@@ -61,55 +69,170 @@ export default function SecurityScreen() {
     setBioEnabled(true);
   };
 
+  const savePassword = () => {
+    if (newPw.length < 6) {
+      Alert.alert('Анхаар', 'Шинэ нууц үг 6-аас дээш тэмдэгттэй байна.');
+      return;
+    }
+
+    Alert.alert('Амжилттай', 'Нууц үг солигдлоо.');
+    setShowPassword(false);
+    setOldPw('');
+    setNewPw('');
+  };
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: R.lg, paddingBottom: 60 }}>
-      <Text style={{ ...F.h2, color: C.white, marginBottom: R.lg }}>Аюулгүй байдал</Text>
+    <AppScreen keyboardShouldPersistTaps="handled">
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppTopBar eyebrow="Профайл" title="Аюулгүй байдал" showBack={false} />
+      <AppHeader
+        title="Аюулгүй байдал"
+        subtitle="Нэвтрэлт, биометр болон нууц үгийн тохиргоогоо удирдана."
+        icon="shield-checkmark-outline"
+        accent={C.primary}
+      />
 
-      {/* Biometric — only shown when hardware is present AND a biometric is
-          enrolled. Other states (no hardware, no enrolled) are hidden rather
-          than shown disabled, matching mobile platform conventions. */}
-      {bioAvailable && (
-        <View style={st.row}>
-          <Ionicons name="finger-print" size={22} color={C.primary} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ ...F.body, color: C.text, fontWeight: '600' }}>Биометр нэвтрэлт</Text>
-            <Text style={{ ...F.tiny, color: C.textMuted }}>Хурууны хээ / Face ID</Text>
-          </View>
-          <Switch value={bioEnabled} onValueChange={toggleBio}
-            trackColor={{ false: C.bgSection, true: C.secondary + '66' }} thumbColor={bioEnabled ? C.secondary : C.textMuted} />
+      <AppCard elevated style={st.summary}>
+        <View style={st.summaryIcon}>
+          <Ionicons name="lock-closed-outline" size={22} color={C.primary} />
         </View>
-      )}
-
-      {/* Change password */}
-      <TouchableOpacity style={st.row} onPress={() => setShowPassword(!showPassword)}>
-        <Ionicons name="lock-closed" size={22} color={C.primary} />
         <View style={{ flex: 1 }}>
-          <Text style={{ ...F.body, color: C.text, fontWeight: '600' }}>Нууц үг солих</Text>
-          <Text style={{ ...F.tiny, color: C.textMuted }}>Тогтмол шинэчлэхийг зөвлөе</Text>
+          <Text style={st.title}>Бүртгэлийн хамгаалалт</Text>
+          <Text style={st.sub}>
+            Нууц үгээ тогтмол шинэчилж, боломжтой үед биометр нэвтрэлтийг асаагаарай.
+          </Text>
         </View>
-        <Ionicons name={showPassword ? 'chevron-up' : 'chevron-down'} size={18} color={C.textMuted} />
+      </AppCard>
+
+      <AppCard style={st.card}>
+        <View style={st.row}>
+          <View style={[st.iconBox, { backgroundColor: C.primary + '18' }]}>
+            <Ionicons name="finger-print-outline" size={22} color={C.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.label}>Биометр нэвтрэлт</Text>
+            <Text style={st.sub}>
+              {bioAvailable ? 'Хурууны хээ / Face ID ашиглана.' : unavailableMessage}
+            </Text>
+          </View>
+          <Switch
+            value={bioEnabled}
+            disabled={!bioAvailable}
+            onValueChange={toggleBio}
+            accessibilityLabel="Биометр нэвтрэлт асаах"
+            accessibilityState={{ checked: bioEnabled, disabled: !bioAvailable }}
+            trackColor={{ false: C.bgSection, true: C.primary + '55' }}
+                thumbColor={bioEnabled ? C.bgCard : C.textMuted}
+          />
+        </View>
+      </AppCard>
+
+      <TouchableOpacity
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityLabel="Нууц үг солих хэсэг нээх"
+        accessibilityState={{ expanded: showPassword }}
+        onPress={() => setShowPassword((v) => !v)}
+      >
+        <AppCard style={st.card}>
+          <View style={st.row}>
+            <View style={[st.iconBox, { backgroundColor: C.seller + '18' }]}>
+              <Ionicons name="key-outline" size={21} color={C.seller} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={st.label}>Нууц үг солих</Text>
+              <Text style={st.sub}>Шинэ нууц үг 6-аас дээш тэмдэгттэй байх хэрэгтэй.</Text>
+            </View>
+            <Ionicons name={showPassword ? 'chevron-up' : 'chevron-down'} size={18} color={C.textMuted} />
+          </View>
+        </AppCard>
       </TouchableOpacity>
 
-      {showPassword && (
-        <View style={st.pwCard}>
-          <TextInput style={st.input} placeholder="Хуучин нууц үг" placeholderTextColor={C.textMuted} secureTextEntry value={oldPw} onChangeText={setOldPw} />
-          <TextInput style={st.input} placeholder="Шинэ нууц үг" placeholderTextColor={C.textMuted} secureTextEntry value={newPw} onChangeText={setNewPw} />
-          <TouchableOpacity style={st.saveBtn} onPress={() => {
-            if (newPw.length < 6) return Alert.alert('6+ тэмдэгт');
-            Alert.alert('Амжилттай', 'Нууц үг солигдлоо');
-            setShowPassword(false); setOldPw(''); setNewPw('');
-          }}>
-            <Text style={{ ...F.body, color: C.white, fontWeight: '700' }}>Хадгалах</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
+      {showPassword ? (
+        <AppCard style={st.formCard}>
+          <TextInput
+            style={st.input}
+            placeholder="Хуучин нууц үг"
+            accessibilityLabel="Хуучин нууц үг"
+            placeholderTextColor={C.textMuted}
+            secureTextEntry
+            value={oldPw}
+            onChangeText={setOldPw}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={st.input}
+            placeholder="Шинэ нууц үг"
+            accessibilityLabel="Шинэ нууц үг"
+            placeholderTextColor={C.textMuted}
+            secureTextEntry
+            value={newPw}
+            onChangeText={setNewPw}
+            autoCapitalize="none"
+          />
+          <AppButton label="Хадгалах" icon="checkmark-circle-outline" onPress={savePassword} />
+        </AppCard>
+      ) : null}
+    </AppScreen>
   );
 }
 
 const st = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: R.md, backgroundColor: C.bgCard, borderRadius: 14, padding: 14, marginBottom: R.sm, borderWidth: 0.5, borderColor: C.border },
-  pwCard: { backgroundColor: C.bgCard, borderRadius: 14, padding: R.lg, marginBottom: R.sm, borderWidth: 0.5, borderColor: C.border },
-  input: { backgroundColor: C.bgInput, borderRadius: 10, padding: R.md, color: C.white, fontSize: 14, marginBottom: 10 },
-  saveBtn: { backgroundColor: C.brand, borderRadius: R.md, padding: 14, alignItems: 'center' },
+  summary: {
+    marginBottom: R.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.md,
+  },
+  summaryIcon: {
+    width: UI.iconBox,
+    height: UI.iconBox,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.primary + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card: {
+    marginBottom: R.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.md,
+  },
+  iconBox: {
+    width: UI.iconBox,
+    height: UI.iconBox,
+    borderRadius: UI.controlRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    ...F.h4,
+    color: C.text,
+  },
+  label: {
+    ...F.body,
+    color: C.text,
+    fontWeight: '700',
+  },
+  sub: {
+    ...F.small,
+    color: C.textSub,
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  formCard: {
+    gap: R.sm,
+  },
+  input: {
+    minHeight: 48,
+    backgroundColor: C.bgInput,
+    borderRadius: UI.controlRadius,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: R.md,
+    color: C.text,
+    ...F.body,
+  },
 });

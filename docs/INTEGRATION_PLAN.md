@@ -55,10 +55,10 @@ Estimated **16 new files**, ~1,900 lines total.
 | M2 | `app/(customer)/register-shop.tsx:45` | Branch submit: if `shopType === 'HERDER'`, `router.push('/(customer)/register-herder')` instead of POST | Herder has 6 steps vs 4, different payload |
 | M3 | `app/(customer)/herder.tsx:13-33` | Add **Баян-Өлгий (BOL)** + **Дорноговь (DOR2)** to `PROVINCES`. Move list to `src/features/herder/constants.ts` (A5) and import | PRD §6.3 — must support all 21 aimags |
 | M4 | `app/(customer)/herder.tsx:55` | Replace inline `fetch` with `HerderAPI.list` from A3 | Use the shared axios interceptor (JWT + 401 redirect) |
-| M5 | `app/(customer)/herder.tsx:215-221` | Wire "Шууд захиалах" button → `useCart().add({ productId, quantity: 1, source: 'herder' })` + haptic + `router.push('/cart')` | **Dead button today — P0 bug fix** |
+| M5 | `app/(customer)/herder.tsx:215-221` | Wire "Шууд захиалах" button → shared herder cart helper + haptic + `router.push('/cart')` | **Implemented; guarded by `npm run smoke:herder-cart`** |
 | M6 | `app/(customer)/herder.tsx:172` | Change `<View>` wrapping product card to `<TouchableOpacity onPress={() => router.push(\`/(customer)/herder-product/\${product.id}\`)}>` | Route to new detail page (A8) instead of generic `/product/[id]` |
 | M7 | `app/(tabs)/index.tsx:55-61` | Gate "Малчны Шинэ бараа" entry on `flags.MALCHNAAS_ENABLED` | Allow controlled rollout |
-| M8 | `app/components/home/HerderRow.tsx:19` | Same feature-flag gate | Hide carousel if flag off |
+| M8 | `src/components/home/HerderRow.tsx:19` | Same feature-flag gate | Hide carousel if flag off |
 | M9 | `src/services/api.ts:274` | Add note pointing to `src/features/herder/api.ts` | Discoverability |
 | M10 | `src/store/auth.ts` | Extend role union with `'herder' \| 'coordinator'` | Role gating |
 | M11 | `app/_layout.tsx` | Register `(herder)` and `(coordinator)` route groups | expo-router requires explicit registration for non-default groups? (verify — most route groups are auto-discovered) |

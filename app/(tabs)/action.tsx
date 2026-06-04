@@ -1,32 +1,38 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/store/auth';
-import { roleColor } from '../../src/shared/design';
+import { C, F, R, roleColor } from '../../src/shared/design';
+import { AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
-type ActionItem = { icon: string; label: string; route: string; desc: string };
+type ActionItem = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  route: string;
+  desc: string;
+};
 
 const ACTIONS: Record<string, ActionItem[]> = {
   BUYER: [
     { icon: 'create-outline', label: 'Зар нэмэх', route: '/feed/create', desc: 'Зарын булан' },
-    { icon: 'storefront-outline', label: 'Дэлгүүр нээх', route: '/(customer)/register-shop', desc: 'Хялбар бүртгэл' },
-    { icon: 'megaphone-outline', label: 'Борлуулагч болох', route: '/(customer)/become-seller', desc: 'Комисс олох' },
-    { icon: 'car-outline', label: 'Жолооч болох', route: '/(customer)/become-driver', desc: 'Хүргэлтээр орлого' },
+    { icon: 'storefront-outline', label: 'Дэлгүүр нээх', route: '/open-shop', desc: 'Хялбар бүртгэл' },
+    { icon: 'megaphone-outline', label: 'Борлуулагч болох', route: '/become-seller', desc: 'Комисс олох' },
+    { icon: 'car-outline', label: 'Жолооч болох', route: '/become-driver', desc: 'Хүргэлтээр орлого' },
   ],
   STORE: [
-    { icon: 'add-circle-outline', label: 'Бараа нэмэх', route: '/(owner)/products', desc: 'Шинэ бараа' },
-    { icon: 'receipt-outline', label: 'Захиалгууд', route: '/(owner)/orders', desc: 'Шинэ захиалга' },
-    { icon: 'tv-outline', label: 'Live эхлүүлэх', route: '/(owner)/live/create', desc: 'Шууд дамжуулалт' },
-    { icon: 'desktop-outline', label: 'POS терминал', route: '/(owner)/pos', desc: 'Кассын систем' },
+    { icon: 'add-circle-outline', label: 'Бараа нэмэх', route: '/owner/products', desc: 'Шинэ бараа' },
+    { icon: 'receipt-outline', label: 'Захиалгууд', route: '/owner/orders', desc: 'Шинэ захиалга' },
+    { icon: 'pricetag-outline', label: 'Купон үүсгэх', route: '/owner/create-coupon', desc: 'Хямдралын код' },
+    { icon: 'desktop-outline', label: 'POS терминал', route: '/owner/pos', desc: 'Кассын систем' },
   ],
   SELLER: [
-    { icon: 'link-outline', label: 'Линк үүсгэх', route: '/(seller)/catalog', desc: 'Урилгын код' },
-    { icon: 'stats-chart-outline', label: 'Орлого харах', route: '/(seller)/earnings', desc: 'Комисс' },
-    { icon: 'trophy-outline', label: 'Топ жагсаалт', route: '/(seller)/leaderboard', desc: 'Топ борлуулагчид' },
+    { icon: 'link-outline', label: 'Линк үүсгэх', route: '/seller/catalog', desc: 'Урилгын код' },
+    { icon: 'stats-chart-outline', label: 'Орлого харах', route: '/seller/earnings', desc: 'Комисс' },
+    { icon: 'trophy-outline', label: 'Топ жагсаалт', route: '/seller/leaderboard', desc: 'Топ борлуулагчид' },
   ],
   DRIVER: [
-    { icon: 'checkmark-circle-outline', label: 'Хүргэлт авах', route: '/(driver)/deliveries', desc: 'Шинэ захиалга' },
-    { icon: 'cash-outline', label: 'Орлого', route: '/(driver)/earnings', desc: 'Өнөөдрийн дүн' },
+    { icon: 'checkmark-circle-outline', label: 'Хүргэлт авах', route: '/driver/deliveries', desc: 'Шинэ захиалга' },
+    { icon: 'cash-outline', label: 'Орлого', route: '/driver/earnings', desc: 'Өнөөдрийн дүн' },
   ],
 };
 
@@ -43,68 +49,58 @@ export default function ActionTab() {
   const color = roleColor(role);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: '#121212' }}
-      contentContainerStyle={{ padding: 16, paddingTop: 52, paddingBottom: 100 }}
-    >
-      <View
-        style={{
-          backgroundColor: color + '18',
-          borderRadius: 16,
-          padding: 16,
-          marginBottom: 20,
-          borderWidth: 0.5,
-          borderColor: color + '40',
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff', marginBottom: 3 }}>
-          Үйлдэл
-        </Text>
-        <Text style={{ fontSize: 12, color: 'rgba(255,255,255,.45)' }}>
-          {ROLE_LABEL[role] ?? 'Авагч'} горим
-        </Text>
-      </View>
+    <AppScreen>
+      <AppTopBar eyebrow="eSeller" title="Үйлдэл" />
+      <AppHeader
+        title="Үйлдэл"
+        subtitle={`${ROLE_LABEL[role] ?? 'Авагч'} горим`}
+        icon="flash-outline"
+        accent={color}
+      />
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: R.sm }}>
         {actions.map((action) => (
           <TouchableOpacity
             key={action.route}
+            activeOpacity={0.86}
+            accessibilityRole="button"
+            accessibilityLabel={`${action.label} нээх. ${action.desc}`}
             onPress={() => router.push(action.route as any)}
-            style={{
-              backgroundColor: '#1E1E1E',
-              borderRadius: 14,
-              padding: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 14,
-              borderWidth: 0.5,
-              borderColor: '#2A2A2A',
-            }}
           >
-            <View
+            <AppCard
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                backgroundColor: color + '20',
+                padding: R.md,
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: R.md,
+                borderColor: color + '24',
               }}
             >
-              <Ionicons name={action.icon as any} size={22} color={color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>
-                {action.label}
-              </Text>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginTop: 2 }}>
-                {action.desc}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,.2)" />
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: R.md,
+                  backgroundColor: color + '18',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name={action.icon} size={22} color={color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...F.body, fontWeight: '800', color: C.text }} numberOfLines={1}>
+                  {action.label}
+                </Text>
+                <Text style={{ ...F.tiny, color: C.textSub, marginTop: 3 }} numberOfLines={2}>
+                  {action.desc}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+            </AppCard>
           </TouchableOpacity>
         ))}
       </View>
-    </ScrollView>
+    </AppScreen>
   );
 }

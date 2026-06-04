@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { post, get, setOnUnauthorized, isOfflineError, type ApiError } from '../services/api';
+import * as SecureStore from '../shared/secureStore';
 
 const log = (...args: unknown[]) => {
   if (__DEV__) console.log('[auth]', ...args);
@@ -18,7 +18,7 @@ export type BackendRole =
   | 'herder'       // Малчнаас шууд — direct-from-herder seller
   | 'coordinator'; // local sum coordinator helping herders onboard
 
-/** App-side role used by the UI (RoleSwitcherBar pills, route guards). */
+/** App-side role used by UI role switchers; authorization uses backend `user.role`. */
 export type AppRole = 'BUYER' | 'STORE' | 'SELLER' | 'DRIVER' | 'HERDER' | 'COORDINATOR';
 
 interface User {

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
+import { C, R } from '../../../shared/design';
 
 function useShimmer() {
   const v = useRef(new Animated.Value(0.4)).current;
@@ -74,10 +75,10 @@ export function ProductListSkeleton({ count = 3 }: { count?: number }) {
 }
 
 const s = StyleSheet.create({
-  block: { backgroundColor: '#e7e5e4', borderRadius: 6 },
+  block: { backgroundColor: C.bgSection, borderRadius: R.sm },
   grid:  { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile:  { width: '48%' as any, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e7e5e4', overflow: 'hidden' },
-  listCard: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#e7e5e4' },
+  tile:  { width: '48%' as any, backgroundColor: C.bgCard, borderRadius: R.md, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  listCard: { backgroundColor: C.bgCard, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   row:      { flexDirection: 'row', gap: 10, paddingHorizontal: 16 },
-  rowCard:  { width: 134, backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5, borderColor: '#e7e5e4', overflow: 'hidden' },
+  rowCard:  { width: 134, backgroundColor: C.bgCard, borderRadius: R.md, borderWidth: 0.5, borderColor: C.border, overflow: 'hidden' },
 });

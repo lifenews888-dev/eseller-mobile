@@ -1,109 +1,167 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native'
-import { router } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
-import { Ionicons } from '@expo/vector-icons'
-import { get } from '../../src/services/api'
-import { C, R, F } from '../../src/shared/design'
-import { EmptyState } from '../../src/shared/ui/EmptyState'
-import { LogoutButton } from '../components/LogoutButton'
-import { SellerNetworkSection } from '../../src/features/sellerNetwork/SellerNetworkSection'
+import { View, Text, TouchableOpacity, RefreshControl } from 'react-native';
+import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { get } from '../../src/services/api';
+import { C, F, R } from '../../src/shared/design';
+import { EmptyState } from '../../src/shared/ui/EmptyState';
+import { AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { LogoutButton } from '../../src/components/LogoutButton';
+import { SellerNetworkSection } from '../../src/features/sellerNetwork/SellerNetworkSection';
 
 export default function SellerDashboard() {
   const { data, refetch, isRefetching } = useQuery({
     queryKey: ['seller-dashboard'],
     queryFn: () => get('/affiliate/earnings'),
-  })
+  });
 
-  // Stock alert
   const { data: productsData } = useQuery({
     queryKey: ['seller-products'],
     queryFn: () => get('/products/my?status=active'),
-  })
-  const lowStock = ((productsData as any)?.products || []).filter((p: any) => (p.stock ?? p.inventory ?? 999) < 5)
+  });
 
-  const stats = (data as any)?.stats || (data as any) || {}
+  const lowStock = ((productsData as any)?.products || []).filter(
+    (p: any) => (p.stock ?? p.inventory ?? 999) < 5,
+  );
+  const stats = (data as any)?.stats || (data as any) || {};
+  const recent = ((data as any)?.recent || (data as any)?.commissions || []).slice(0, 5);
 
-  const CARDS = [
-    { icon: 'cash' as const, label: 'Нийт орлого', value: (stats.totalEarned || 0).toLocaleString() + '₮', color: '#E8242C' },
-    { icon: 'trending-up' as const, label: 'Энэ сар', value: (stats.thisMonth || 0).toLocaleString() + '₮', color: '#1A73E8' },
-    { icon: 'time' as const, label: 'Хүлээгдэж буй', value: (stats.pending || 0).toLocaleString() + '₮', color: '#F9A825' },
-    { icon: 'cart' as const, label: 'Борлуулалт', value: String(stats.totalSales || stats.totalOrders || 0), color: '#34A853' },
-  ]
+  const cards = [
+    { icon: 'cash' as const, label: 'Нийт орлого', value: `${(stats.totalEarned || 0).toLocaleString()}₮`, color: C.seller },
+    { icon: 'trending-up' as const, label: 'Энэ сар', value: `${(stats.thisMonth || 0).toLocaleString()}₮`, color: C.primary },
+    { icon: 'time' as const, label: 'Хүлээгдэж буй', value: `${(stats.pending || 0).toLocaleString()}₮`, color: C.gold },
+    { icon: 'cart' as const, label: 'Борлуулалт', value: String(stats.totalSales || stats.totalOrders || 0), color: C.secondary },
+  ];
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}>
-      {/* Top spacer — was a wrapper around RoleSwitcherBar; the bar was
-          removed for the production shell (kept as a component for future
-          dev-only / settings-tool use). The spacer stays to preserve the
-          status-bar clearance the dashboard header relied on. */}
-      <View style={{ paddingTop: 52 }} />
-      <View style={{ padding: 16 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Самбар</Text>
-        <Text style={{ color: C.textSub, fontSize: 13, marginTop: 4 }}>Борлуулагчийн хяналтын самбар</Text>
-      </View>
+    <AppScreen refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.seller} />}>
+      <AppTopBar eyebrow="Борлуулагч" title="Самбар" showBack={false} />
+      <AppHeader
+        title="Самбар"
+        subtitle="Борлуулагчийн хяналтын самбар"
+        icon="analytics-outline"
+        accent={C.seller}
+      />
 
-      {/* Stock alert */}
-      {lowStock.length > 0 && (
-        <TouchableOpacity onPress={() => router.push('/(seller)/products' as any)}
-          style={{ marginHorizontal: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EA433515', borderRadius: R.lg, padding: 14, borderWidth: 0.5, borderColor: '#EA433533' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="warning" size={20} color="#EA4335" />
-            <Text style={{ color: '#EA4335', fontSize: 13, fontWeight: '700' }}>⚠️ {lowStock.length} бараа дуусах дөхөж байна</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#EA4335" />
+      {lowStock.length > 0 ? (
+        <TouchableOpacity
+          activeOpacity={0.86}
+          accessibilityLabel="Дуусах дөхсөн бараанууд"
+          onPress={() => router.push('/seller/products' as any)}
+        >
+          <AppCard
+            style={{
+              marginBottom: R.md,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderColor: C.error + '35',
+              backgroundColor: C.errorDim,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, flex: 1 }}>
+              <Ionicons name="warning-outline" size={20} color={C.error} />
+              <Text style={{ ...F.small, color: C.error, fontWeight: '800', flex: 1 }}>
+                {lowStock.length} бараа дуусах дөхөж байна
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.error} />
+          </AppCard>
         </TouchableOpacity>
-      )}
+      ) : null}
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8, gap: 10 }}>
-        {CARDS.map((c, i) => (
-          <View key={i} style={{ width: '47%', backgroundColor: C.bgCard, borderRadius: R.lg, padding: 16, borderLeftWidth: 3, borderLeftColor: c.color, borderWidth: 1, borderColor: C.border }}>
-            <Ionicons name={c.icon} size={24} color={c.color} />
-            <Text style={{ color: c.color, fontSize: 20, fontWeight: '900', marginTop: 8 }}>{c.value}</Text>
-            <Text style={{ color: C.textSub, fontSize: 12, marginTop: 4 }}>{c.label}</Text>
-          </View>
+      <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.sm }}>
+        {cards.slice(0, 2).map((card) => (
+          <AppMetricCard
+            key={card.label}
+            icon={card.icon}
+            label={card.label}
+            value={card.value}
+            accent={card.color}
+          />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.lg }}>
+        {cards.slice(2).map((card) => (
+          <AppMetricCard
+            key={card.label}
+            icon={card.icon}
+            label={card.label}
+            value={card.value}
+            accent={card.color}
+          />
         ))}
       </View>
 
-      <View style={{ margin: 12 }}>
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>Хурдан үйлдэл</Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ marginBottom: R.lg }}>
+        <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm }}>Хурдан үйлдэл</Text>
+        <View style={{ flexDirection: 'row', gap: R.sm }}>
           {[
-            { icon: 'link' as const, label: 'Линк үүсгэх', route: '/(seller)/products' },
-            { icon: 'stats-chart' as const, label: 'Орлого харах', route: '/(seller)/earnings' },
-          ].map((a, i) => (
-            <TouchableOpacity key={i} onPress={() => router.push(a.route as any)}
-              style={{ flex: 1, backgroundColor: C.bgSection, borderRadius: R.lg, padding: 16, alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.border }}>
-              <Ionicons name={a.icon} size={24} color={C.seller} />
-              <Text style={{ color: C.text, fontSize: 13, fontWeight: '600', textAlign: 'center' }}>{a.label}</Text>
+            { icon: 'link' as const, label: 'Линк үүсгэх', route: '/seller/catalog' },
+            { icon: 'stats-chart' as const, label: 'Орлого харах', route: '/seller/earnings' },
+          ].map((action) => (
+            <TouchableOpacity
+              key={action.route}
+              activeOpacity={0.86}
+              accessibilityLabel={action.label}
+              style={{ flex: 1 }}
+              onPress={() => router.push(action.route as any)}
+            >
+              <AppCard style={{ alignItems: 'center', minHeight: 104, justifyContent: 'center' }}>
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: R.md,
+                    backgroundColor: C.seller + '18',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: R.sm,
+                  }}
+                >
+                  <Ionicons name={action.icon} size={22} color={C.seller} />
+                </View>
+                <Text style={{ ...F.small, color: C.text, fontWeight: '800', textAlign: 'center' }} numberOfLines={2}>
+                  {action.label}
+                </Text>
+              </AppCard>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      <View style={{ margin: 12, marginTop: 4 }}>
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>Сүүлийн орлогууд</Text>
-        {((data as any)?.recent || (data as any)?.commissions || []).slice(0, 5).map((c: any, i: number) => (
-          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: C.border }}>
-            <View>
-              <Text style={{ color: C.text, fontWeight: '600' }}>{c.productName || 'Захиалга'}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('mn-MN') : ''}</Text>
+      <View style={{ marginBottom: R.lg }}>
+        <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm }}>Сүүлийн орлогууд</Text>
+        {recent.map((commission: any, index: number) => (
+          <AppCard
+            key={commission.id ?? index}
+            style={{
+              marginBottom: R.sm,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: R.sm,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ ...F.small, color: C.text, fontWeight: '800' }} numberOfLines={1}>
+                {commission.productName || 'Захиалга'}
+              </Text>
+              <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 3 }}>
+                {commission.createdAt ? new Date(commission.createdAt).toLocaleDateString('mn-MN') : ''}
+              </Text>
             </View>
-            <Text style={{ color: C.secondary, fontWeight: '800', fontSize: 16 }}>+{(c.amount || 0).toLocaleString()}₮</Text>
-          </View>
+            <Text style={{ ...F.body, color: C.secondary, fontWeight: '900' }} numberOfLines={1}>
+              +{(commission.amount || 0).toLocaleString()}₮
+            </Text>
+          </AppCard>
         ))}
-        {!((data as any)?.recent?.length || (data as any)?.commissions?.length) && (
-          <EmptyState icon="💸" title="Одоогоор орлого байхгүй" />
-        )}
+        {recent.length === 0 ? <EmptyState icon="cash-outline" title="Одоогоор орлого байхгүй" /> : null}
       </View>
 
-      {/* Seller-network read-only dashboard (PR103) — additive, does not
-          replace the existing affiliate flow above. Sourced from Sarana
-          BFF /api/seller/dashboard which proxies Negd's S2S adapter. */}
       <SellerNetworkSection />
-
       <LogoutButton />
       <View style={{ height: 40 }} />
-    </ScrollView>
-  )
+    </AppScreen>
+  );
 }

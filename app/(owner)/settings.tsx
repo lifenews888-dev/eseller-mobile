@@ -1,31 +1,57 @@
-import { useState, useEffect } from 'react'
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import * as Haptics from 'expo-haptics'
-import { get, put } from '../../src/services/api'
-import { C, R } from '../../src/shared/design'
-import { LogoutButton } from '../components/LogoutButton'
+import { useEffect, useState } from 'react';
+import { Alert, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
+import { get, put } from '../../src/services/api';
+import { LogoutButton } from '../../src/components/LogoutButton';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
-const FIELDS = [
+type SettingsForm = {
+  name: string;
+  phone: string;
+  address: string;
+  description: string;
+  hours: string;
+};
+
+type FieldConfig = {
+  key: keyof SettingsForm;
+  label: string;
+  placeholder: string;
+  keyboard?: KeyboardTypeOptions;
+  multiline?: boolean;
+};
+
+const FIELDS: FieldConfig[] = [
   { key: 'name', label: 'Дэлгүүрийн нэр', placeholder: 'Миний дэлгүүр' },
   { key: 'phone', label: 'Утасны дугаар', placeholder: '9911-XXXX', keyboard: 'phone-pad' },
   { key: 'address', label: 'Хаяг', placeholder: 'БЗД, 3-р хороо' },
   { key: 'hours', label: 'Ажиллах цаг', placeholder: '09:00 - 21:00' },
-  { key: 'description', label: 'Тайлбар', placeholder: 'Дэлгүүрийн тухай...', multiline: true },
-]
+  {
+    key: 'description',
+    label: 'Тайлбар',
+    placeholder: 'Дэлгүүрийн тухай...',
+    multiline: true,
+  },
+];
 
 export default function OwnerSettings() {
-  const [form, setForm] = useState({
-    name: '', phone: '', address: '', description: '', hours: '09:00 - 21:00',
-  })
+  const [form, setForm] = useState<SettingsForm>({
+    name: '',
+    phone: '',
+    address: '',
+    description: '',
+    hours: '09:00 - 21:00',
+  });
 
   const { data } = useQuery({
     queryKey: ['shop-settings'],
     queryFn: () => get('/store/settings'),
-  })
+  });
 
   useEffect(() => {
-    const shop = (data as any)?.shop || (data as any)
+    const shop = (data as any)?.shop || (data as any);
     if (shop?.name) {
       setForm({
         name: shop.name || '',
@@ -33,60 +59,70 @@ export default function OwnerSettings() {
         address: shop.address || '',
         description: shop.description || '',
         hours: shop.hours || '09:00 - 21:00',
-      })
+      });
     }
-  }, [data])
+  }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: (d: any) => put('/store/settings', d),
+    mutationFn: (payload: SettingsForm) => put('/store/settings', payload),
     onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      Alert.alert('Амжилттай', 'Хадгалагдлаа')
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Амжилттай', 'Хадгалагдлаа');
     },
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
-  })
+    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Хадгалах үед алдаа гарлаа'),
+  });
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 20, fontWeight: '900' }}>Дэлгүүрийн тохиргоо</Text>
-      </View>
+    <AppScreen>
+      <AppTopBar eyebrow="Дэлгүүр" title="Тохиргоо" showBack={false} />
 
-      <View style={{ padding: 12 }}>
-        {FIELDS.map(f => (
-          <View key={f.key} style={{ marginBottom: 14 }}>
-            <Text style={{ color: C.textSub, fontSize: 12, fontWeight: '600', marginBottom: 6 }}>{f.label.toUpperCase()}</Text>
+      <AppHeader
+        title="Дэлгүүрийн тохиргоо"
+        subtitle="Хаяг, холбоо барих мэдээлэл, ажиллах цагийг шинэчилнэ."
+        icon="settings-outline"
+        accent={C.store}
+      />
+
+      <AppCard style={{ gap: R.md }}>
+        {FIELDS.map((field) => (
+          <View key={field.key} style={{ gap: R.sm }}>
+            <Text style={{ ...F.small, color: C.textSub, fontWeight: '800' }}>
+              {field.label}
+            </Text>
             <TextInput
-              value={(form as any)[f.key]}
-              onChangeText={v => setForm(p => ({ ...p, [f.key]: v }))}
-              placeholder={f.placeholder}
+              value={form[field.key]}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, [field.key]: value }))}
+              placeholder={field.placeholder}
               placeholderTextColor={C.textMuted}
-              keyboardType={(f as any).keyboard || 'default'}
-              multiline={f.multiline}
-              numberOfLines={f.multiline ? 3 : 1}
+              keyboardType={field.keyboard || 'default'}
+              multiline={field.multiline}
+              numberOfLines={field.multiline ? 4 : 1}
               style={{
-                backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14,
-                color: C.text, fontSize: 14, borderWidth: 1, borderColor: C.border,
-                textAlignVertical: f.multiline ? 'top' : 'center',
+                minHeight: field.multiline ? 104 : 46,
+                backgroundColor: C.bgInput,
+                borderRadius: UI.controlRadius,
+                paddingHorizontal: R.md,
+                paddingVertical: R.md,
+                color: C.text,
+                fontSize: 14,
+                borderWidth: 1,
+                borderColor: C.border,
+                textAlignVertical: field.multiline ? 'top' : 'center',
               }}
             />
           </View>
         ))}
 
-        <TouchableOpacity
-          onPress={() => saveMutation.mutate(form)}
+        <AppButton
+          label={saveMutation.isPending ? 'Хадгалж байна...' : 'Хадгалах'}
+          icon="save-outline"
           disabled={saveMutation.isPending}
-          style={{
-            backgroundColor: saveMutation.isPending ? C.textMuted : '#34A853',
-            borderRadius: R.lg, padding: 16, alignItems: 'center', marginTop: 8,
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-            {saveMutation.isPending ? 'Хадгалж байна...' : 'Хадгалах'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          onPress={() => saveMutation.mutate(form)}
+          style={{ backgroundColor: C.store, borderColor: C.store, marginTop: R.sm }}
+        />
+      </AppCard>
+
       <LogoutButton />
-    </ScrollView>
-  )
+    </AppScreen>
+  );
 }

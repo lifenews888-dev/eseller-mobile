@@ -1,114 +1,281 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, RefreshControl, ActivityIndicator } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
-import { C, R, F } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import {
+  filterPublicProducts,
+  firstProductImage,
+  getPublicProductPrice,
+} from '../../src/shared/productQuality';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+
+type FlashProduct = {
+  id: string;
+  name?: string;
+  price?: number;
+  salePrice?: number;
+  originalPrice?: number;
+  discount?: number;
+  sold?: number;
+  stock?: number;
+  images?: string[];
+};
+
+type FlashSale = {
+  title?: string;
+  endsAt?: string;
+  products?: FlashProduct[];
+  items?: FlashProduct[];
+};
+
+function unwrap<T = unknown>(res: any): T {
+  return (res?.data ?? res) as T;
+}
 
 function useCountdown(endsAt: string) {
   const calc = () => Math.max(0, Math.floor((new Date(endsAt).getTime() - Date.now()) / 1000));
   const [secs, setSecs] = useState(calc);
   const prev = useRef(secs);
+
   useEffect(() => {
-    const t = setInterval(() => {
-      const v = calc();
-      setSecs(v);
-      if (v === 0 && prev.current > 0) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      prev.current = v;
+    const timer = setInterval(() => {
+      const value = calc();
+      setSecs(value);
+      if (value === 0 && prev.current > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      }
+      prev.current = value;
     }, 1000);
-    return () => clearInterval(t);
+
+    return () => clearInterval(timer);
   }, [endsAt]);
-  const h = String(Math.floor(secs / 3600)).padStart(2, '0');
-  const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
-  const s = String(secs % 60).padStart(2, '0');
-  return { h, m, s, ended: secs === 0 };
+
+  return {
+    h: String(Math.floor(secs / 3600)).padStart(2, '0'),
+    m: String(Math.floor((secs % 3600) / 60)).padStart(2, '0'),
+    s: String(secs % 60).padStart(2, '0'),
+    ended: secs === 0,
+  };
 }
 
-const fmt = (n: number) => n.toLocaleString() + '₮';
+const fmt = (n: number) => `${(n ?? 0).toLocaleString('mn-MN')}₮`;
 
 export default function FlashSaleScreen() {
+  const fallbackEndsAt = new Date(Date.now() + 4 * 3600_000).toISOString();
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['flash-sale'],
     queryFn: () => get('/flash-sales/active'),
   });
 
-  const sale = (data as any) || { title: 'Flash Sale 🔥', endsAt: new Date(Date.now() + 4 * 3600_000).toISOString(), products: [] };
-  const { h, m, s, ended } = useCountdown(sale.endsAt);
+  const sale = unwrap<FlashSale>(data) || {};
+  const title = sale.title || 'Хямдралтай бараа';
+  const products = filterPublicProducts(sale.products ?? sale.items ?? []);
+  const { h, m, s, ended } = useCountdown(sale.endsAt || fallbackEndsAt);
 
   return (
-    <ScrollView style={st.container} contentContainerStyle={{ padding: R.lg, paddingBottom: 60 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}>
+    <AppScreen
+      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.primary} />}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppTopBar eyebrow="Дэлгүүр" title="Flash sale" showBack={false} />
+      <AppHeader
+        title="Flash sale"
+        subtitle="Хугацаатай хямдрал, Gold гишүүний эрт нэвтрэх боломж."
+        icon="flash-outline"
+        accent={C.seller}
+      />
 
-      {/* Countdown */}
-      <View style={st.countdownCard}>
-        <View>
-          <Text style={{ ...F.h3, color: C.white }}>{sale.title || 'Flash Sale 🔥'}</Text>
-          <Text style={{ ...F.tiny, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{ended ? 'Дууссан!' : 'Дуусахад'}</Text>
+      <AppCard elevated style={st.countdownCard}>
+        <View style={st.countdownHead}>
+          <View style={st.flashIcon}>
+            <Ionicons name="flash" size={22} color={C.seller} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.saleTitle}>{title}</Text>
+            <Text style={st.saleSub}>{ended ? 'Хямдрал дууссан' : 'Дуусах хүртэл'}</Text>
+          </View>
         </View>
         <View style={st.timerRow}>
-          {[h, m, s].map((v, i) => (
-            <React.Fragment key={i}>
-              {i > 0 && <Text style={st.timerColon}>:</Text>}
-              <View style={st.timerBox}><Text style={st.timerText}>{v}</Text></View>
-            </React.Fragment>
+          {[h, m, s].map((value, index) => (
+            <View key={`${value}-${index}`} style={st.timerGroup}>
+              {index > 0 ? <Text style={st.timerColon}>:</Text> : null}
+              <View style={st.timerBox}>
+                <Text style={st.timerText}>{value}</Text>
+              </View>
+            </View>
           ))}
         </View>
-      </View>
+      </AppCard>
 
-      {/* Gold banner */}
-      <TouchableOpacity style={st.goldBanner} onPress={() => router.push('/(tabs)/gold')}>
-        <Ionicons name="diamond" size={18} color={C.gold} />
-        <Text style={{ ...F.small, color: C.gold, flex: 1 }}>Gold гишүүд 1 цагийн өмнө нэвтэрнэ</Text>
-        <Ionicons name="chevron-forward" size={16} color={C.gold} />
+      <TouchableOpacity activeOpacity={0.86} onPress={() => router.push('/gold' as any)}>
+        <AppCard style={st.goldBanner}>
+          <View style={st.goldIcon}>
+            <Ionicons name="star-outline" size={20} color={C.gold} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.goldTitle}>Gold гишүүний давуу эрх</Text>
+            <Text style={st.goldText}>Flash sale эхлэхээс 1 цагийн өмнө нэвтэрнэ.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={C.gold} />
+        </AppCard>
       </TouchableOpacity>
 
-      {/* Products grid */}
-      {isLoading ? <ActivityIndicator color={C.brand} style={{ marginTop: 40 }} /> : (
+      {isLoading ? (
+        <AppCard style={st.loadingCard}>
+          <ActivityIndicator color={C.primary} />
+        </AppCard>
+      ) : products.length === 0 ? (
+        <AppCard style={st.emptyCard}>
+          <Ionicons name="flash-outline" size={42} color={C.textMuted} />
+          <Text style={st.emptyTitle}>Идэвхтэй хямдрал алга</Text>
+          <Text style={st.emptyText}>Дараагийн flash sale эхлэхэд энд бараанууд харагдана.</Text>
+          <AppButton label="Дэлгүүр үзэх" icon="bag-outline" variant="secondary" onPress={() => router.push('/store' as any)} />
+        </AppCard>
+      ) : (
         <View style={st.grid}>
-          {(sale.products || []).map((p: any) => {
-            const disc = p.discount || Math.round((1 - (p.salePrice || p.price) / (p.originalPrice || p.price + 10000)) * 100);
-            const sold = p.sold || 0;
-            const stock = p.stock || 50;
-            const pct = Math.round((sold / stock) * 100);
-            return (
-              <TouchableOpacity key={p.id} style={st.productCard} onPress={() => router.push(`/product/${p.id}`)}>
-                <View style={st.discBadge}><Text style={st.discText}>-{disc}%</Text></View>
-                <View style={st.imgWrap}>
-                  {p.images?.[0] ? <Image source={{ uri: p.images[0] }} style={st.img} /> :
-                    <Ionicons name="flash" size={36} color={C.brand} />}
-                </View>
-                <Text style={{ ...F.small, color: C.text, fontWeight: '600', marginBottom: 6, height: 32 }} numberOfLines={2}>{p.name}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: R.sm }}>
-                  <Text style={{ ...F.body, color: C.brand, fontWeight: '900' }}>{fmt(p.salePrice || p.price)}</Text>
-                  {p.originalPrice && <Text style={{ ...F.tiny, color: C.textMuted, textDecorationLine: 'line-through' }}>{fmt(p.originalPrice)}</Text>}
-                </View>
-                <View style={st.stockBar}><View style={[st.stockFill, { width: `${pct}%` }]} /></View>
-                <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 3, textAlign: 'center' }}>{sold}/{stock} зарагдсан</Text>
-              </TouchableOpacity>
-            );
-          })}
+          {products.map((product, index) => (
+            <ProductCard key={`${product.id || product.name || 'flash'}-${index}`} product={product} />
+          ))}
         </View>
       )}
-    </ScrollView>
+    </AppScreen>
+  );
+}
+
+function ProductCard({ product }: { product: FlashProduct }) {
+  const price = getPublicProductPrice(product);
+  const image = firstProductImage(product, '');
+  const original = product.originalPrice;
+  const discount = product.discount || (original ? Math.max(0, Math.round((1 - price / original) * 100)) : 0);
+  const sold = product.sold || 0;
+  const stock = product.stock || 50;
+  const percent = Math.min(100, Math.max(0, Math.round((sold / Math.max(1, stock)) * 100)));
+
+  return (
+    <TouchableOpacity activeOpacity={0.86} style={st.productTap} onPress={() => router.push(`/product/${product.id}` as any)}>
+      <AppCard style={st.productCard}>
+        {discount > 0 ? (
+          <View style={st.discountBadge}>
+            <Text style={st.discountText}>-{discount}%</Text>
+          </View>
+        ) : null}
+        <View style={st.imageWrap}>
+          {image ? (
+            <Image source={{ uri: image }} style={st.image} />
+          ) : (
+            <Ionicons name="flash-outline" size={34} color={C.seller} />
+          )}
+        </View>
+        <Text style={st.productName} numberOfLines={2}>
+          {product.name || 'Хямдралтай бараа'}
+        </Text>
+        <View style={st.priceRow}>
+          <Text style={st.price}>{fmt(price)}</Text>
+          {original ? <Text style={st.originalPrice}>{fmt(original)}</Text> : null}
+        </View>
+        <View style={st.stockBar}>
+          <View style={[st.stockFill, { width: `${percent}%` }]} />
+        </View>
+        <Text style={st.stockText}>{sold}/{stock} зарагдсан</Text>
+      </AppCard>
+    </TouchableOpacity>
   );
 }
 
 const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  countdownCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.brand, borderRadius: R.lg, padding: R.lg, marginBottom: R.md },
+  countdownCard: { gap: R.md, marginBottom: R.md },
+  countdownHead: { flexDirection: 'row', alignItems: 'center', gap: R.md },
+  flashIcon: {
+    width: UI.iconBox,
+    height: UI.iconBox,
+    borderRadius: UI.controlRadius,
+    backgroundColor: `${C.seller}18`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saleTitle: { ...F.h3, color: C.text },
+  saleSub: { ...F.small, color: C.textSub, marginTop: 2 },
   timerRow: { flexDirection: 'row', alignItems: 'center' },
-  timerBox: { backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: R.sm, paddingHorizontal: 10, paddingVertical: 6 },
-  timerText: { color: C.white, fontSize: 20, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  timerColon: { color: C.white, fontSize: 20, fontWeight: '900', marginHorizontal: 4 },
-  goldBanner: { flexDirection: 'row', alignItems: 'center', gap: R.sm, backgroundColor: C.goldDim, borderRadius: R.md, padding: R.md, marginBottom: R.lg, borderWidth: 0.5, borderColor: C.gold + '33' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  productCard: { width: '48%' as any, backgroundColor: C.bgCard, borderRadius: R.lg, padding: 10, borderWidth: 0.5, borderColor: C.border },
-  discBadge: { position: 'absolute', top: R.sm, left: R.sm, zIndex: 1, backgroundColor: C.brand, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  discText: { color: C.white, fontSize: 11, fontWeight: '900' },
-  imgWrap: { height: 100, borderRadius: 10, backgroundColor: C.bgSection, alignItems: 'center', justifyContent: 'center', marginBottom: R.sm },
-  img: { width: '100%', height: '100%', borderRadius: 10 },
-  stockBar: { height: 4, backgroundColor: C.bgSection, borderRadius: 2, overflow: 'hidden' },
-  stockFill: { height: '100%', backgroundColor: C.gold, borderRadius: 2 },
+  timerGroup: { flexDirection: 'row', alignItems: 'center' },
+  timerBox: {
+    minWidth: 48,
+    minHeight: 42,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.bgSection,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: C.text,
+    fontVariant: ['tabular-nums'],
+  },
+  timerColon: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: C.textMuted,
+    marginHorizontal: R.xs,
+  },
+  goldBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.md,
+    borderColor: `${C.gold}30`,
+    marginBottom: R.md,
+  },
+  goldIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.goldDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goldTitle: { ...F.small, color: C.text, fontWeight: '800' },
+  goldText: { ...F.tiny, color: C.textSub, marginTop: 2 },
+  loadingCard: { minHeight: 120, alignItems: 'center', justifyContent: 'center' },
+  emptyCard: { alignItems: 'center', gap: R.sm },
+  emptyTitle: { ...F.h4, color: C.text, textAlign: 'center' },
+  emptyText: { ...F.small, color: C.textSub, textAlign: 'center', lineHeight: 18 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm },
+  productTap: { width: '48%' },
+  productCard: { minHeight: 242, padding: R.sm, position: 'relative' },
+  discountBadge: {
+    position: 'absolute',
+    top: R.sm,
+    left: R.sm,
+    zIndex: 1,
+    backgroundColor: C.seller,
+    borderRadius: R.sm,
+    paddingHorizontal: R.xs,
+    paddingVertical: 2,
+  },
+  discountText: { ...F.tiny, color: C.bgCard, fontWeight: '900' },
+  imageWrap: {
+    height: 104,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.bgSection,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: R.sm,
+    overflow: 'hidden',
+  },
+  image: { width: '100%', height: '100%' },
+  productName: { ...F.small, color: C.text, fontWeight: '800', minHeight: 36 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: R.xs, marginTop: R.xs, marginBottom: R.sm },
+  price: { ...F.body, color: C.seller, fontWeight: '900' },
+  originalPrice: { ...F.tiny, color: C.textMuted, textDecorationLine: 'line-through' },
+  stockBar: {
+    height: 5,
+    backgroundColor: C.bgSection,
+    borderRadius: R.full,
+    overflow: 'hidden',
+  },
+  stockFill: { height: '100%', backgroundColor: C.gold, borderRadius: R.full },
+  stockText: { ...F.tiny, color: C.textMuted, textAlign: 'center', marginTop: 4 },
 });

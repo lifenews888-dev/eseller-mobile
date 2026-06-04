@@ -1,14 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { get, post, put, del } from '../../src/services/api';
-import { C, R, F } from '../../src/shared/design';
+import { Stack } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { del, get, post, put } from '../../src/services/api';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
-const DISTRICTS = ['Баянгол', 'Баянзүрх', 'Сүхбаатар', 'Чингэлтэй', 'Хан-Уул', 'Сонгинохайрхан', 'Налайх', 'Багануур'];
+const DISTRICTS = [
+  'Баянгол',
+  'Баянзүрх',
+  'Сүхбаатар',
+  'Чингэлтэй',
+  'Хан-Уул',
+  'Сонгинохайрхан',
+  'Налайх',
+  'Багануур',
+];
 
 export default function AddressesScreen() {
   const qc = useQueryClient();
+  const layout = useAppLayoutMetrics();
   const { data, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['addresses'], queryFn: () => get('/buyer/addresses') });
   const addresses = (data as any)?.addresses || [];
 
@@ -20,90 +32,365 @@ export default function AddressesScreen() {
   const [detail, setDetail] = useState('');
   const [isDefault, setIsDefault] = useState(false);
 
-  const reset = () => { setName(''); setPhone(''); setDistrict(''); setDetail(''); setIsDefault(false); setEditId(null); setShowForm(false); };
+  const reset = () => {
+    setName('');
+    setPhone('');
+    setDistrict('');
+    setDetail('');
+    setIsDefault(false);
+    setEditId(null);
+    setShowForm(false);
+  };
 
   const saveMut = useMutation({
     mutationFn: (body: any) => editId ? put(`/buyer/addresses/${editId}`, body) : post('/buyer/addresses', body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['addresses'] }); reset(); },
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['addresses'] });
+      reset();
+    },
+    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Хаяг хадгалж чадсангүй.'),
   });
 
   const delMut = useMutation({
     mutationFn: (id: string) => del(`/buyer/addresses/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['addresses'] }),
+    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Хаяг устгаж чадсангүй.'),
   });
 
-  const openEdit = (a: any) => { setName(a.name); setPhone(a.phone); setDistrict(a.district); setDetail(a.detail); setIsDefault(a.isDefault); setEditId(a.id); setShowForm(true); };
+  const openCreate = () => {
+    reset();
+    setShowForm(true);
+  };
+
+  const openEdit = (address: any) => {
+    setName(address.name ?? '');
+    setPhone(address.phone ?? '');
+    setDistrict(address.district ?? '');
+    setDetail(address.detail ?? address.address ?? '');
+    setIsDefault(!!address.isDefault);
+    setEditId(String(address.id ?? address._id));
+    setShowForm(true);
+  };
+
+  const save = () => {
+    if (!name || !phone || !district) {
+      Alert.alert('Мэдээлэл дутуу', 'Хүлээн авагч, утас, дүүргээ бөглөнө үү.');
+      return;
+    }
+    saveMut.mutate({ name, phone, district, detail, isDefault });
+  };
 
   return (
-    <ScrollView style={st.container} contentContainerStyle={{ padding: R.lg, paddingBottom: 60 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: R.lg }}>
-        <Text style={{ ...F.h2, color: C.white }}>Хүргэлтийн хаяг</Text>
-        <TouchableOpacity style={st.addBtn} onPress={() => { reset(); setShowForm(true); }}>
-          <Ionicons name="add" size={20} color={C.white} /><Text style={{ ...F.small, color: C.white, fontWeight: '700' }}>Нэмэх</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.screen}>
+      <AppScreen
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: showForm ? layout.screenBottom : layout.screenBottom + 96 }}
+      >
+        <Stack.Screen options={{ headerShown: false }} />
+        <AppTopBar eyebrow="Профайл" title="Хүргэлтийн хаяг" showBack={false} />
+        <AppHeader
+          title="Хүргэлтийн хаяг"
+          subtitle="Захиалга хийхдээ ашиглах хаягуудаа хадгалж удирдана."
+          icon="location-outline"
+          accent={C.primary}
+        />
 
-      {showForm && (
-        <View style={st.formCard}>
-          <Text style={{ ...F.h4, color: C.white, marginBottom: R.md }}>{editId ? 'Хаяг засах' : 'Шинэ хаяг'}</Text>
-          <TextInput style={st.input} placeholder="Хүлээн авагч" placeholderTextColor={C.textMuted} value={name} onChangeText={setName} />
-          <TextInput style={st.input} placeholder="Утас" placeholderTextColor={C.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-            {DISTRICTS.map(d => (
-              <TouchableOpacity key={d} style={[st.chip, district === d && st.chipActive]} onPress={() => setDistrict(d)}>
-                <Text style={[st.chipText, district === d && { color: C.white }]}>{d}</Text>
-              </TouchableOpacity>
+        {showForm ? (
+          <AddressForm
+            editId={editId}
+            name={name}
+            phone={phone}
+            district={district}
+            detail={detail}
+            isDefault={isDefault}
+            isSaving={saveMut.isPending}
+            setName={setName}
+            setPhone={setPhone}
+            setDistrict={setDistrict}
+            setDetail={setDetail}
+            setIsDefault={setIsDefault}
+            onCancel={reset}
+            onSave={save}
+          />
+        ) : null}
+
+        {isLoading ? (
+          <AppCard style={styles.centerCard}>
+            <ActivityIndicator color={C.brand} />
+            <Text style={styles.mutedText}>Хаягууд ачаалж байна...</Text>
+          </AppCard>
+        ) : addresses.length === 0 && !showForm ? (
+          <AppCard style={styles.centerCard}>
+            <Ionicons name="location-outline" size={46} color={C.textMuted} />
+            <Text style={styles.emptyTitle}>Хаяг байхгүй</Text>
+            <Text style={styles.mutedText}>Анхны хүргэлтийн хаягаа нэмээрэй.</Text>
+          </AppCard>
+        ) : (
+          <View style={styles.addressList}>
+            {addresses.map((address: any) => (
+              <AddressCard
+                key={address.id ?? address._id}
+                address={address}
+                onEdit={() => openEdit(address)}
+                onDelete={() => {
+                  const id = String(address.id ?? address._id);
+                  Alert.alert('Устгах уу?', 'Энэ хаягийг жагсаалтаас устгана.', [
+                    { text: 'Болих', style: 'cancel' },
+                    { text: 'Устгах', style: 'destructive', onPress: () => delMut.mutate(id) },
+                  ]);
+                }}
+              />
             ))}
-          </ScrollView>
-          <TextInput style={[st.input, { height: 70, textAlignVertical: 'top' }]} placeholder="Дэлгэрэнгүй хаяг" placeholderTextColor={C.textMuted} value={detail} onChangeText={setDetail} multiline />
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, marginBottom: R.md }} onPress={() => setIsDefault(!isDefault)}>
-            <Ionicons name={isDefault ? 'checkbox' : 'square-outline'} size={22} color={isDefault ? C.brand : C.textMuted} />
-            <Text style={{ ...F.small, color: C.text }}>Үндсэн хаяг</Text>
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity style={[st.btn, { backgroundColor: C.bgSection }]} onPress={reset}><Text style={{ ...F.body, color: C.text, fontWeight: '700' }}>Болих</Text></TouchableOpacity>
-            <TouchableOpacity style={[st.btn, { backgroundColor: C.brand }]} onPress={() => { if (!name || !phone || !district) return Alert.alert('Алдаа', 'Бөглөнө үү'); saveMut.mutate({ name, phone, district, detail, isDefault }); }}>
-              <Text style={{ ...F.body, color: C.white, fontWeight: '700' }}>Хадгалах</Text></TouchableOpacity>
           </View>
-        </View>
-      )}
+        )}
+      </AppScreen>
 
-      {addresses.length === 0 && !showForm ? (
-        <View style={st.empty}><Ionicons name="location-outline" size={48} color={C.bgSection} /><Text style={{ ...F.body, color: C.textMuted, marginTop: R.md }}>Хаяг байхгүй</Text></View>
-      ) : addresses.map((a: any) => (
-        <View key={a.id} style={[st.card, a.isDefault && { borderColor: C.brand + '44' }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, flex: 1 }}>
-              <Ionicons name="location" size={18} color={a.isDefault ? C.brand : C.textMuted} />
-              <Text style={{ ...F.body, color: C.white, fontWeight: '700' }}>{a.name}</Text>
-              {a.isDefault && <View style={st.defaultBadge}><Text style={{ fontSize: 9, color: C.brand, fontWeight: '800' }}>Үндсэн</Text></View>}
-            </View>
-            <View style={{ flexDirection: 'row', gap: R.sm }}>
-              <TouchableOpacity onPress={() => openEdit(a)}><Ionicons name="create-outline" size={18} color={C.primary} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => Alert.alert('Устгах?', '', [{ text: 'Болих' }, { text: 'Устгах', style: 'destructive', onPress: () => delMut.mutate(a.id) }])}>
-                <Ionicons name="trash-outline" size={18} color={C.brand} /></TouchableOpacity>
-            </View>
-          </View>
-          <Text style={{ ...F.small, color: C.textSub }}>{a.phone}</Text>
-          <Text style={{ ...F.tiny, color: C.textMuted }}>{a.district} · {a.detail}</Text>
+      {!showForm ? (
+        <View style={[styles.fixedActions, { paddingBottom: layout.insets.bottom + R.lg }]}>
+          <AppButton
+            label="Шинэ хаяг нэмэх"
+            icon="add"
+            onPress={openCreate}
+          />
         </View>
-      ))}
-    </ScrollView>
+      ) : null}
+    </View>
   );
 }
 
-const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.brand, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  formCard: { backgroundColor: C.bgCard, borderRadius: R.lg, padding: R.lg, marginBottom: R.lg, borderWidth: 0.5, borderColor: C.border },
-  input: { backgroundColor: C.bgInput, borderRadius: 10, padding: R.md, color: C.white, fontSize: 14, marginBottom: 10 },
-  chip: { backgroundColor: C.bgInput, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, marginRight: R.sm },
-  chipActive: { backgroundColor: C.brand },
-  chipText: { color: C.textMuted, fontSize: 12, fontWeight: '600' },
-  btn: { flex: 1, borderRadius: R.md, padding: 14, alignItems: 'center' },
-  empty: { alignItems: 'center', paddingVertical: 60 },
-  card: { backgroundColor: C.bgCard, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 0.5, borderColor: C.border },
-  defaultBadge: { backgroundColor: C.brandDim, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+function AddressForm({
+  editId,
+  name,
+  phone,
+  district,
+  detail,
+  isDefault,
+  isSaving,
+  setName,
+  setPhone,
+  setDistrict,
+  setDetail,
+  setIsDefault,
+  onCancel,
+  onSave,
+}: {
+  editId: string | null;
+  name: string;
+  phone: string;
+  district: string;
+  detail: string;
+  isDefault: boolean;
+  isSaving: boolean;
+  setName: (value: string) => void;
+  setPhone: (value: string) => void;
+  setDistrict: (value: string) => void;
+  setDetail: (value: string) => void;
+  setIsDefault: (value: boolean) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <AppCard style={styles.formCard}>
+      <Text style={styles.formTitle}>{editId ? 'Хаяг засах' : 'Шинэ хаяг'}</Text>
+      <Field placeholder="Хүлээн авагч" value={name} onChangeText={setName} icon="person-outline" />
+      <Field placeholder="Утас" value={phone} onChangeText={setPhone} icon="call-outline" keyboardType="phone-pad" />
+
+      <Text style={styles.fieldLabel}>Дүүрэг</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.districtRow}>
+        {DISTRICTS.map((item) => {
+          const active = district === item;
+          return (
+            <TouchableOpacity
+              key={item}
+              activeOpacity={0.84}
+              onPress={() => setDistrict(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item} дүүрэг сонгох`}
+              style={[styles.districtChip, active ? styles.districtChipActive : null]}
+            >
+              <Text style={[styles.districtText, active ? styles.districtTextActive : null]}>{item}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <TextInput
+        style={[styles.input, styles.detailInput]}
+        placeholder="Дэлгэрэнгүй хаяг"
+        placeholderTextColor={C.textMuted}
+        value={detail}
+        onChangeText={setDetail}
+        multiline
+        textAlignVertical="top"
+      />
+
+      <TouchableOpacity
+        activeOpacity={0.84}
+        style={styles.defaultRow}
+        onPress={() => setIsDefault(!isDefault)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isDefault }}
+        accessibilityLabel="Үндсэн хаяг болгох"
+      >
+        <Ionicons name={isDefault ? 'checkbox' : 'square-outline'} size={22} color={isDefault ? C.primary : C.textMuted} />
+        <Text style={styles.defaultText}>Үндсэн хаяг болгох</Text>
+      </TouchableOpacity>
+
+      <View style={styles.formActions}>
+        <AppButton label="Болих" icon="close" variant="ghost" style={styles.formButton} onPress={onCancel} />
+        <AppButton
+          label={isSaving ? 'Хадгалж байна' : 'Хадгалах'}
+          icon="checkmark"
+          disabled={isSaving}
+          style={styles.formButton}
+          onPress={onSave}
+        />
+      </View>
+    </AppCard>
+  );
+}
+
+function Field({
+  icon,
+  ...props
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  placeholder: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  keyboardType?: 'default' | 'phone-pad';
+}) {
+  return (
+    <View style={styles.inputWrap}>
+      <Ionicons name={icon} size={18} color={C.textMuted} />
+      <TextInput
+        {...props}
+        accessibilityLabel={props.placeholder}
+        placeholderTextColor={C.textMuted}
+        style={styles.inputInline}
+      />
+    </View>
+  );
+}
+
+function AddressCard({ address, onEdit, onDelete }: { address: any; onEdit: () => void; onDelete: () => void }) {
+  return (
+    <AppCard style={[styles.addressCard, address.isDefault ? styles.defaultCard : null]}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleRow}>
+          <Ionicons name="location" size={18} color={address.isDefault ? C.primary : C.textMuted} />
+          <Text style={styles.addressName} numberOfLines={1}>{address.name}</Text>
+          {address.isDefault ? <Badge label="Үндсэн" /> : null}
+        </View>
+        <View style={styles.iconActions}>
+          <IconAction icon="create-outline" color={C.primary} label={`${address.name} засах`} onPress={onEdit} />
+          <IconAction icon="trash-outline" color={C.error} label={`${address.name} устгах`} onPress={onDelete} />
+        </View>
+      </View>
+      <Text style={styles.addressPhone}>{address.phone}</Text>
+      <Text style={styles.addressDetail}>{address.district} · {address.detail ?? address.address ?? ''}</Text>
+    </AppCard>
+  );
+}
+
+function Badge({ label }: { label: string }) {
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>{label}</Text>
+    </View>
+  );
+}
+
+function IconAction({ icon, color, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; color: string; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.84}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      style={[styles.iconAction, { backgroundColor: `${color}18` }]}
+    >
+      <Ionicons name={icon} size={16} color={color} />
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  fixedActions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: C.bgCard,
+    padding: UI.screenPad,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  centerCard: { alignItems: 'center', gap: R.sm },
+  emptyTitle: { ...F.body, color: C.text, fontWeight: '900', textAlign: 'center' },
+  mutedText: { ...F.small, color: C.textMuted, textAlign: 'center', lineHeight: 20 },
+  formCard: { marginBottom: R.md },
+  formTitle: { ...F.h4, color: C.text, marginBottom: R.md },
+  inputWrap: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: R.sm,
+  },
+  inputInline: { flex: 1, color: C.text, fontSize: 14, paddingVertical: R.sm },
+  input: {
+    minHeight: 48,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    padding: R.md,
+    color: C.text,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  detailInput: { minHeight: 84, marginBottom: R.sm },
+  fieldLabel: { ...F.small, color: C.text, fontWeight: '900', marginBottom: R.sm },
+  districtRow: { gap: R.sm, paddingBottom: R.sm },
+  districtChip: {
+    backgroundColor: C.bgSection,
+    borderRadius: R.full,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  districtChipActive: { backgroundColor: C.primary, borderColor: C.primary },
+  districtText: { ...F.small, color: C.textSub, fontWeight: '800' },
+  districtTextActive: { color: C.bgCard },
+  defaultRow: { flexDirection: 'row', alignItems: 'center', gap: R.sm, marginBottom: R.md },
+  defaultText: { ...F.small, color: C.text, fontWeight: '800' },
+  formActions: { flexDirection: 'row', gap: R.sm },
+  formButton: { flex: 1 },
+  addressList: { gap: R.sm },
+  addressCard: { padding: R.md },
+  defaultCard: { borderColor: C.primary, backgroundColor: C.primaryDim },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: R.md, marginBottom: R.xs },
+  cardTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: R.sm },
+  addressName: { ...F.body, color: C.text, fontWeight: '900', flex: 1 },
+  addressPhone: { ...F.small, color: C.textSub, marginTop: 2 },
+  addressDetail: { ...F.tiny, color: C.textMuted, marginTop: 3 },
+  iconActions: { flexDirection: 'row', gap: R.sm },
+  iconAction: {
+    width: 32,
+    height: 32,
+    borderRadius: R.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: { backgroundColor: C.bgCard, borderRadius: R.full, paddingHorizontal: R.sm, paddingVertical: 3 },
+  badgeText: { ...F.tiny, color: C.primary, fontWeight: '900' },
 });

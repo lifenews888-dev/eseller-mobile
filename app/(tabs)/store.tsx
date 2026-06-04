@@ -1,453 +1,716 @@
-import React from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, FlatList, TextInput,
-  TouchableOpacity, Image, ScrollView,
-  RefreshControl, Alert,
-} from 'react-native'
-import { router }   from 'expo-router'
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Ionicons } from '@expo/vector-icons'
-import * as Haptics from 'expo-haptics'
-import { get, del } from '../../src/services/api'
-import { useAuth }  from '../../src/store/auth'
-import { C, R, F, S } from '../../src/shared/design'
-import { ProductCardSkeleton } from '../../src/shared/ui/Skeleton'
-import { FilterSheet } from '../../src/shared/ui/FilterSheet'
+  Alert,
+  FlatList,
+  Image,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { useQuery } from '@tanstack/react-query';
+import { del, get } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { C, F, R, UI } from '../../src/shared/design';
+import { LIVE_STORE_CATEGORIES, resolveLiveCategoryKey } from '../../src/shared/liveCategories';
+import {
+  filterPublicProducts,
+  firstProductImage,
+  getPublicProductPrice,
+} from '../../src/shared/productQuality';
+import { ProductCardSkeleton } from '../../src/shared/ui/Skeleton';
+import { FilterSheet } from '../../src/shared/ui/FilterSheet';
+import { EmptyState } from '../../src/shared/ui/EmptyState';
+import { AppButton, AppCard, AppHeader, AppMetricCard, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
-// ═══════════════════════════════════
-// BUYER — Дэлгүүр хайх, бараа үзэх
-// ═══════════════════════════════════
+const STORE_BENEFITS = [
+  { icon: 'car-outline' as const, label: 'Үнэгүй хүргэлт', sub: '50,000₮-өөс дээш', color: C.success },
+  { icon: 'shield-checkmark-outline' as const, label: 'Аюулгүй төлбөр', sub: 'QPay, карт, банк', color: C.primary },
+  { icon: 'flash-outline' as const, label: 'Хурдан хүргэлт', sub: '2-4 цагийн дотор', color: C.seller },
+  { icon: 'sparkles-outline' as const, label: 'Шинэ ирэлт', sub: 'Долоо хоног бүр', color: C.seller },
+];
 
-const CATS = [
-  { slug:'',              icon:'grid',             name:'Бүгд' },
-  { slug:'electronics',   icon:'phone-portrait',   name:'Электроник' },
-  { slug:'fashion',       icon:'shirt',            name:'Хувцас' },
-  { slug:'home-living',   icon:'home',             name:'Гэр ахуй' },
-  { slug:'beauty-health', icon:'sparkles',         name:'Гоо сайхан' },
-  { slug:'kids-toys',     icon:'happy',            name:'Хүүхэд' },
-  { slug:'auto-moto',     icon:'car',              name:'Авто' },
-  { slug:'sports-travel', icon:'football',         name:'Спорт' },
-  { slug:'food',          icon:'fast-food',        name:'Хүнс' },
-  { slug:'digital',       icon:'laptop',           name:'Дижитал' },
-  { slug:'books',         icon:'book',             name:'Ном' },
-  { slug:'construction',  icon:'construct',        name:'Барилга' },
-  { slug:'services',      icon:'build',            name:'Үйлчилгээ' },
-]
+const STORE_PROMOS = [
+  'Шинэ хэрэглэгчид 10,000₮ купон',
+  '50,000₮-өөс дээш үнэгүй хүргэлт',
+  'Gold гишүүнд 2x оноо',
+  'Долоо хоног бүр шинэ ирэлт',
+];
 
-function BuyerStoreScreen() {
-  const [search,     setSearch]     = useState('')
-  const [category,   setCategory]   = useState('')
-  const [filterOpen, setFilterOpen] = useState(false)
-  const [filters,    setFilters]    = useState<any>({})
+const STORE_TRUST = ['Баталгаат', 'Хурдан хүргэлт', '48 цагийн буцаалт', 'Аюулгүй төлбөр'];
+const STORE_MARKET_ACCENT = C.brand;
+const STORE_MARKET_ACCENT_DIM = C.brandDim;
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['store-products', search, category, filters],
-    queryFn:  () => get(
-      `/search?q=${search}&category=${category}&limit=20` +
-      `&minPrice=${filters.minPrice || ''}` +
-      `&maxPrice=${filters.maxPrice || ''}` +
-      `&sort=${filters.sortBy || 'newest'}`
-    ),
-  })
+type StoreRoutePatch = {
+  search?: string;
+  category?: string;
+  saleOnly?: boolean;
+};
 
-  const products = (data as any)?.products || []
+export default function StoreScreen() {
+  const { role } = useAuth();
 
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View style={{
-        paddingTop: 52, paddingHorizontal: 16, paddingBottom: 12,
-        backgroundColor: C.bg,
-      }}>
-        <View style={{
-          flexDirection: 'row', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: 12,
-        }}>
-          <Text style={{ ...F.h2, color: C.text }}>Дэлгүүр</Text>
-          <TouchableOpacity
-            onPress={() => setFilterOpen(true)}
-            style={{
-              backgroundColor: C.bgSection, borderRadius: R.lg,
-              padding: 10, borderWidth: 1,
-              borderColor: Object.keys(filters).length > 0 ? C.primary : C.border,
-            }}
-          >
-            <Ionicons name="options-outline" size={20}
-              color={Object.keys(filters).length > 0 ? C.primary : C.text} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={{
-          flexDirection: 'row', alignItems: 'center',
-          backgroundColor: C.bgSection, borderRadius: R.xl,
-          paddingHorizontal: 14, borderWidth: 1, borderColor: C.border,
-        }}>
-          <Ionicons name="search" size={18} color={C.textMuted} />
-          <TextInput
-            value={search} onChangeText={setSearch}
-            placeholder="Бараа хайх..." placeholderTextColor={C.textMuted}
-            style={{ flex: 1, color: C.text, padding: 12, fontSize: 14 }}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={18} color={C.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Categories */}
-      <View>
-        <ScrollView
-          horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 6 }}
-        >
-          {CATS.map(c => {
-            const active = category === c.slug
-            return (
-              <TouchableOpacity
-                key={c.slug || 'all'}
-                onPress={() => setCategory(category === c.slug && c.slug !== '' ? '' : c.slug)}
-                style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  paddingHorizontal: 14, paddingVertical: 9,
-                  borderRadius: R.full, gap: 6,
-                  backgroundColor: active ? C.primary : C.bgSection,
-                  borderWidth: 1, borderColor: active ? C.primary : C.border,
-                }}
-              >
-                <Ionicons
-                  name={(active ? c.icon : c.icon + '-outline') as any}
-                  size={14} color={active ? C.white : C.textSub}
-                />
-                <Text style={{
-                  color: active ? C.white : C.textSub,
-                  fontSize: 13, fontWeight: active ? '700' : '500',
-                }}>
-                  {c.name}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Products */}
-      {isLoading ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
-          {[1,2,3,4,5,6].map(i => <ProductCardSkeleton key={i} />)}
-        </View>
-      ) : (
-        <FlatList
-          data={products} numColumns={2}
-          keyExtractor={i => i._id || i.id}
-          contentContainerStyle={{ padding: 8, paddingBottom: 80 }}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={C.brand} />}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => router.push(`/product/${item._id || item.id}`)}
-              style={{
-                flex: 1, margin: 6, backgroundColor: C.bgCard,
-                borderRadius: R.lg, overflow: 'hidden',
-                borderWidth: 1, borderColor: C.border, ...S.card,
-              }}
-            >
-              <Image
-                source={{ uri: (typeof item.images?.[0] === 'string' ? item.images[0] : item.images?.[0]?.url) || item.media?.[0]?.url }}
-                style={{ width: '100%', aspectRatio: 1, backgroundColor: C.bgSection }}
-                resizeMode="cover"
-              />
-              <View style={{ padding: 10 }}>
-                <Text style={{ color: C.text, fontSize: 13, fontWeight: '500' }} numberOfLines={2}>
-                  {item.name}
-                </Text>
-                {item.price > 0 ? (
-                  <Text style={{ color: C.brand, fontWeight: '800', fontSize: 14, marginTop: 6 }}>
-                    {item.price.toLocaleString()}₮
-                  </Text>
-                ) : (
-                  <Text style={{ color: '#D97706', fontWeight: '600', fontSize: 12, marginTop: 6 }}>
-                    Үнэ тохируулаагүй
-                  </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 80 }}>
-              <Ionicons name="cube-outline" size={64} color={C.border} />
-              <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 16 }}>
-                Бараа олдсонгүй
-              </Text>
-            </View>
-          }
-        />
-      )}
-
-      <FilterSheet visible={filterOpen} onClose={() => setFilterOpen(false)}
-        onApply={setFilters} type="store" />
-    </View>
-  )
+  if (role === 'STORE') return <StoreOwnerProductsScreen />;
+  return <BuyerStoreScreen />;
 }
 
-// ═══════════════════════════════════
-// STORE OWNER — Миний бараа удирдах
-// ═══════════════════════════════════
+function BuyerStoreScreen() {
+  const params = useLocalSearchParams<{ category?: string; q?: string; sale?: string }>();
+  const layout = useAppLayoutMetrics();
+  const searchInputRef = useRef<TextInput>(null);
+  const [search, setSearch] = useState('');
+  const [searchFocusKey, setSearchFocusKey] = useState(0);
+  const [category, setCategory] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<any>({});
+  const saleOnly = params.sale === 'true';
 
-function StoreOwnerProductsScreen() {
-  const { user } = useAuth()
-  const [tab, setTab] = useState<'active' | 'inactive'>('active')
+  useEffect(() => {
+    setCategory(typeof params.category === 'string' ? resolveLiveCategoryKey(params.category) : '');
+    setSearch(typeof params.q === 'string' ? params.q : '');
+  }, [params.category, params.q]);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['my-products', tab],
-    queryFn: () => get(`/products/my?status=${tab}`),
-    enabled: !!user,
-  })
+  const activeCategory = LIVE_STORE_CATEGORIES.find((item) => item.key === category);
+  const apiCategory = activeCategory?.apiCategory ?? category;
+  const visibleStoreCategories = useMemo(() => {
+    if (!category || !activeCategory) return LIVE_STORE_CATEGORIES;
 
-  const products = (data as any)?.products || (Array.isArray(data) ? data : [])
+    const allCategory = LIVE_STORE_CATEGORIES[0];
+    const remainingCategories = LIVE_STORE_CATEGORIES.filter(
+      (item) => item.key && item.key !== activeCategory.key,
+    );
 
-  const stats = {
-    total:    products.length,
-    active:   products.filter((p: any) => p.isActive).length,
-    outStock: products.filter((p: any) => (p.stock || 0) <= 0).length,
-    revenue:  products.reduce((s: number, p: any) => s + (p.soldCount || 0) * (p.price || 0), 0),
-  }
+    return [allCategory, activeCategory, ...remainingCategories];
+  }, [activeCategory, category]);
 
-  const handleDelete = (id: string, name: string) => {
-    Alert.alert('Устгах', `"${name}" устгах уу?`, [
-      { text: 'Болих', style: 'cancel' },
-      {
-        text: 'Устгах', style: 'destructive',
-        onPress: async () => {
-          try {
-            await del(`/products/${id}`)
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-            refetch()
-          } catch (e: any) {
-            Alert.alert('Алдаа', e.message)
-          }
-        },
-      },
-    ])
-  }
+  const { data, isLoading, isRefetching, refetch } = useQuery({
+    queryKey: ['store-products', search, category, filters, saleOnly],
+    queryFn: () => get('/search', {
+      q: search,
+      category: apiCategory,
+      limit: 20,
+      minPrice: filters.minPrice || '',
+      maxPrice: filters.maxPrice || '',
+      sort: filters.sortBy || 'newest',
+      ...(saleOnly ? { flashSale: true } : {}),
+    }),
+  });
+
+  const products = filterPublicProducts((data as any)?.products || []);
+  const hasFilters = Object.values(filters).some(Boolean);
+  const hasActiveStoreQuery = Boolean(search.trim() || category || hasFilters || saleOnly);
+
+  const replaceStoreRoute = (patch: StoreRoutePatch) => {
+    const nextSearch = patch.search ?? search;
+    const nextCategory = patch.category ?? category;
+    const nextSaleOnly = patch.saleOnly ?? saleOnly;
+    const routeParams: Record<string, string> = {};
+
+    if (nextCategory) routeParams.category = nextCategory;
+    if (nextSearch.trim()) routeParams.q = nextSearch.trim();
+    if (nextSaleOnly) routeParams.sale = 'true';
+
+    router.replace(
+      Object.keys(routeParams).length
+        ? ({ pathname: '/store' as any, params: routeParams } as any)
+        : ('/store' as any),
+    );
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    replaceStoreRoute({ search: value });
+  };
+
+  const handleSearchClear = () => {
+    Haptics.selectionAsync().catch(() => {});
+    setSearch('');
+    replaceStoreRoute({ search: '' });
+  };
+
+  const handleCategoryPress = (nextCategory: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setCategory(nextCategory);
+    replaceStoreRoute({ category: nextCategory });
+  };
+
+  const clearStoreFilters = () => {
+    Haptics.selectionAsync().catch(() => {});
+    setSearch('');
+    setCategory('');
+    setFilters({});
+    router.replace('/store' as any);
+  };
+
+  const focusStoreSearch = () => {
+    Haptics.selectionAsync().catch(() => {});
+    setSearchFocusKey((current) => current + 1);
+    searchInputRef.current?.focus();
+    setTimeout(() => searchInputRef.current?.focus(), 50);
+  };
+
+  const header = (
+    <>
+      <AppTopBar eyebrow="eSeller" title="Дэлгүүр" showBack={false} />
+      <AppHeader
+        title="Дэлгүүр"
+        subtitle="Нэгдсэн marketplace-ээс бараа, үйлчилгээ, шинэ саналуудыг хайна."
+        icon="storefront-outline"
+        accent={STORE_MARKET_ACCENT}
+        style={{ marginBottom: R.md }}
+      />
+
+      <AppCard style={{ padding: R.md, marginBottom: R.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm }}>
+          <View
+            style={{
+              flex: 1,
+              minHeight: 46,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: C.bgSection,
+              borderRadius: UI.controlRadius,
+              paddingHorizontal: R.md,
+              borderWidth: 1,
+              borderColor: C.border,
+            }}
+          >
+            <Ionicons name="search-outline" size={18} color={C.textMuted} />
+            <TextInput
+              key={searchFocusKey}
+              ref={searchInputRef}
+              autoFocus={searchFocusKey > 0}
+              value={search}
+              onChangeText={handleSearchChange}
+              placeholder="Бараа хайх..."
+              placeholderTextColor={C.textMuted}
+              style={{ flex: 1, color: C.text, padding: R.sm, fontSize: 14 }}
+            />
+            {search.length > 0 ? (
+              <TouchableOpacity
+                activeOpacity={0.82}
+                onPress={handleSearchClear}
+                accessibilityRole="button"
+                accessibilityLabel="Хайлтыг цэвэрлэх"
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={18} color={C.textMuted} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.84}
+            onPress={() => setFilterOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Шүүлтүүр нээх"
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: UI.controlRadius,
+              backgroundColor: hasFilters ? STORE_MARKET_ACCENT_DIM : C.bgSection,
+              borderWidth: 1,
+              borderColor: hasFilters ? STORE_MARKET_ACCENT : C.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="options-outline" size={20} color={hasFilters ? STORE_MARKET_ACCENT : C.text} />
+          </TouchableOpacity>
+        </View>
+      </AppCard>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: R.sm, paddingBottom: R.md }}
+      >
+        {visibleStoreCategories.map((item) => {
+          const active = category === item.key;
+          return (
+            <TouchableOpacity
+              key={item.key || 'all'}
+              activeOpacity={0.84}
+              onPress={() => handleCategoryPress(active && item.key !== '' ? '' : item.key)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name} ангилал`}
+              style={{
+                minHeight: 38,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: R.xs,
+                paddingHorizontal: R.md,
+                borderRadius: R.full,
+                backgroundColor: active ? STORE_MARKET_ACCENT : C.bgSection,
+                borderWidth: 1,
+                borderColor: active ? STORE_MARKET_ACCENT : C.border,
+              }}
+            >
+              <Ionicons name={item.icon as any} size={14} color={active ? C.bgCard : C.textSub} />
+              <Text style={{ ...F.small, color: active ? C.bgCard : C.textSub, fontWeight: active ? '800' : '600' }}>
+                {item.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <StorePromoSurface
+        productCount={products.length}
+        saleOnly={saleOnly}
+        loading={isLoading}
+        onSearchPress={focusStoreSearch}
+        onSalePress={(enabled) => replaceStoreRoute({ saleOnly: enabled })}
+      />
+    </>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View style={{
-        paddingTop: 52, paddingHorizontal: 16, paddingBottom: 12,
-      }}>
-        <View style={{
-          flexDirection: 'row', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: 16,
-        }}>
-          <Text style={{ ...F.h2, color: C.text }}>Миний бараа</Text>
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-              router.push('/product/create' as any)
-            }}
-            style={{
-              backgroundColor: C.store, borderRadius: R.lg,
-              paddingHorizontal: 14, paddingVertical: 9,
-              flexDirection: 'row', alignItems: 'center', gap: 6,
-            }}
-          >
-            <Ionicons name="add" size={18} color={C.white} />
-            <Text style={{ color: C.white, fontWeight: '700', fontSize: 13 }}>
-              Бараа нэмэх
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Stats */}
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-          {[
-            { label: 'Нийт', value: stats.total, color: C.primary },
-            { label: 'Идэвхтэй', value: stats.active, color: C.secondary },
-            { label: 'Дууссан', value: stats.outStock, color: C.error },
-          ].map((s, i) => (
-            <View key={i} style={{
-              flex: 1, backgroundColor: C.bgCard, borderRadius: R.lg,
-              padding: 12, alignItems: 'center',
-              borderWidth: 1, borderColor: C.border,
-            }}>
-              <Text style={{ color: s.color, fontSize: 22, fontWeight: '800' }}>
-                {s.value}
-              </Text>
-              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>
-                {s.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Revenue */}
-        <View style={{
-          backgroundColor: C.store + '12', borderRadius: R.lg,
-          padding: 14, flexDirection: 'row', alignItems: 'center',
-          justifyContent: 'space-between', borderWidth: 1, borderColor: C.store + '30',
-          marginBottom: 12,
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="trending-up" size={20} color={C.store} />
-            <Text style={{ color: C.textSub, fontSize: 13 }}>Нийт борлуулалт</Text>
-          </View>
-          <Text style={{ color: C.store, fontWeight: '800', fontSize: 16 }}>
-            {stats.revenue.toLocaleString()}₮
-          </Text>
-        </View>
-
-        {/* Tabs */}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {(['active', 'inactive'] as const).map(t => (
-            <TouchableOpacity
-              key={t}
-              onPress={() => setTab(t)}
-              style={{
-                flex: 1, paddingVertical: 10, alignItems: 'center',
-                borderRadius: R.lg,
-                backgroundColor: tab === t ? C.store + '15' : C.bgSection,
-                borderWidth: 1,
-                borderColor: tab === t ? C.store : C.border,
-              }}
-            >
-              <Text style={{
-                color: tab === t ? C.store : C.textMuted,
-                fontWeight: tab === t ? '700' : '500', fontSize: 13,
-              }}>
-                {t === 'active' ? 'Идэвхтэй' : 'Идэвхгүй'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Product list */}
       {isLoading ? (
-        <View style={{ padding: 10 }}>
-          {[1,2,3].map(i => <ProductCardSkeleton key={i} />)}
-        </View>
+        <ScrollView
+          contentContainerStyle={{
+            padding: UI.screenPad,
+            paddingTop: layout.screenTop,
+            paddingBottom: layout.screenBottom,
+          }}
+        >
+          {header}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <ProductCardSkeleton key={item} style={{ flexBasis: '47%', flexGrow: 0, flexShrink: 0 }} />
+            ))}
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={products}
-          keyExtractor={(p: any) => p._id || p.id}
-          contentContainerStyle={{ padding: 12, paddingBottom: 80 }}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={C.store} />}
-          renderItem={({ item }: any) => (
-            <View style={{
-              flexDirection: 'row', backgroundColor: C.bgCard,
-              borderRadius: R.lg, marginBottom: 10, overflow: 'hidden',
-              borderWidth: 1, borderColor: C.border,
-            }}>
-              <Image
-                source={{ uri: (typeof item.images?.[0] === 'string' ? item.images[0] : item.images?.[0]?.url) || item.media?.[0]?.url }}
-                style={{ width: 90, height: 90, backgroundColor: C.bgSection }}
-                resizeMode="cover"
-              />
-              <View style={{ flex: 1, padding: 12, justifyContent: 'center' }}>
-                <Text style={{ color: C.text, fontWeight: '600', fontSize: 14 }} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  {item.price > 0 ? (
-                    <Text style={{ color: C.brand, fontWeight: '800', fontSize: 15 }}>
-                      {item.price.toLocaleString()}₮
-                    </Text>
-                  ) : (
-                    <Text style={{ color: '#D97706', fontWeight: '600', fontSize: 12 }}>
-                      Үнэ тохируулаагүй
-                    </Text>
-                  )}
-                  <View style={{
-                    backgroundColor: (item.stock || 0) > 0 ? C.secondary + '18' : C.error + '18',
-                    borderRadius: R.sm, paddingHorizontal: 6, paddingVertical: 2,
-                  }}>
-                    <Text style={{
-                      color: (item.stock || 0) > 0 ? C.secondary : C.error,
-                      fontSize: 10, fontWeight: '700',
-                    }}>
-                      {(item.stock || 0) > 0 ? `${item.stock} ширхэг` : 'Дууссан'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                  <Text style={{ color: C.textMuted, fontSize: 11 }}>
-                    {item.soldCount || 0} зарагдсан
-                  </Text>
-                  {item.allowAffiliate && (
-                    <View style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 2,
-                    }}>
-                      <Ionicons name="megaphone-outline" size={10} color={C.seller} />
-                      <Text style={{ color: C.seller, fontSize: 10 }}>
-                        {item.affiliateCommission || item.commission}%
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Actions */}
-              <View style={{
-                justifyContent: 'center', paddingRight: 10, gap: 8,
-              }}>
-                <TouchableOpacity
-                  onPress={() => router.push(`/product/edit/${item._id || item.id}` as any)}
-                  style={{
-                    backgroundColor: C.primary + '15', borderRadius: R.sm,
-                    padding: 8,
-                  }}
-                >
-                  <Ionicons name="create-outline" size={16} color={C.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDelete(item._id || item.id, item.name)}
-                  style={{
-                    backgroundColor: C.error + '15', borderRadius: R.sm,
-                    padding: 8,
-                  }}
-                >
-                  <Ionicons name="trash-outline" size={16} color={C.error} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+          numColumns={2}
+          keyExtractor={(item: any) => item._id || item.id}
+          contentContainerStyle={{
+            padding: UI.screenPad,
+            paddingTop: layout.screenTop,
+            paddingBottom: layout.screenBottom,
+          }}
+          ListHeaderComponent={header}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={STORE_MARKET_ACCENT} />}
+          renderItem={({ item }) => <BuyerProductCard item={item} />}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 60 }}>
-              <Ionicons name="cube-outline" size={64} color={C.border} />
-              <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 16 }}>
-                Бараа байхгүй байна
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push('/product/create' as any)}
-                style={{
-                  backgroundColor: C.store, borderRadius: R.lg,
-                  paddingHorizontal: 24, paddingVertical: 12, marginTop: 16,
-                }}
-              >
-                <Text style={{ color: C.white, fontWeight: '700' }}>
-                  Эхний бараагаа нэмэх
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <AppCard style={{ marginTop: R.lg }}>
+              <EmptyState
+                icon="cube-outline"
+                title="Бараа олдсонгүй"
+                subtitle="Хайлтаа өөрчилж эсвэл шүүлтүүрээ суллаад дахин үзнэ үү."
+                cta={hasActiveStoreQuery ? {
+                  label: 'Шүүлтүүр цэвэрлэх',
+                  icon: 'refresh-outline',
+                  accent: STORE_MARKET_ACCENT,
+                  onPress: clearStoreFilters,
+                } : undefined}
+                compact
+              />
+            </AppCard>
           }
         />
       )}
+
+      <FilterSheet visible={filterOpen} onClose={() => setFilterOpen(false)} onApply={setFilters} type="store" />
     </View>
-  )
+  );
 }
 
-// ═══════════════════════════════════
-// ROUTER — Role-аар ялгах
-// ═══════════════════════════════════
+function StorePromoSurface({
+  productCount,
+  saleOnly,
+  loading,
+  onSearchPress,
+  onSalePress,
+}: {
+  productCount: number;
+  saleOnly: boolean;
+  loading?: boolean;
+  onSearchPress: () => void;
+  onSalePress: (enabled: boolean) => void;
+}) {
+  const countLabel = loading ? 'Уншиж байна' : `${productCount} бараа`;
 
-export default function StoreScreen() {
-  const { role } = useAuth()
+  return (
+    <View style={{ gap: R.md, marginBottom: R.md }}>
+      <AppCard elevated style={{ borderColor: STORE_MARKET_ACCENT + '24' }}>
+        <Text style={{ ...F.tiny, color: STORE_MARKET_ACCENT, fontWeight: '900', marginBottom: R.xs }}>Онцлох</Text>
+        <Text style={{ ...F.h2, color: C.text }}>Нэгдсэн дэлгүүрийн шинэ саналууд</Text>
+        <Text style={{ ...F.small, color: C.textSub, marginTop: R.xs }}>
+          Хямдрал, шинэ бараа, баталгаат дэлгүүрүүд нэг дор.
+        </Text>
 
-  if (role === 'STORE') return <StoreOwnerProductsScreen />
+        <View style={{ flexDirection: 'row', gap: R.sm, marginTop: R.md }}>
+          <AppButton
+            label="Бараа хайх"
+            icon="search-outline"
+            onPress={onSearchPress}
+            style={{ flex: 1 }}
+          />
+          <AppButton
+            label="Хямдрал"
+            icon="pricetag-outline"
+            variant={saleOnly ? 'primary' : 'ghost'}
+            onPress={() => onSalePress(!saleOnly)}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </AppCard>
 
-  // BUYER / default — DRIVER/SELLER now have their own groups
-  return <BuyerStoreScreen />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+        {STORE_BENEFITS.map((benefit) => (
+          <AppCard key={benefit.label} style={{ width: '48%', padding: R.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: R.sm,
+                  backgroundColor: benefit.color + '18',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name={benefit.icon} size={17} color={benefit.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...F.tiny, color: C.text, fontWeight: '900' }} numberOfLines={1}>
+                  {benefit.label}
+                </Text>
+                <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }} numberOfLines={1}>
+                  {benefit.sub}
+                </Text>
+              </View>
+            </View>
+          </AppCard>
+        ))}
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+        {STORE_PROMOS.map((promo) => (
+          <View
+            key={promo}
+            style={{
+              maxWidth: '100%',
+              backgroundColor: C.bgSection,
+              borderRadius: R.full,
+              paddingHorizontal: R.md,
+              paddingVertical: R.sm,
+              borderWidth: 1,
+              borderColor: C.border,
+            }}
+          >
+            <Text style={{ ...F.small, color: C.textSub, fontWeight: '700' }}>{promo}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+        {STORE_TRUST.map((trust) => (
+          <View
+            key={trust}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: R.xs,
+              backgroundColor: C.bgCard,
+              borderRadius: R.full,
+              paddingHorizontal: R.md,
+              paddingVertical: R.sm,
+              borderWidth: 1,
+              borderColor: C.border,
+            }}
+          >
+            <Ionicons name="checkmark-circle" size={13} color={C.secondary} />
+            <Text style={{ ...F.tiny, color: C.textSub, fontWeight: '800' }}>{trust}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: R.md }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...F.h3, color: C.text }}>Нэгдсэн бараанууд</Text>
+          <Text style={{ ...F.small, color: C.textMuted, marginTop: 2 }}>{countLabel}</Text>
+        </View>
+        <Text style={{ ...F.tiny, color: C.textMuted, fontWeight: '700' }}>Эрэмбэ: шинэ эхэндээ</Text>
+      </View>
+    </View>
+  );
+}
+
+function StoreOwnerProductsScreen() {
+  const { user } = useAuth();
+  const layout = useAppLayoutMetrics();
+  const [tab, setTab] = useState<'active' | 'inactive'>('active');
+
+  const { data, isLoading, isRefetching, refetch } = useQuery({
+    queryKey: ['my-products', tab],
+    queryFn: () => get(`/products/my?status=${tab}`),
+    enabled: !!user,
+  });
+
+  const products = useMemo(() => (data as any)?.products || (Array.isArray(data) ? data : []), [data]);
+
+  const stats = {
+    total: products.length,
+    active: products.filter((item: any) => item.isActive).length,
+    outStock: products.filter((item: any) => (item.stock || 0) <= 0).length,
+    revenue: products.reduce((sum: number, item: any) => sum + (item.soldCount || 0) * (item.price || 0), 0),
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    Alert.alert('Устгах', `"${name}" барааг устгах уу?`, [
+      { text: 'Болих', style: 'cancel' },
+      {
+        text: 'Устгах',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await del(`/products/${id}`);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            refetch();
+          } catch (error: any) {
+            Alert.alert('Алдаа', error.message);
+          }
+        },
+      },
+    ]);
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <FlatList
+        data={isLoading ? [] : products}
+        keyExtractor={(item: any) => item._id || item.id}
+        contentContainerStyle={{
+          padding: UI.screenPad,
+          paddingTop: layout.screenTop,
+          paddingBottom: layout.screenBottom,
+        }}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.store} />}
+        ListHeaderComponent={
+          <>
+            <AppHeader
+              title="Миний бараа"
+              subtitle="Дэлгүүрийн бараа, үлдэгдэл, борлуулалтын төлөв."
+              icon="cube-outline"
+              accent={C.store}
+              style={{ marginBottom: R.md }}
+            />
+
+            <AppButton
+              label="Бараа нэмэх"
+              icon="add"
+              variant="success"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push({ pathname: '/owner/products', params: { create: '1' } } as any);
+              }}
+              style={{ backgroundColor: C.store, borderColor: C.store, marginBottom: R.md }}
+            />
+
+            <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.md }}>
+              <AppMetricCard label="Нийт" value={stats.total} icon="apps-outline" accent={C.primary} />
+              <AppMetricCard label="Идэвхтэй" value={stats.active} icon="checkmark-circle-outline" accent={C.secondary} />
+              <AppMetricCard label="Дууссан" value={stats.outStock} icon="alert-circle-outline" accent={C.error} />
+            </View>
+
+            <AppCard style={{ marginBottom: R.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: R.md }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, flex: 1 }}>
+                  <Ionicons name="trending-up-outline" size={20} color={C.store} />
+                  <Text style={{ ...F.small, color: C.textSub }}>Нийт борлуулалт</Text>
+                </View>
+                <Text style={{ ...F.h4, color: C.store }}>{formatMoney(stats.revenue)}</Text>
+              </View>
+            </AppCard>
+
+            <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.md }}>
+              {(['active', 'inactive'] as const).map((item) => {
+                const active = tab === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    activeOpacity={0.84}
+                    onPress={() => setTab(item)}
+                    style={{
+                      flex: 1,
+                      minHeight: 42,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: UI.controlRadius,
+                      backgroundColor: active ? C.store + '18' : C.bgSection,
+                      borderWidth: 1,
+                      borderColor: active ? C.store : C.border,
+                    }}
+                  >
+                    <Text style={{ ...F.small, color: active ? C.store : C.textMuted, fontWeight: '800' }}>
+                      {item === 'active' ? 'Идэвхтэй' : 'Идэвхгүй'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        }
+        renderItem={({ item }) => <OwnerProductRow item={item} onDelete={handleDelete} />}
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={{ paddingTop: R.md }}>
+              {[1, 2, 3].map((item) => <ProductCardSkeleton key={item} />)}
+            </View>
+          ) : (
+            <AppCard style={{ marginTop: R.lg }}>
+              <EmptyState
+                icon="cube-outline"
+                title="Бараа байхгүй байна"
+                subtitle="Дэлгүүрийн эхний бараагаа нэмээд захиалга авч эхлээрэй."
+                cta={{
+                  label: 'Эхний бараагаа нэмэх',
+                  icon: 'add',
+                  accent: C.store,
+                  onPress: () => router.push({ pathname: '/owner/products', params: { create: '1' } } as any),
+                }}
+              />
+            </AppCard>
+          )
+        }
+      />
+    </View>
+  );
+}
+
+function BuyerProductCard({ item }: { item: any }) {
+  const id = item._id || item.id;
+  const image = firstProductImage(item);
+  const price = getPublicProductPrice(item);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.86}
+      onPress={() => router.push(`/product/${id}` as any)}
+      style={{ flex: 1, margin: R.xs }}
+    >
+      <AppCard style={{ padding: 0, overflow: 'hidden' }}>
+        <Image
+          source={{ uri: image }}
+          style={{ width: '100%', aspectRatio: 1, backgroundColor: C.bgSection }}
+          resizeMode="cover"
+        />
+        <View style={{ padding: R.sm }}>
+          <Text style={{ ...F.small, color: C.text, fontWeight: '700' }} numberOfLines={2}>
+            {item.name}
+          </Text>
+          {price > 0 ? (
+            <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>
+              {formatMoney(price)}
+            </Text>
+          ) : (
+            <Text style={{ ...F.tiny, color: C.seller, fontWeight: '800', marginTop: R.xs }}>
+              Үнэ тохируулаагүй
+            </Text>
+          )}
+        </View>
+      </AppCard>
+    </TouchableOpacity>
+  );
+}
+
+function OwnerProductRow({ item, onDelete }: { item: any; onDelete: (id: string, name: string) => void }) {
+  const id = item._id || item.id;
+  const stock = Number(item.stock || 0);
+
+  return (
+    <AppCard style={{ flexDirection: 'row', padding: 0, overflow: 'hidden', marginBottom: R.sm }}>
+      <Image
+        source={{ uri: firstImage(item) }}
+        style={{ width: 92, height: 92, backgroundColor: C.bgSection }}
+        resizeMode="cover"
+      />
+      <View style={{ flex: 1, padding: R.md, justifyContent: 'center' }}>
+        <Text style={{ ...F.small, color: C.text, fontWeight: '800' }} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, marginTop: R.xs, flexWrap: 'wrap' }}>
+          {Number(item.price || 0) > 0 ? (
+            <Text style={{ ...F.small, color: C.brand, fontWeight: '900' }}>{formatMoney(item.price)}</Text>
+          ) : (
+            <Text style={{ ...F.tiny, color: C.seller, fontWeight: '800' }}>Үнэ тохируулаагүй</Text>
+          )}
+          <StatusPill
+            label={stock > 0 ? `${stock} ширхэг` : 'Дууссан'}
+            color={stock > 0 ? C.secondary : C.error}
+          />
+        </View>
+        <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.xs }}>
+          {item.soldCount || 0} зарагдсан
+        </Text>
+      </View>
+      <View style={{ justifyContent: 'center', paddingRight: R.sm, gap: R.sm }}>
+        <IconAction icon="eye-outline" color={C.primary} onPress={() => router.push(`/product/${id}` as any)} />
+        <IconAction icon="trash-outline" color={C.error} onPress={() => onDelete(id, item.name)} />
+      </View>
+    </AppCard>
+  );
+}
+
+function IconAction({
+  icon,
+  color,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  color: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={onPress}
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: R.sm,
+        backgroundColor: color + '15',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Ionicons name={icon} size={16} color={color} />
+    </TouchableOpacity>
+  );
+}
+
+function StatusPill({ label, color }: { label: string; color: string }) {
+  return (
+    <View
+      style={{
+        backgroundColor: color + '18',
+        borderRadius: R.full,
+        paddingHorizontal: R.sm,
+        paddingVertical: 3,
+      }}
+    >
+      <Text style={{ ...F.tiny, color, fontWeight: '900' }}>{label}</Text>
+    </View>
+  );
+}
+
+function firstImage(item: any) {
+  const image = typeof item?.images?.[0] === 'string'
+    ? item.images[0]
+    : item?.images?.[0]?.url ?? item?.media?.[0]?.url;
+  return image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop';
+}
+
+function formatMoney(value?: number) {
+  return `${Number(value || 0).toLocaleString()}₮`;
 }

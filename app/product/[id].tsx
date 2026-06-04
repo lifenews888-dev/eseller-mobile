@@ -1,989 +1,950 @@
-import React, { useState } from 'react'
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import {
-  View, Text, ScrollView,
-  TouchableOpacity, Image,
-  Dimensions, Alert,
-} from 'react-native'
-import { router, useLocalSearchParams }
-  from 'expo-router'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { Ionicons } from '@expo/vector-icons'
-import * as Haptics from 'expo-haptics'
-import { get, post } from '../../src/services/api'
-import { useCart }   from '../../src/store/cart'
-import { useAuth }   from '../../src/store/auth'
-import { C, R, F, S } from '../../src/shared/design'
-import { Skeleton }  from '../../src/shared/ui/Skeleton'
+  Alert,
+  Dimensions,
+  Image,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
+import { get, post } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { useCart } from '../../src/store/cart';
+import { C, F, R, UI } from '../../src/shared/design';
+import {
+  filterPublicProducts,
+  getPublicProductQualityIssue,
+  type ProductQualityIssue,
+} from '../../src/shared/productQuality';
+import { AppButton, AppCard, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { Skeleton } from '../../src/shared/ui/Skeleton';
 
-const { width } = Dimensions.get('window')
+const { width } = Dimensions.get('window');
 
 interface ReviewItem {
-  id:           string
-  rating:       number
-  title?:       string | null
-  comment?:     string | null
-  buyerName?:   string | null
-  isVerified?:  boolean
-  sellerReply?: string | null
-  createdAt:    string
+  id: string;
+  rating: number;
+  title?: string | null;
+  comment?: string | null;
+  buyerName?: string | null;
+  isVerified?: boolean;
+  sellerReply?: string | null;
+  createdAt: string;
 }
 
 interface ReviewsResponse {
-  reviews: ReviewItem[]
-  total:   number
-  breakdown: { rating: number; count: number }[]
-  hasMore: boolean
+  reviews: ReviewItem[];
+  total: number;
+  breakdown: { rating: number; count: number }[];
+  hasMore: boolean;
 }
 
 interface RelatedProduct {
-  id:          string
-  name:        string
-  price:       number
-  salePrice?:  number | null
-  images?:     string[] | null
-  emoji?:      string | null
-  rating?:     number | null
-  reviewCount?: number | null
+  id: string;
+  name: string;
+  price: number;
+  salePrice?: number | null;
+  images?: string[] | null;
+  emoji?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
 }
 
 interface RelatedResponse {
-  products: RelatedProduct[]
+  products: RelatedProduct[];
 }
 
 export default function ProductDetailScreen() {
-  const { id }              = useLocalSearchParams()
-  const { add, items }      = useCart()
-  const { user }            = useAuth()
-  const [imgIdx, setImgIdx] = useState(0)
-  const [qty, setQty]       = useState(1)
-  const [saved, setSaved]   = useState(false)
+  const { id } = useLocalSearchParams();
+  const productId = Array.isArray(id) ? id[0] : id;
+  const productReturnTo = `/product/${productId}`;
+  const { add, items } = useCart();
+  const { user } = useAuth();
+  const layout = useAppLayoutMetrics();
+  const [imgIdx, setImgIdx] = useState(0);
+  const [qty, setQty] = useState(1);
+  const [saved, setSaved] = useState(false);
 
   const { data: product, isLoading } = useQuery({
-    queryKey: ['product', id],
-    queryFn:  () => get(`/products/${id}`),
-    enabled:  !!id,
-  })
+    queryKey: ['product', productId],
+    queryFn: () => get(`/products/${productId}`),
+    enabled: !!productId,
+  });
 
   const { data: reviewsData } = useQuery<ReviewsResponse>({
-    queryKey: ['product-reviews', id],
-    // axios response interceptor unwraps res.data at runtime, so the
-    // runtime shape is the review payload even though the static type
-    // of `get()` still says AxiosResponse. Double cast to bridge.
-    queryFn:  () => get(`/products/${id}/reviews?limit=5`) as unknown as Promise<ReviewsResponse>,
-    enabled:  !!id,
-  })
+    queryKey: ['product-reviews', productId],
+    queryFn: () => get(`/products/${productId}/reviews?limit=5`) as unknown as Promise<ReviewsResponse>,
+    enabled: !!productId,
+  });
 
   const { data: relatedData } = useQuery<RelatedResponse>({
-    queryKey: ['product-related', id],
-    queryFn:  () => get(`/products/${id}/related?limit=6`) as unknown as Promise<RelatedResponse>,
-    enabled:  !!id,
-  })
+    queryKey: ['product-related', productId],
+    queryFn: () => get(`/products/${productId}/related?limit=6`) as unknown as Promise<RelatedResponse>,
+    enabled: !!productId,
+  });
 
-  const p      = product as any
-  // images can be string[] (dropship/Prisma) or { url: string }[] (media)
-  const rawImages: any[] = p?.images?.length ? p.images : (p?.media || [])
-  const images = rawImages.map((img: any) =>
-    typeof img === 'string' ? { url: img } : img
-  )
+  const p = ((product as any)?.product ?? product) as any;
+  const images = normalizeImages(p);
+  const stock = getStock(p);
+  const price = Number(p?.price || 0);
+  const salePrice = p?.salePrice != null ? Number(p.salePrice) : null;
+  const displayPrice = salePrice != null && salePrice < price ? salePrice : price;
+  const productKey = p?.id || p?._id || productId || '';
+  const qualityIssue = p
+    ? getPublicProductQualityIssue(p, { requireImage: true, requirePrice: true })
+    : null;
+  const relatedProducts = filterPublicProducts(relatedData?.products ?? [])
+    .filter((item) => item.id !== productKey);
 
-  // Start-or-resume conversation with the shop. Backend find-or-creates
-  // so a buyer tapping the button twice still lands on the same thread.
-  // Sends product context so the seller sees what the buyer is asking
-  // about (mirrors the web chat widget payload).
   const startChat = useMutation({
     mutationFn: async () => {
-      if (!user) throw new Error('AUTH_REQUIRED')
-      if (!p?.shop?.id) throw new Error('NO_SHOP')
-      const price = p.salePrice ?? p.price
+      if (!user) throw new Error('AUTH_REQUIRED');
+      const shopId = p?.shop?.id || p?.shop?._id || p?.entityId || p?.sellerId;
+      if (!shopId) throw new Error('NO_SHOP');
       return post('/chat/conversations', {
-        shopId:        p.shop.id,
-        customerId:    user.id,
-        customerName:  user.name || 'Хэрэглэгч',
-        productName:   p.name,
-        productPrice:  price,
-      }) as unknown as Promise<{ id: string }>
+        shopId,
+        customerId: user.id,
+        customerName: user.name || 'Хэрэглэгч',
+        productName: p.name,
+        productPrice: displayPrice,
+      }) as unknown as Promise<{ id: string }>;
     },
     onSuccess: (conv) => {
-      router.push({ pathname: '/chat/[id]', params: { id: conv.id } } as any)
+      router.push({ pathname: '/chat/[id]', params: { id: conv.id } } as any);
     },
-    onError: (err: Error) => {
-      if (err.message === 'AUTH_REQUIRED') {
-        router.push('/(auth)/login' as any)
-        return
+    onError: (error: Error) => {
+      if (error.message === 'AUTH_REQUIRED') {
+        router.push({ pathname: '/login', params: { returnTo: productReturnTo } } as any);
+        return;
       }
-      Alert.alert('Чат эхлүүлж чадсангүй', 'Дахин оролдоно уу')
+      Alert.alert('Чат эхлүүлж чадсангүй', 'Дахин оролдоно уу.');
     },
-  })
+  });
 
   const handleAddToCart = () => {
-    if (!p) return
+    if (qualityIssue) {
+      Alert.alert('Бараа шалгалтад байна', qualityIssue.message);
+      return;
+    }
+    if (!validateCartQuantity()) return;
 
-    // Stock-ыг backend-ээс `stock` эсвэл `quantity` талбараар өгнө.
-    // 0 бол outOfStock — undefined/null бол хязгааргүй (legacy data).
-    const stock: number | undefined =
-      typeof p.stock === 'number' ? p.stock
-      : typeof p.quantity === 'number' ? p.quantity
-      : undefined
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    add(buildCartItem(), qty);
+    Alert.alert('Сагсанд нэмлээ', `${p.name} x ${qty}`, [
+      { text: 'Үргэлжлүүлэх' },
+      { text: 'Сагс харах', onPress: () => router.push('/cart' as any) },
+    ]);
+  };
+
+  const handleBuyNow = () => {
+    if (qualityIssue) {
+      Alert.alert('Бараа шалгалтад байна', qualityIssue.message);
+      return;
+    }
+    if (!user) {
+      router.push({ pathname: '/login', params: { returnTo: productReturnTo } } as any);
+      return;
+    }
+    if (!validateCartQuantity()) return;
+    add(buildCartItem(), qty);
+    router.push('/checkout' as any);
+  };
+
+  const buildCartItem = () => ({
+    id: productKey,
+    name: p.name,
+    price: displayPrice || price,
+    image: images[0]?.url || null,
+    entityId: p.shop?.id || p.shop?._id || p.entityId || '',
+    entityName: p.shop?.name || p.entityName || '',
+  });
+
+  const validateCartQuantity = () => {
+    if (!p) return false;
 
     if (stock === 0) {
-      Alert.alert('Барагдсан', 'Энэ бараа одоогоор дууссан байна')
-      return
+      Alert.alert('Бараа дууссан', 'Энэ бараа одоогоор дууссан байна.');
+      return false;
     }
 
     if (stock !== undefined) {
-      const existingQty = items.find((i) => i.id === p.id)?.qty || 0
+      const existingQty = items.find((item) => item.id === productKey)?.qty || 0;
       if (existingQty + qty > stock) {
-        const remaining = Math.max(stock - existingQty, 0)
+        const remaining = Math.max(stock - existingQty, 0);
         Alert.alert(
           'Үлдэгдэл хүрэхгүй',
           remaining > 0
-            ? `Та сагсанд ${existingQty} ширхэг оруулсан. Үлдэгдэл: ${remaining} ширхэг`
-            : `Сагсанд хамгийн их тоо хэдийн нэмэгдсэн байна (${stock} ширхэг)`,
-        )
-        return
+            ? `Та сагсанд ${existingQty} ширхэг оруулсан. Үлдэгдэл: ${remaining} ширхэг.`
+            : `Сагсанд хамгийн их тоо нэмэгдсэн байна (${stock} ширхэг).`,
+        );
+        return false;
       }
     }
 
-    Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Success
-    )
-    add({
-      id:         p.id,
-      name:       p.name,
-      price:      p.price,
-      image:      images[0]?.url || null,
-      // Cart labels shop ownership under the legacy `entityId/entityName`
-      // keys. API returns this as `shop.id/shop.name`, so map them here.
-      entityId:   p.shop?.id   || '',
-      entityName: p.shop?.name || '',
-    }, qty)
-    Alert.alert('Сагсанд нэмлээ',
-      `${p.name} x ${qty}`,
-      [
-        { text:'Үргэлжлүүлэх' },
-        { text:'Сагс харах',
-          onPress: () => router.push('/cart' as any) },
-      ]
-    )
+    return true;
+  };
+
+  const handleShare = async () => {
+    if (!p) return;
+    await Share.share({
+      message: `${p.name} - ${formatMoney(displayPrice)}\nhttps://eseller.mn/product/${productKey}`,
+    });
+  };
+
+  const handleAffiliate = () => {
+    if (user) {
+      router.push('/referral' as any);
+      return;
+    }
+    router.push({ pathname: '/register', params: { role: 'affiliate', returnTo: productReturnTo } } as any);
+  };
+
+  const handleWriteReview = () => {
+    if (!user) {
+      router.push({ pathname: '/login', params: { returnTo: productReturnTo } } as any);
+      return;
+    }
+    Alert.alert('Үнэлгээ бичих', 'Захиалга амжилттай биелсний дараа үнэлгээ бичих боломжтой.');
+  };
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <Skeleton width="100%" height={340} borderRadius={0} />
+        <View style={{ padding: R.lg, gap: R.md }}>
+          <Skeleton width="80%" height={24} />
+          <Skeleton width="42%" height={30} />
+          <Skeleton width="100%" height={14} />
+          <Skeleton width="86%" height={14} />
+        </View>
+      </View>
+    );
   }
 
-  if (isLoading) return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <Skeleton width="100%" height={340} borderRadius={0} />
-      <View style={{ padding: 16, gap: 12 }}>
-        <Skeleton width="80%" height={24} />
-        <Skeleton width="40%" height={28} />
-        <Skeleton width="100%" height={14} />
-        <Skeleton width="100%" height={14} />
-        <Skeleton width="70%"  height={14} />
+  if (!p) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, padding: UI.screenPad, justifyContent: 'center' }}>
+        <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+          <Ionicons name="alert-circle-outline" size={44} color={C.textMuted} />
+          <Text style={{ ...F.h4, color: C.text, textAlign: 'center' }}>Бараа олдсонгүй</Text>
+          <Text style={{ ...F.small, color: C.textSub, textAlign: 'center' }}>
+            Marketplace руу буцаад өөр бараа сонгоно уу.
+          </Text>
+          <AppButton label="Дэлгүүр рүү" icon="storefront-outline" onPress={() => router.push('/store' as any)} />
+        </AppCard>
       </View>
-    </View>
-  )
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: layout.screenBottom + R.xxxl }}>
+        <ImageCarousel
+          images={images}
+          imgIdx={imgIdx}
+          setImgIdx={setImgIdx}
+          topOffset={layout.screenTop}
+          saved={saved}
+          onToggleSaved={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setSaved((value) => !value);
+          }}
+          onShare={handleShare}
+        />
 
-        {/* Image carousel */}
-        <View style={{ height: 340, backgroundColor: C.bgCard }}>
-          <ScrollView
-            horizontal pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={e =>
-              setImgIdx(Math.round(
-                e.nativeEvent.contentOffset.x / width
-              ))
-            }
-          >
-            {images.length > 0
-              ? images.map((img: any, i: number) => (
-                <Image key={i}
-                  source={{ uri: img.url }}
-                  style={{ width, height: 340 }}
-                  resizeMode="cover"
-                />
-              ))
-              : (
-                <View style={{
-                  width, height: 340,
-                  alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: C.bgSection,
-                }}>
-                  <Ionicons name="image-outline" size={72} color={C.border} />
-                </View>
-              )
-            }
-          </ScrollView>
-
-          {/* Back */}
-          <TouchableOpacity
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Буцах"
-            style={{
-              position: 'absolute', top: 48, left: 16,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              borderRadius: R.full, width: 40, height: 40,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Ionicons name="arrow-back" size={20} color={C.white} />
-          </TouchableOpacity>
-
-          {/* Save */}
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              setSaved(!saved)
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={saved ? 'Хадгалснаас хасах' : 'Хадгалах'}
-            accessibilityState={{ selected: saved }}
-            style={{
-              position: 'absolute', top: 48, right: 16,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              borderRadius: R.full, width: 40, height: 40,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Ionicons
-              name={saved ? 'heart' : 'heart-outline'}
-              size={20}
-              color={saved ? C.brand : C.white}
-            />
-          </TouchableOpacity>
-
-          {/* Image dots */}
-          {images.length > 1 && (
-            <View style={{
-              position: 'absolute', bottom: 12, left: 0, right: 0,
-              flexDirection: 'row', justifyContent: 'center', gap: 6,
-            }}>
-              {images.map((_: any, i: number) => (
-                <View key={i} style={{
-                  width: i === imgIdx ? 20 : 7, height: 7, borderRadius: 4,
-                  backgroundColor: i === imgIdx ? C.white : 'rgba(255,255,255,0.4)',
-                }} />
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Info */}
-        <View style={{ padding: 16 }}>
-          <Text style={{ ...F.h2, color: C.text, marginBottom: 10 }}>
-            {p?.name}
-          </Text>
-
-          <View style={{
-            flexDirection: 'row', alignItems: 'center',
-            justifyContent: 'space-between', marginBottom: 16,
-          }}>
-            {/* Price block — if salePrice is set and lower than price,
-                show salePrice as the big brand-colored number and strike
-                through the original price next to it. Matches web
-                ProductDetailClient (AUDIT M1). */}
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, flexShrink: 1 }}>
-              <Text style={{ color: C.brand, fontSize: 28, fontWeight: '900' }}>
-                {(p?.salePrice ?? p?.price)?.toLocaleString()}₮
-              </Text>
-              {p?.salePrice != null && p?.salePrice < p?.price && (
-                <Text style={{
-                  color: C.textMuted,
-                  fontSize: 16,
-                  fontWeight: '500',
-                  textDecorationLine: 'line-through',
-                }}>
-                  {p.price.toLocaleString()}₮
-                </Text>
-              )}
-            </View>
-            {p?.rating > 0 && (
-              <View style={{
-                flexDirection: 'row', alignItems: 'center', gap: 4,
-                backgroundColor: C.bgSection, borderRadius: R.full,
-                paddingHorizontal: 12, paddingVertical: 6,
-              }}>
-                <Ionicons name="star" size={14} color="#F9A825" />
-                <Text style={{ color: C.text, fontWeight: '700', fontSize: 14 }}>
-                  {p.rating.toFixed(1)}
-                </Text>
-                <Text style={{ color: C.textMuted, fontSize: 12 }}>
-                  ({p.reviewCount || 0})
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Entity-specific details — mirrors web ProductDetailClient
-              per-entityType layouts (AUDIT M2). Rendered above the generic
-              Quantity block so category-relevant specs (apartment area,
-              service duration, pre-order batch progress) surface first.
-              Falls through for STORE / legacy products. */}
-          {p?.entityType === 'REAL_ESTATE' && <RealEstateDetails p={p} />}
-          {p?.entityType === 'SERVICE'     && <ServiceDetails     p={p} />}
-          {p?.entityType === 'PRE_ORDER'   && <PreOrderDetails    p={p} />}
-
-          {/* Quantity — hidden for REAL_ESTATE (buying units of a flat
-              makes no sense) and PRE_ORDER (one slot per buyer). Stays
-              visible for SERVICE so buyers can book multiple sessions. */}
-          {p?.entityType !== 'REAL_ESTATE' && p?.entityType !== 'PRE_ORDER' && (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 16,
-            marginBottom: 16, backgroundColor: C.bgSection,
-            borderRadius: R.lg, padding: 12,
-          }}>
-            <Text style={{ color: C.textSub, fontWeight: '600', flex: 1 }}>
-              Тоо ширхэг
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                if (qty > 1) {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  setQty(q => q - 1)
-                }
-              }}
-              style={{
-                backgroundColor: C.bgCard, borderRadius: R.md,
-                width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
-                borderWidth: 1, borderColor: C.border,
-              }}
-            >
-              <Ionicons name="remove" size={18} color={C.text} />
-            </TouchableOpacity>
-            <Text style={{
-              color: C.text, fontSize: 18, fontWeight: '700',
-              minWidth: 30, textAlign: 'center',
-            }}>
-              {qty}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                const stock: number | undefined =
-                  typeof p?.stock === 'number' ? p.stock
-                  : typeof p?.quantity === 'number' ? p.quantity
-                  : undefined
-                if (stock !== undefined && qty >= stock) return
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                setQty(q => q + 1)
-              }}
-              style={{
-                backgroundColor: C.brand, borderRadius: R.md,
-                width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="add" size={18} color={C.white} />
-            </TouchableOpacity>
-          </View>
-          )}
-
-          {/* Delivery info — per-product fee + ETA, mirrors web storefront
-              ModalBody. Skipped entirely for dropship products because the
-              yellow dropship card below already covers shipping semantics
-              (and dropship.estimatedShippingDaysMin/Max is in days, not mins).
-              Also skipped when both fields are empty so legacy products
-              without delivery metadata don't render an empty card. */}
-          {!p?.dropship && (p?.deliveryFee != null || p?.estimatedMins != null) && (
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 14,
-              marginBottom: 16,
-              backgroundColor: C.bgSection,
-              borderRadius: R.lg,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}>
-              {p?.deliveryFee != null && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="car-outline" size={16} color={C.textSub} />
-                  <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
-                    {p.deliveryFee === 0 ? 'Үнэгүй хүргэлт' : `${p.deliveryFee.toLocaleString()}₮ хүргэлт`}
-                  </Text>
-                </View>
-              )}
-              {p?.deliveryFee != null && p?.estimatedMins != null && (
-                <View style={{ width: 1, height: 14, backgroundColor: C.border }} />
-              )}
-              {p?.estimatedMins != null && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="time-outline" size={16} color={C.textSub} />
-                  <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
-                    ~{p.estimatedMins} мин
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Dropship badges — shown only for products imported from AliExpress / CJ.
-              Sits above the description so the buyer sees the shipping caveats
-              before reading the product copy. Matches Amazon-style "Import from"
-              convention: origin + ETA + customs disclaimer. */}
-          {p?.dropship && (
-            <View style={{
-              backgroundColor: '#FEF3C7',
-              borderRadius: R.lg,
-              padding: 14,
-              marginBottom: 16,
-              borderWidth: 1,
-              borderColor: '#FDE68A',
-              gap: 8,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="earth" size={18} color="#92400E" />
-                <Text style={{ color: '#92400E', fontWeight: '800', fontSize: 14 }}>
-                  Олон улсаас хүргэнэ
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="time-outline" size={16} color="#92400E" />
-                <Text style={{ color: '#78350F', fontSize: 13 }}>
-                  Хүргэх хугацаа: {p.dropship.estimatedShippingDaysMin || 15}–{p.dropship.estimatedShippingDaysMax || 30} хоног
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                <Ionicons name="information-circle-outline" size={16} color="#92400E" style={{ marginTop: 1 }} />
-                <Text style={{ color: '#78350F', fontSize: 12, flex: 1, lineHeight: 17 }}>
-                  Гаалийн хураамж, импортын татвар барааны үнэд багтаагүй. Хэрэглэгч тусад нь төлөх магадлалтай.
-                </Text>
-              </View>
-              {p.dropship.supplierName && (
-                <Text style={{ color: '#78350F', fontSize: 11, opacity: 0.75 }}>
-                  Нийлүүлэгч: {p.dropship.supplierName.toUpperCase()}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Description */}
-          {p?.description && (
-            <View style={{
-              backgroundColor: C.bgCard, borderRadius: R.lg,
-              padding: 16, marginBottom: 16,
-              borderWidth: 1, borderColor: C.border,
-            }}>
-              <Text style={{ ...F.h4, color: C.text, marginBottom: 8 }}>
-                Тайлбар
-              </Text>
-              <Text style={{ color: C.textSub, lineHeight: 22, fontSize: 14 }}>
-                {p.description}
-              </Text>
-            </View>
-          )}
-
-          {/* Reviews section — matches web ReviewSection parity (audit C7).
-              Hidden entirely when there are no reviews so the screen doesn't
-              render an empty "0 үнэлгээ" block. */}
-          {reviewsData && reviewsData.total > 0 && (
-            <ReviewSection data={reviewsData} avgRating={p?.rating ?? 0} />
-          )}
-
-          {/* Store — links to /storefront/[slug]. The API returns the
-              seller's shop as `shop: { id, name, slug, logo }`. Requires
-              a slug so we don't navigate to /storefront/undefined. */}
-          {p?.shop?.slug && (
-            <TouchableOpacity
-              onPress={() =>
-                router.push(`/storefront/${p.shop.slug}` as any)
-              }
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                backgroundColor: C.bgCard, borderRadius: R.lg,
-                padding: 14, marginBottom: 16, gap: 12,
-                borderWidth: 1, borderColor: C.border,
-              }}
-            >
-              {p.shop.logo ? (
-                <Image
-                  source={{ uri: p.shop.logo }}
-                  style={{ width: 48, height: 48, borderRadius: 24 }}
-                />
-              ) : (
-                <View style={{
-                  width: 48, height: 48, borderRadius: 24,
-                  backgroundColor: C.primary,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Text style={{ color: C.white, fontSize: 20, fontWeight: '700' }}>
-                    {p.shop.name?.[0] || '?'}
-                  </Text>
-                </View>
-              )}
+        <View style={{ padding: R.lg, gap: R.md }}>
+          <AppCard elevated>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, alignItems: 'flex-start' }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>
-                  {p.shop.name}
+                <Text style={{ ...F.h2, color: C.text }} numberOfLines={3}>
+                  {p.name}
                 </Text>
-                <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>
-                  Дэлгүүр харах
+                <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.xs }}>
+                  {p.category || p.entityType || 'Marketplace'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={C.border} />
-            </TouchableOpacity>
-          )}
+              <RatingBadge rating={Number(p.rating || 0)} reviewCount={Number(p.reviewCount || 0)} />
+            </View>
 
-          {/* Chat-with-seller — parity with web chat widget (AUDIT M1c).
-              Tap → find-or-create conversation with product context, then
-              open chat screen.
-              Hidden when the product has no shop (herder / orphan listings). */}
-          {p?.shop?.id && (
-            <TouchableOpacity
-              onPress={() => startChat.mutate()}
-              disabled={startChat.isPending}
-              accessibilityRole="button"
-              accessibilityLabel={`Худалдагчтай чатлах${p.shop.name ? `: ${p.shop.name}` : ''}`}
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                backgroundColor: C.bgCard, borderRadius: R.lg,
-                padding: 14, marginBottom: 16, gap: 12,
-                borderWidth: 1, borderColor: C.brand,
-                opacity: startChat.isPending ? 0.6 : 1,
-              }}
-            >
-              <View style={{
-                width: 40, height: 40, borderRadius: 20,
-                backgroundColor: C.brand,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Ionicons name="chatbubbles" size={18} color={C.white} />
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: R.sm, marginTop: R.md, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 28, fontWeight: '900', color: C.brand }}>{formatMoney(displayPrice)}</Text>
+              {salePrice != null && salePrice < price ? (
+                <Text style={{ ...F.body, color: C.textMuted, textDecorationLine: 'line-through' }}>
+                  {formatMoney(price)}
+                </Text>
+              ) : null}
+            </View>
+          </AppCard>
+
+          <EntityDetails p={p} />
+          {qualityIssue ? <QualityHoldCard issue={qualityIssue} /> : null}
+
+          {!qualityIssue && p.entityType !== 'REAL_ESTATE' && p.entityType !== 'PRE_ORDER' ? (
+            <QuantitySelector qty={qty} setQty={setQty} stock={stock} />
+          ) : null}
+
+          <DeliveryCard p={p} />
+          <DropshipNotice p={p} />
+
+          {p.description ? (
+            <Section title="Тайлбар">
+              <Text style={{ ...F.small, color: C.textSub, lineHeight: 21 }}>{p.description}</Text>
+            </Section>
+          ) : null}
+
+          {p.shop ? (
+            <ShopBlock p={p} startChatPending={startChat.isPending} onStartChat={() => startChat.mutate()} />
+          ) : null}
+
+          <TouchableOpacity activeOpacity={0.86} onPress={handleAffiliate}>
+            <AppCard style={{ flexDirection: 'row', alignItems: 'center', gap: R.md, borderColor: C.brand + '28' }}>
+              <View
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: UI.controlRadius,
+                  backgroundColor: C.brandDim,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="megaphone-outline" size={20} color={C.brand} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: C.text, fontWeight: '700', fontSize: 14 }}>
-                  Худалдагчтай чатлах
-                </Text>
-                <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>
-                  {p.shop.name || 'Асуух зүйл байвал шууд бичнэ үү'}
+                <Text style={{ ...F.small, color: C.brand, fontWeight: '900' }}>Борлуулж эхлэх</Text>
+                <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
+                  Энэ барааг санал болгож урамшуулал аваарай.
                 </Text>
               </View>
-              <Ionicons
-                name={startChat.isPending ? 'hourglass-outline' : 'chevron-forward'}
-                size={18}
-                color={C.brand}
-              />
-            </TouchableOpacity>
-          )}
+              <Ionicons name="chevron-forward" size={18} color={C.brand} />
+            </AppCard>
+          </TouchableOpacity>
+
+          {reviewsData ? (
+            <ReviewSection data={reviewsData} avgRating={Number(p.rating || 0)} onWriteReview={handleWriteReview} />
+          ) : null}
         </View>
 
-        {/* Related products — same-category feed, matches web parity (AUDIT M1b).
-            Placed outside the padded Info container so the horizontal
-            ScrollView can bleed to the screen edges. Hidden when the
-            endpoint returned nothing. */}
-        {relatedData && relatedData.products.length > 0 && (
-          <RelatedSection products={relatedData.products} currentId={id as string} />
-        )}
-
-        <View style={{ height: 120 }} />
+        {relatedProducts.length ? (
+          <RelatedSection products={relatedProducts} currentId={productKey} />
+        ) : null}
       </ScrollView>
 
-      {/* Bottom buttons */}
-      <View style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        flexDirection: 'row', padding: 16, paddingBottom: 32,
-        gap: 10, backgroundColor: 'rgba(18,18,18,0.95)',
-        borderTopWidth: 1, borderTopColor: C.border,
-      }}>
-        <TouchableOpacity
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: UI.screenPad,
+          backgroundColor: C.bgCard,
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+          flexDirection: 'row',
+          gap: R.sm,
+          paddingBottom: layout.insets.bottom + R.lg,
+        }}
+      >
+        <AppButton
+          label="Сагслах"
+          icon="cart-outline"
+          variant="ghost"
           onPress={handleAddToCart}
-          accessibilityRole="button"
-          accessibilityLabel={`Сагсанд нэмэх, ${qty} ширхэг`}
-          style={{
-            flex: 1, backgroundColor: C.bgSection, borderRadius: R.lg,
-            padding: 16, alignItems: 'center', borderWidth: 1.5,
-            borderColor: C.brand, flexDirection: 'row',
-            justifyContent: 'center', gap: 6,
-          }}
-        >
-          <Ionicons name="cart-outline" size={18} color={C.brand} />
-          <Text style={{ color: C.brand, fontWeight: '700', fontSize: 15 }}>
-            Сагслах
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            if (!user) {
-              router.push('/(auth)/login' as any)
-              return
-            }
-            router.push({
-              pathname: '/checkout' as any,
-              params: { productId: id as string, qty: qty.toString() }
-            })
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Шууд захиалах, ${qty} ширхэг`}
-          style={{
-            flex: 2, backgroundColor: C.brand, borderRadius: R.lg,
-            padding: 16, alignItems: 'center', flexDirection: 'row',
-            justifyContent: 'center', gap: 6,
-            ...S.elevated, shadowColor: C.brand,
-          }}
-        >
-          <Ionicons name="flash" size={18} color={C.white} />
-          <Text style={{ color: C.white, fontWeight: '800', fontSize: 16 }}>
-            Захиалах
-          </Text>
-        </TouchableOpacity>
+          disabled={!!qualityIssue}
+          style={{ flex: 1, borderColor: C.brand }}
+          textStyle={{ color: C.brand }}
+        />
+        <AppButton
+          label="Захиалах"
+          icon="flash"
+          onPress={handleBuyNow}
+          disabled={!!qualityIssue}
+          style={{ flex: 1.5 }}
+        />
       </View>
     </View>
-  )
+  );
 }
 
-function ReviewSection({ data, avgRating }: { data: ReviewsResponse; avgRating: number }) {
-  // Backend returns only the rating buckets that actually have reviews,
-  // so fill in the missing rows with 0 counts for a stable 5-bar layout.
-  const countsByRating: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-  for (const b of data.breakdown) countsByRating[b.rating] = b.count
-
+function ImageCarousel({
+  images,
+  imgIdx,
+  setImgIdx,
+  topOffset,
+  saved,
+  onToggleSaved,
+  onShare,
+}: {
+  images: Array<{ url: string }>;
+  imgIdx: number;
+  setImgIdx: (index: number) => void;
+  topOffset: number;
+  saved: boolean;
+  onToggleSaved: () => void;
+  onShare: () => void | Promise<unknown>;
+}) {
   return (
-    <View style={{
-      backgroundColor: C.bgCard, borderRadius: R.lg,
-      padding: 16, marginBottom: 16,
-      borderWidth: 1, borderColor: C.border,
-    }}>
-      <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>
-        Үнэлгээ ({data.total})
-      </Text>
-
-      {/* Summary row: big avg on the left, breakdown bars on the right */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 }}>
-        <View style={{ alignItems: 'center', minWidth: 80 }}>
-          <Text style={{ fontSize: 32, fontWeight: '900', color: C.text }}>
-            {(avgRating || 0).toFixed(1)}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Ionicons
-                key={n}
-                name={n <= Math.round(avgRating) ? 'star' : 'star-outline'}
-                size={12}
-                color="#F59E0B"
-              />
-            ))}
+    <View style={{ height: 340, backgroundColor: C.bgCard }}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) => setImgIdx(Math.round(event.nativeEvent.contentOffset.x / width))}
+      >
+        {images.length > 0 ? (
+          images.map((img, index) => (
+            <Image key={`${img.url}:${index}`} source={{ uri: img.url }} style={{ width, height: 340 }} resizeMode="cover" />
+          ))
+        ) : (
+          <View style={{ width, height: 340, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bgSection }}>
+            <Ionicons name="image-outline" size={72} color={C.border} />
           </View>
-        </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          {[5, 4, 3, 2, 1].map((r) => {
-            const count = countsByRating[r]
-            const pct = data.total > 0 ? (count / data.total) * 100 : 0
-            return (
-              <View key={r} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ color: C.textMuted, fontSize: 11, width: 10 }}>{r}</Text>
-                <Ionicons name="star" size={10} color="#F59E0B" />
-                <View style={{
-                  flex: 1, height: 6, borderRadius: 3, backgroundColor: C.bgSection,
-                  overflow: 'hidden',
-                }}>
-                  <View style={{ width: `${pct}%`, height: '100%', backgroundColor: '#F59E0B' }} />
-                </View>
-                <Text style={{ color: C.textMuted, fontSize: 11, width: 24, textAlign: 'right' }}>
-                  {count}
-                </Text>
-              </View>
-            )
-          })}
+        )}
+      </ScrollView>
+
+      <View style={{ position: 'absolute', top: topOffset, left: UI.screenPad, right: UI.screenPad, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <IconButton icon="arrow-back" accessibilityLabel="Буцах" onPress={() => router.back()} />
+        <View style={{ flexDirection: 'row', gap: R.sm }}>
+          <IconButton icon="share-social-outline" accessibilityLabel="Хуваалцах" onPress={onShare} />
+          <IconButton
+            icon={saved ? 'heart' : 'heart-outline'}
+            accessibilityLabel={saved ? 'Хадгалснаас хасах' : 'Хадгалах'}
+            color={saved ? C.brand : C.text}
+            onPress={onToggleSaved}
+          />
         </View>
       </View>
 
-      {/* Individual reviews */}
-      <View style={{ gap: 12 }}>
-        {data.reviews.map((r) => <ReviewRow key={r.id} r={r} />)}
-      </View>
-
-      {data.hasMore && (
-        <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 12, textAlign: 'center' }}>
-          +{data.total - data.reviews.length} бусад үнэлгээ
-        </Text>
-      )}
-    </View>
-  )
-}
-
-function ReviewRow({ r }: { r: ReviewItem }) {
-  const when = new Date(r.createdAt).toLocaleDateString('mn-MN')
-  return (
-    <View style={{
-      backgroundColor: C.bgSection, borderRadius: R.md,
-      padding: 12, borderWidth: 0.5, borderColor: C.border,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-          <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
-            {r.buyerName || 'Хэрэглэгч'}
-          </Text>
-          {r.isVerified && (
-            <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
-          )}
-        </View>
-        <View style={{ flexDirection: 'row', gap: 1 }}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Ionicons
-              key={n}
-              name={n <= r.rating ? 'star' : 'star-outline'}
-              size={12}
-              color={n <= r.rating ? '#F59E0B' : C.border}
+      {images.length > 1 ? (
+        <View style={{ position: 'absolute', bottom: 14, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: R.xs }}>
+          {images.map((_, index) => (
+            <View
+              key={index}
+              style={{
+                width: index === imgIdx ? 20 : 7,
+                height: 7,
+                borderRadius: R.full,
+                backgroundColor: index === imgIdx ? C.bgCard : C.bgCard + '8C',
+              }}
             />
           ))}
         </View>
-      </View>
-      {r.title ? (
-        <Text style={{ color: C.text, fontWeight: '600', fontSize: 13, marginBottom: 4 }}>
-          {r.title}
-        </Text>
       ) : null}
-      {r.comment ? (
-        <Text style={{ color: C.textSub, fontSize: 13, lineHeight: 19 }}>
-          {r.comment}
-        </Text>
-      ) : null}
-      {r.sellerReply ? (
-        <View style={{
-          marginTop: 8, paddingTop: 8, paddingLeft: 10,
-          borderLeftWidth: 2, borderLeftColor: C.brand,
-        }}>
-          <Text style={{ color: C.brand, fontWeight: '700', fontSize: 11, marginBottom: 2 }}>
-            Худалдагчийн хариу
-          </Text>
-          <Text style={{ color: C.textSub, fontSize: 12, lineHeight: 17 }}>
-            {r.sellerReply}
+
+      {images.length > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: R.md,
+            right: UI.screenPad,
+            backgroundColor: C.text + '9E',
+            borderRadius: R.full,
+            paddingHorizontal: R.sm,
+            paddingVertical: 5,
+          }}
+        >
+          <Text style={{ ...F.tiny, color: C.bgCard, fontWeight: '900' }}>
+            {imgIdx + 1}/{images.length}
           </Text>
         </View>
       ) : null}
-      <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 6 }}>{when}</Text>
     </View>
-  )
+  );
+}
+
+function QuantitySelector({
+  qty,
+  setQty,
+  stock,
+}: {
+  qty: number;
+  setQty: React.Dispatch<React.SetStateAction<number>>;
+  stock?: number;
+}) {
+  return (
+    <AppCard>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.md }}>
+        <Text style={{ ...F.small, color: C.textSub, flex: 1 }}>Тоо ширхэг</Text>
+        <StepButton icon="remove" disabled={qty <= 1} onPress={() => setQty((value) => Math.max(1, value - 1))} />
+        <Text style={{ ...F.h3, color: C.text, minWidth: 34, textAlign: 'center' }}>{qty}</Text>
+        <StepButton
+          icon="add"
+          disabled={stock !== undefined && qty >= stock}
+          active
+          onPress={() => setQty((value) => value + 1)}
+        />
+      </View>
+      {stock !== undefined ? (
+        <Text style={{ ...F.tiny, color: stock > 0 ? C.textMuted : C.error, marginTop: R.sm }}>
+          Үлдэгдэл: {stock} ширхэг
+        </Text>
+      ) : null}
+    </AppCard>
+  );
+}
+
+function QualityHoldCard({ issue }: { issue: ProductQualityIssue }) {
+  return (
+    <AppCard style={{ backgroundColor: C.goldDim, borderColor: C.gold + '45', gap: R.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm }}>
+        <Ionicons name="shield-checkmark-outline" size={20} color={C.seller} />
+        <Text style={{ ...F.small, color: C.seller, fontWeight: '900' }}>
+          Бараа түр шалгалтад байна
+        </Text>
+      </View>
+      <Text style={{ ...F.small, color: C.text }}>
+        {issue.message} Үнэ, зураг болон мэдээлэл баталгаажсаны дараа захиалах боломжтой.
+      </Text>
+    </AppCard>
+  );
+}
+
+function DeliveryCard({ p }: { p: any }) {
+  if (p?.dropship || (p?.deliveryFee == null && p?.estimatedMins == null)) return null;
+
+  return (
+    <Section title="Хүргэлт">
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+        {p?.deliveryFee != null ? (
+          <InfoPill
+            icon="car-outline"
+            label={p.deliveryFee === 0 ? 'Үнэгүй хүргэлт' : `${formatMoney(p.deliveryFee)} хүргэлт`}
+          />
+        ) : null}
+        {p?.estimatedMins != null ? <InfoPill icon="time-outline" label={`~${p.estimatedMins} мин`} /> : null}
+      </View>
+    </Section>
+  );
+}
+
+function DropshipNotice({ p }: { p: any }) {
+  if (!p?.dropship) return null;
+
+  const min = p.dropship.estimatedShippingDaysMin;
+  const max = p.dropship.estimatedShippingDaysMax;
+  const eta = min || max ? `${min ?? max}-${max ?? min} хоног` : 'Хүргэлтийн хугацаа баталгаажсаны дараа';
+
+  return (
+    <AppCard style={{ backgroundColor: C.goldDim, borderColor: C.gold + '45', gap: R.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm }}>
+        <Ionicons name="earth-outline" size={20} color={C.seller} />
+        <Text style={{ ...F.small, color: C.seller, fontWeight: '900' }}>Олон улсаас хүргэнэ</Text>
+      </View>
+      <Text style={{ ...F.small, color: C.text }}>
+        Нийлүүлэгч: {p.dropship.supplierName || 'Гадаад нийлүүлэгч'}
+      </Text>
+      <Text style={{ ...F.tiny, color: C.textSub }}>Тооцоолсон хугацаа: {eta}</Text>
+    </AppCard>
+  );
+}
+
+function ShopBlock({
+  p,
+  startChatPending,
+  onStartChat,
+}: {
+  p: any;
+  startChatPending: boolean;
+  onStartChat: () => void;
+}) {
+  const shop = p.shop;
+  const slug = shop?.slug || shop?.storefrontSlug || shop?.id || shop?._id;
+
+  return (
+    <Section title="Дэлгүүр">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.md }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: UI.controlRadius,
+            backgroundColor: C.primaryDim,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ ...F.h4, color: C.primary }}>{initials(shop?.name)}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...F.small, color: C.text, fontWeight: '900' }} numberOfLines={1}>
+            {shop?.name || 'Дэлгүүр'}
+          </Text>
+          <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>Баталгаат худалдагч</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: R.sm, marginTop: R.md }}>
+        {slug ? (
+          <AppButton
+            label="Дэлгүүр үзэх"
+            icon="storefront-outline"
+            variant="ghost"
+            onPress={() => router.push(`/${slug}` as any)}
+            style={{ flex: 1 }}
+          />
+        ) : null}
+        <AppButton
+          label={startChatPending ? 'Нээж байна' : 'Чат бичих'}
+          icon="chatbubble-ellipses-outline"
+          onPress={onStartChat}
+          style={{ flex: 1 }}
+        />
+      </View>
+    </Section>
+  );
+}
+
+function ReviewSection({ data, avgRating, onWriteReview }: { data: ReviewsResponse; avgRating: number; onWriteReview: () => void }) {
+  const reviews = data.reviews ?? [];
+  const total = Number(data.total ?? reviews.length);
+  const countsByRating: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const bucket of data.breakdown ?? []) countsByRating[bucket.rating] = bucket.count;
+
+  return (
+    <Section title="Үнэлгээ">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: R.md, marginBottom: R.md }}>
+        <View>
+          <Text style={{ fontSize: 32, fontWeight: '900', color: C.text }}>{(avgRating || 0).toFixed(1)}</Text>
+          <Text style={{ ...F.tiny, color: C.textMuted }}>{total} сэтгэгдэл</Text>
+        </View>
+        <AppButton
+          label="Үнэлгээ бичих"
+          icon="create-outline"
+          variant="ghost"
+          onPress={onWriteReview}
+          style={{ minHeight: 38 }}
+        />
+      </View>
+
+      {total === 0 ? (
+        <Text style={{ ...F.small, color: C.textMuted }}>
+          Одоогоор үнэлгээ алга. Захиалга биелсний дараа анхны үнэлгээг үлдээгээрэй.
+        </Text>
+      ) : (
+        <>
+          <View style={{ gap: R.xs, marginBottom: R.md }}>
+            {[5, 4, 3, 2, 1].map((rating) => {
+              const count = countsByRating[rating];
+              const pct = total > 0 ? (count / total) * 100 : 0;
+              return (
+                <View key={rating} style={{ flexDirection: 'row', alignItems: 'center', gap: R.xs }}>
+                  <Text style={{ ...F.tiny, color: C.textMuted, width: 10 }}>{rating}</Text>
+                  <Ionicons name="star" size={10} color={C.gold} />
+                  <View style={{ flex: 1, height: 6, borderRadius: R.full, backgroundColor: C.bgSection, overflow: 'hidden' }}>
+                    <View style={{ width: `${pct}%`, height: '100%', backgroundColor: C.gold }} />
+                  </View>
+                  <Text style={{ ...F.tiny, color: C.textMuted, width: 24, textAlign: 'right' }}>{count}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <View style={{ gap: R.sm }}>
+            {reviews.map((review) => <ReviewRow key={review.id} review={review} />)}
+          </View>
+          {data.hasMore ? (
+            <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.sm, textAlign: 'center' }}>
+              +{total - reviews.length} бусад үнэлгээ
+            </Text>
+          ) : null}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function ReviewRow({ review }: { review: ReviewItem }) {
+  return (
+    <View style={{ backgroundColor: C.bgSection, borderRadius: UI.controlRadius, padding: R.md, borderWidth: 1, borderColor: C.border }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: R.sm }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: R.xs }}>
+          <Text style={{ ...F.small, color: C.text, fontWeight: '800' }} numberOfLines={1}>
+            {review.buyerName || 'Хэрэглэгч'}
+          </Text>
+          {review.isVerified ? <Ionicons name="checkmark-circle" size={13} color={C.success} /> : null}
+        </View>
+        <StarRow rating={review.rating} />
+      </View>
+      {review.title ? <Text style={{ ...F.small, color: C.text, fontWeight: '800', marginTop: R.sm }}>{review.title}</Text> : null}
+      {review.comment ? <Text style={{ ...F.small, color: C.textSub, lineHeight: 19, marginTop: R.xs }}>{review.comment}</Text> : null}
+      {review.sellerReply ? (
+        <View style={{ marginTop: R.sm, paddingLeft: R.sm, borderLeftWidth: 2, borderLeftColor: C.brand }}>
+          <Text style={{ ...F.tiny, color: C.brand, fontWeight: '900' }}>Худалдагчийн хариу</Text>
+          <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>{review.sellerReply}</Text>
+        </View>
+      ) : null}
+      <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.sm }}>{formatDate(review.createdAt)}</Text>
+    </View>
+  );
 }
 
 function RelatedSection({ products, currentId }: { products: RelatedProduct[]; currentId: string }) {
   return (
-    <View style={{ marginBottom: 8 }}>
-      <Text style={{
-        ...F.h4,
-        color: C.text,
-        marginBottom: 12,
-        paddingHorizontal: 16,
-      }}>
-        Төстэй бараа
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
-      >
-        {products.map((rp) => (
-          <RelatedCard key={rp.id} product={rp} currentId={currentId} />
+    <View style={{ marginBottom: R.md }}>
+      <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm, paddingHorizontal: R.lg }}>Төстэй бараа</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: R.lg, gap: R.sm }}>
+        {products.map((product) => (
+          <RelatedCard key={product.id} product={product} currentId={currentId} />
         ))}
       </ScrollView>
     </View>
-  )
+  );
 }
 
 function RelatedCard({ product, currentId }: { product: RelatedProduct; currentId: string }) {
-  const display = product.salePrice ?? product.price
-  const image = product.images?.[0]
-  // router.replace (not push) so the back button still returns to the
-  // originating screen rather than walking through the chain of related
-  // products the user tapped through.
+  const display = product.salePrice ?? product.price;
+  const image = product.images?.[0];
   const handlePress = () => {
-    if (product.id === currentId) return
-    router.replace({ pathname: '/product/[id]', params: { id: product.id } } as any)
-  }
+    if (product.id === currentId) return;
+    router.replace({ pathname: '/product/[id]', params: { id: product.id } } as any);
+  };
+
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      activeOpacity={0.8}
-      style={{
-        width: 140,
-        backgroundColor: C.bgCard,
-        borderRadius: R.lg,
-        borderWidth: 1,
-        borderColor: C.border,
-        overflow: 'hidden',
-      }}
-    >
-      <View style={{
-        width: '100%',
-        height: 140,
-        backgroundColor: C.bgSection,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        {image ? (
-          <Image source={{ uri: image }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-        ) : product.emoji ? (
-          <Text style={{ fontSize: 48 }}>{product.emoji}</Text>
-        ) : (
-          <Ionicons name="image-outline" size={32} color={C.border} />
-        )}
-      </View>
-      <View style={{ padding: 10, gap: 4 }}>
-        <Text numberOfLines={2} style={{ color: C.text, fontSize: 12, fontWeight: '600', minHeight: 32 }}>
-          {product.name}
-        </Text>
-        <Text style={{ color: C.brand, fontSize: 14, fontWeight: '800' }}>
-          {display?.toLocaleString()}₮
-        </Text>
-        {product.rating != null && product.rating > 0 && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-            <Ionicons name="star" size={11} color="#F9A825" />
-            <Text style={{ color: C.textMuted, fontSize: 11 }}>
-              {product.rating.toFixed(1)} ({product.reviewCount || 0})
+    <TouchableOpacity activeOpacity={0.86} onPress={handlePress} style={{ width: 142 }}>
+      <AppCard style={{ padding: 0, overflow: 'hidden' }}>
+        <View style={{ width: '100%', height: 142, backgroundColor: C.bgSection, alignItems: 'center', justifyContent: 'center' }}>
+          {image ? (
+            <Image source={{ uri: image }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          ) : product.emoji ? (
+            <Text style={{ fontSize: 42 }}>{product.emoji}</Text>
+          ) : (
+            <Ionicons name="image-outline" size={32} color={C.border} />
+          )}
+        </View>
+        <View style={{ padding: R.sm }}>
+          <Text numberOfLines={2} style={{ ...F.tiny, color: C.text, fontWeight: '800', minHeight: 32 }}>{product.name}</Text>
+          <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>{formatMoney(display)}</Text>
+          {product.rating != null && product.rating > 0 ? (
+            <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>
+              ★ {product.rating.toFixed(1)} ({product.reviewCount || 0})
             </Text>
-          </View>
-        )}
-      </View>
+          ) : null}
+        </View>
+      </AppCard>
     </TouchableOpacity>
-  )
+  );
 }
 
-// ─── Entity-specific detail sections (AUDIT M2) ─────────────────────
-// Mirror of web `ProductDetailClient` per-entityType layouts. Each
-// component renders a self-contained card/block above the Quantity +
-// Delivery sections. Fields are all optional — if the row has no
-// relevant data the sub-blocks simply don't render.
-
-function SpecCard({ icon, label, value }: { icon: any; label: string; value: string }) {
-  return (
-    <View style={{
-      flex: 1, minWidth: '47%', flexDirection: 'row', alignItems: 'center',
-      gap: 10, padding: 12, borderRadius: R.lg,
-      backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
-    }}>
-      <Ionicons name={icon} size={20} color={C.textMuted} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: C.textMuted, fontSize: 11 }}>{label}</Text>
-        <Text style={{ color: C.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
-          {value}
-        </Text>
-      </View>
-    </View>
-  )
-}
-
-function SpecPill({ icon, value, iconColor }: { icon: any; value: string; iconColor?: string }) {
-  return (
-    <View style={{
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      paddingHorizontal: 12, paddingVertical: 8, borderRadius: R.full,
-      backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
-    }}>
-      <Ionicons name={icon} size={14} color={iconColor || C.textSub} />
-      <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{value}</Text>
-    </View>
-  )
+function EntityDetails({ p }: { p: any }) {
+  if (p?.entityType === 'REAL_ESTATE') return <RealEstateDetails p={p} />;
+  if (p?.entityType === 'SERVICE') return <ServiceDetails p={p} />;
+  if (p?.entityType === 'PRE_ORDER') return <PreOrderDetails p={p} />;
+  return null;
 }
 
 function RealEstateDetails({ p }: { p: any }) {
-  const price    = p.salePrice ?? p.price
-  const hasSpecs = p.area || p.rooms || p.floor || p.district
-  if (!hasSpecs && !p.area) return null
+  const price = p.salePrice ?? p.price;
+  const hasSpecs = p.area || p.rooms || p.floor || p.district;
+  if (!hasSpecs) return null;
+
   return (
-    <View style={{ marginBottom: 16, gap: 10 }}>
-      {hasSpecs && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {p.area     && <SpecCard icon="resize-outline"  label="Талбай" value={`${p.area}м²`} />}
-          {p.rooms    && <SpecCard icon="bed-outline"     label="Өрөө"   value={`${p.rooms}`} />}
-          {p.floor    && (
-            <SpecCard
-              icon="business-outline"
-              label="Давхар"
-              value={`${p.floor}${p.totalFloors ? '/' + p.totalFloors : ''}`}
-            />
-          )}
-          {p.district && <SpecCard icon="location-outline" label="Дүүрэг" value={p.district} />}
-        </View>
-      )}
-      {p.area && price > 0 && (
-        <Text style={{ color: C.textMuted, fontSize: 13 }}>
-          м²-ийн үнэ: <Text style={{ color: C.text, fontWeight: '700' }}>
-            {Math.round(price / p.area).toLocaleString()}₮
-          </Text>
+    <Section title="Үл хөдлөхийн мэдээлэл">
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+        {p.area ? <SpecCard icon="resize-outline" label="Талбай" value={`${p.area}м²`} /> : null}
+        {p.rooms ? <SpecCard icon="bed-outline" label="Өрөө" value={`${p.rooms}`} /> : null}
+        {p.floor ? <SpecCard icon="business-outline" label="Давхар" value={`${p.floor}${p.totalFloors ? '/' + p.totalFloors : ''}`} /> : null}
+        {p.district ? <SpecCard icon="location-outline" label="Дүүрэг" value={p.district} /> : null}
+      </View>
+      {p.area && price > 0 ? (
+        <Text style={{ ...F.small, color: C.textMuted, marginTop: R.sm }}>
+          м²-ийн үнэ: <Text style={{ color: C.text, fontWeight: '800' }}>{formatMoney(Math.round(price / p.area))}</Text>
         </Text>
-      )}
-    </View>
-  )
+      ) : null}
+    </Section>
+  );
 }
 
 function ServiceDetails({ p }: { p: any }) {
-  const hasPills = p.duration || p.rating || p.district
-  if (!hasPills) return null
+  const hasPills = p.duration || p.rating || p.district;
+  if (!hasPills) return null;
+
   return (
-    <View style={{ marginBottom: 16, gap: 10 }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {p.duration && <SpecPill icon="time-outline"     value={`${p.duration} мин`} />}
-        {p.rating   && <SpecPill icon="star"             value={`${p.rating}`} iconColor="#F9A825" />}
-        {p.district && <SpecPill icon="location-outline" value={p.district} />}
+    <Section title="Үйлчилгээний мэдээлэл">
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+        {p.duration ? <InfoPill icon="time-outline" label={`${p.duration} мин`} /> : null}
+        {p.rating ? <InfoPill icon="star" label={`${p.rating}`} color={C.gold} /> : null}
+        {p.district ? <InfoPill icon="location-outline" label={p.district} /> : null}
       </View>
-      {p.availableSlots != null && p.availableSlots > 0 && (
-        <Text style={{ color: C.textMuted, fontSize: 13 }}>
-          Захиалах боломжтой цаг: <Text style={{ color: C.text, fontWeight: '700' }}>
-            {p.availableSlots}
-          </Text>
+      {p.availableSlots != null && p.availableSlots > 0 ? (
+        <Text style={{ ...F.small, color: C.textMuted, marginTop: R.sm }}>
+          Захиалах боломжтой цаг: <Text style={{ color: C.text, fontWeight: '800' }}>{p.availableSlots}</Text>
         </Text>
-      )}
-    </View>
-  )
+      ) : null}
+    </Section>
+  );
 }
 
 function PreOrderDetails({ p }: { p: any }) {
-  const current  = Number(p.currentBatch) || 0
-  const min      = Number(p.minBatch) || 1
-  const progress = Math.min(Math.round((current / min) * 100), 100)
-  // deliveryEstimate is stored as a date string on the Product model; if
-  // it parses to a valid date, compute days left — otherwise treat it as
-  // free-form text and render it under the bar.
-  const deadline   = p.deliveryEstimate ? new Date(p.deliveryEstimate) : null
-  const hasValidDate = deadline && !isNaN(deadline.getTime())
-  const daysLeft   = hasValidDate
-    ? Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / 86400000))
-    : null
-  const price    = p.salePrice ?? p.price
-  const advance  = p.advancePercent
-    ? Math.round((price * p.advancePercent) / 100)
-    : null
+  const current = Number(p.currentBatch) || 0;
+  const min = Number(p.minBatch) || 1;
+  const progress = Math.min(Math.round((current / min) * 100), 100);
+  const deadline = p.deliveryEstimate ? new Date(p.deliveryEstimate) : null;
+  const validDate = deadline && !Number.isNaN(deadline.getTime());
+  const daysLeft = validDate ? Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / 86400000)) : null;
+  const price = p.salePrice ?? p.price;
+  const advance = p.advancePercent ? Math.round((price * p.advancePercent) / 100) : null;
 
   return (
-    <View style={{ marginBottom: 16, gap: 10 }}>
-      <View style={{
-        padding: 14, borderRadius: R.lg, gap: 8,
-        backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
-            Захиалга цугласан
-          </Text>
-          <Text style={{ color: C.text, fontSize: 13, fontWeight: '800' }}>
-            {current}/{min}
-          </Text>
-        </View>
-        <View style={{
-          height: 10, borderRadius: 5, overflow: 'hidden',
-          backgroundColor: C.bgSection,
-        }}>
-          <View style={{
-            width: `${progress}%`, height: '100%',
-            backgroundColor: C.brand, borderRadius: 5,
-          }} />
-        </View>
-        {daysLeft !== null && (
-          <Text style={{ color: C.textMuted, fontSize: 12 }}>
-            {daysLeft} хоног үлдсэн
-          </Text>
-        )}
-        {!hasValidDate && p.deliveryEstimate && (
-          <Text style={{ color: C.textMuted, fontSize: 12 }}>
-            Хүргэлт: {p.deliveryEstimate}
-          </Text>
-        )}
+    <Section title="Урьдчилсан захиалга">
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md }}>
+        <Text style={{ ...F.small, color: C.textSub }}>Цугласан захиалга</Text>
+        <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>{current}/{min}</Text>
       </View>
-      {advance != null && (
-        <Text style={{ color: C.textMuted, fontSize: 13 }}>
-          Урьдчилгаа: <Text style={{ color: C.text, fontWeight: '700' }}>
-            {p.advancePercent}% ({advance.toLocaleString()}₮)
-          </Text>
+      <View style={{ height: 10, borderRadius: R.full, overflow: 'hidden', backgroundColor: C.bgSection, marginTop: R.sm }}>
+        <View style={{ width: `${progress}%`, height: '100%', backgroundColor: C.seller }} />
+      </View>
+      {daysLeft !== null ? <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.sm }}>{daysLeft} хоног үлдсэн</Text> : null}
+      {!validDate && p.deliveryEstimate ? <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.sm }}>Хүргэлт: {p.deliveryEstimate}</Text> : null}
+      {advance != null ? (
+        <Text style={{ ...F.small, color: C.textMuted, marginTop: R.sm }}>
+          Урьдчилгаа: <Text style={{ color: C.text, fontWeight: '800' }}>{p.advancePercent}% ({formatMoney(advance)})</Text>
         </Text>
-      )}
+      ) : null}
+    </Section>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <AppCard>
+      <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm }}>{title}</Text>
+      {children}
+    </AppCard>
+  );
+}
+
+function SpecCard({ icon, label, value }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; value: string }) {
+  return (
+    <View style={{ flex: 1, minWidth: '47%', flexDirection: 'row', alignItems: 'center', gap: R.sm, padding: R.md, borderRadius: UI.controlRadius, backgroundColor: C.bgSection }}>
+      <Ionicons name={icon} size={20} color={C.textMuted} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ ...F.tiny, color: C.textMuted }}>{label}</Text>
+        <Text style={{ ...F.small, color: C.text, fontWeight: '800' }} numberOfLines={1}>{value}</Text>
+      </View>
     </View>
-  )
+  );
+}
+
+function InfoPill({ icon, label, color = C.textSub }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; color?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.xs, paddingHorizontal: R.sm, paddingVertical: R.sm, borderRadius: R.full, backgroundColor: C.bgSection }}>
+      <Ionicons name={icon} size={14} color={color} />
+      <Text style={{ ...F.tiny, color: C.text, fontWeight: '800' }}>{label}</Text>
+    </View>
+  );
+}
+
+function IconButton({
+  icon,
+  color = C.text,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  color?: string;
+  onPress: () => void | Promise<unknown>;
+  accessibilityLabel: string;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.84}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      style={{
+        width: 42,
+        height: 42,
+        borderRadius: R.full,
+        backgroundColor: C.bgCard + 'EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: C.bgCard + '8C',
+      }}
+    >
+      <Ionicons name={icon} size={20} color={color} />
+    </TouchableOpacity>
+  );
+}
+
+function StepButton({ icon, disabled, active, onPress }: { icon: 'add' | 'remove'; disabled?: boolean; active?: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={icon === 'add' ? 'Тоо нэмэх' : 'Тоо хасах'}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: UI.controlRadius,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: disabled ? C.border : active ? C.primary : C.bgSection,
+        borderWidth: active ? 0 : 1,
+        borderColor: C.border,
+      }}
+    >
+      <Ionicons name={icon} size={18} color={disabled ? C.textMuted : active ? C.bgCard : C.text} />
+    </TouchableOpacity>
+  );
+}
+
+function RatingBadge({ rating, reviewCount }: { rating: number; reviewCount: number }) {
+  if (!rating) return null;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.xs, backgroundColor: C.bgSection, borderRadius: R.full, paddingHorizontal: R.sm, paddingVertical: 6 }}>
+      <Ionicons name="star" size={14} color={C.gold} />
+      <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>{rating.toFixed(1)}</Text>
+      <Text style={{ ...F.tiny, color: C.textMuted }}>({reviewCount})</Text>
+    </View>
+  );
+}
+
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 1 }}>
+      {[1, 2, 3, 4, 5].map((item) => (
+        <Ionicons key={item} name={item <= rating ? 'star' : 'star-outline'} size={12} color={item <= rating ? C.gold : C.border} />
+      ))}
+    </View>
+  );
+}
+
+function normalizeImages(p: any): Array<{ url: string }> {
+  const raw = p?.images?.length ? p.images : (p?.media || []);
+  return raw
+    .map((img: any) => (typeof img === 'string' ? { url: img } : img))
+    .filter((img: any) => typeof img?.url === 'string' && img.url.length > 0);
+}
+
+function getStock(p: any): number | undefined {
+  if (typeof p?.stock === 'number') return p.stock;
+  if (typeof p?.quantity === 'number') return p.quantity;
+  return undefined;
+}
+
+function initials(name?: string) {
+  return (name || 'Д').trim().slice(0, 2).toLocaleUpperCase('mn-MN');
+}
+
+function formatMoney(value?: number) {
+  return `${Number(value || 0).toLocaleString()}₮`;
+}
+
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString('mn-MN');
+  } catch {
+    return iso;
+  }
 }

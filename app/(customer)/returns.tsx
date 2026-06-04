@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Stack, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { get, post } from '../../src/services/api';
-import { C, R, F } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
-const REASONS = ['Бараа эвдэрсэн', 'Буруу бараа ирсэн', 'Чанар муу', 'Зурагнаас өөр', 'Хэмжээ тохирохгүй', 'Бусад'];
-const fmt = (n: number) => n.toLocaleString() + '₮';
+const REASONS = [
+  'Бараа эвдэрсэн',
+  'Буруу бараа ирсэн',
+  'Чанар муу',
+  'Зургаас өөр',
+  'Хэмжээ тохирохгүй',
+  'Бусад',
+];
 
 export default function ReturnsScreen() {
-  const { data } = useQuery({ queryKey: ['delivered-orders'], queryFn: () => get('/orders') });
-  const orders = ((data as any)?.orders || []).filter((o: any) => o.status === 'delivered');
+  const { data, isLoading } = useQuery({ queryKey: ['delivered-orders'], queryFn: () => get('/orders') });
+  const orders = resolveOrders(data).filter((order: any) => order.status === 'delivered');
 
   const [selected, setSelected] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -19,72 +27,259 @@ export default function ReturnsScreen() {
 
   const returnMut = useMutation({
     mutationFn: (body: any) => post(`/orders/${selected}/return`, body),
-    onSuccess: () => { Alert.alert('Амжилттай', 'Буцаалтын хүсэлт илгээгдлээ'); setSelected(null); setReason(''); setPhotos([]); },
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
+    onSuccess: () => {
+      Alert.alert('Амжилттай', 'Буцаалтын хүсэлт илгээгдлээ.');
+      setSelected(null);
+      setReason('');
+      setPhotos([]);
+    },
+    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Буцаалтын хүсэлт илгээж чадсангүй.'),
   });
 
   const pickImage = async () => {
     if (photos.length >= 4) return;
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
-    if (!r.canceled) setPhotos([...photos, r.assets[0].uri]);
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    if (!result.canceled) setPhotos((current) => [...current, result.assets[0].uri]);
+  };
+
+  const submit = () => {
+    if (!selected) {
+      Alert.alert('Захиалга сонгоно уу');
+      return;
+    }
+    if (!reason) {
+      Alert.alert('Шалтгаан сонгоно уу');
+      return;
+    }
+    returnMut.mutate({ reason, images: photos });
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: R.lg, paddingBottom: 60 }}>
-      <Text style={{ ...F.tiny, color: C.gold, fontWeight: '600', marginBottom: R.md }}>48 цагийн дотор буцааж болно</Text>
+    <AppScreen>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppTopBar eyebrow="Дэмжлэг" title="Буцаалт" showBack={false} />
+      <AppHeader
+        title="Буцаалт"
+        subtitle="Хүргэгдсэн захиалгад 48 цагийн дотор буцаалтын хүсэлт илгээнэ."
+        icon="refresh-outline"
+        accent={C.primary}
+      />
 
-      {orders.length === 0 ? (
-        <View style={st.empty}><Ionicons name="bag-check-outline" size={48} color={C.bgSection} /><Text style={{ ...F.body, color: C.textMuted, marginTop: R.md }}>Буцааж болох захиалга байхгүй</Text></View>
-      ) : orders.map((o: any) => (
-        <TouchableOpacity key={o.id} style={[st.card, selected === o.id && { borderColor: C.brand }]} onPress={() => setSelected(selected === o.id ? null : o.id)}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <Text style={{ ...F.body, color: C.white, fontWeight: '700' }}>#{o.orderNumber || o.id?.slice(-5)}</Text>
-            <Ionicons name={selected === o.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected === o.id ? C.brand : C.textMuted} />
+      <AppCard style={styles.noticeCard}>
+        <View style={styles.noticeIcon}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={C.primary} />
+        </View>
+        <View style={styles.noticeText}>
+          <Text style={styles.noticeTitle}>48 цагийн баталгаа</Text>
+          <Text style={styles.noticeSub}>Шалтгаан, зураг хавсаргавал хүсэлт хурдан шийдэгдэнэ.</Text>
+        </View>
+      </AppCard>
+
+      <Text style={styles.sectionTitle}>Захиалга сонгох</Text>
+      {isLoading ? (
+        <AppCard style={styles.centerCard}>
+          <ActivityIndicator color={C.brand} />
+          <Text style={styles.mutedText}>Захиалгууд ачаалж байна...</Text>
+        </AppCard>
+      ) : orders.length === 0 ? (
+        <AppCard style={styles.centerCard}>
+          <Ionicons name="bag-check-outline" size={44} color={C.textMuted} />
+          <Text style={styles.emptyTitle}>Буцааж болох захиалга байхгүй</Text>
+          <Text style={styles.mutedText}>Зөвхөн хүргэгдсэн захиалгад буцаалт үүсгэнэ.</Text>
+          <View style={styles.emptyActions}>
+            <AppButton
+              label="Захиалга харах"
+              icon="cube-outline"
+              onPress={() => router.push('/orders' as any)}
+              style={styles.emptyButton}
+            />
+            <AppButton
+              label="Тусламж"
+              icon="help-circle-outline"
+              variant="secondary"
+              onPress={() => router.push('/help' as any)}
+              style={styles.emptyButton}
+            />
           </View>
-          <Text style={{ ...F.body, color: C.secondary, fontWeight: '800' }}>{fmt(o.total || 0)}</Text>
-          <Text style={{ ...F.tiny, color: C.textMuted }}>{(o.items || []).map((i: any) => i.name).join(', ')}</Text>
-        </TouchableOpacity>
-      ))}
+        </AppCard>
+      ) : (
+        <View style={styles.orderList}>
+          {orders.map((order: any) => {
+            const id = getOrderId(order);
+            const active = selected === id;
+            return (
+              <TouchableOpacity
+                key={id}
+                activeOpacity={0.86}
+                onPress={() => setSelected(active ? null : id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Захиалга #${shortId(order.orderNumber ?? id)} сонгох`}
+                accessibilityState={{ selected: active }}
+              >
+                <AppCard style={[styles.orderCard, active ? styles.orderCardActive : null]}>
+                  <View style={styles.orderHeader}>
+                    <Text style={styles.orderNumber}>#{shortId(order.orderNumber ?? id)}</Text>
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={active ? C.primary : C.textMuted}
+                    />
+                  </View>
+                  <Text style={styles.orderTotal}>{formatMoney(order.total || 0)}</Text>
+                  <Text style={styles.mutedText} numberOfLines={1}>{itemSummary(order.items)}</Text>
+                </AppCard>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
-      {selected && (
-        <>
-          <Text style={{ ...F.h4, color: C.white, marginTop: R.lg, marginBottom: R.sm }}>Шалтгаан</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.sm }}>
-            {REASONS.map(r => (
-              <TouchableOpacity key={r} style={[st.chip, reason === r && { backgroundColor: C.brand }]} onPress={() => setReason(r)}>
-                <Text style={{ ...F.tiny, color: reason === r ? C.white : C.textMuted, fontWeight: '600' }}>{r}</Text>
+      {selected ? (
+        <View style={styles.formBlock}>
+          <Text style={styles.sectionTitle}>Шалтгаан</Text>
+          <View style={styles.chips}>
+            {REASONS.map((item) => {
+              const active = reason === item;
+              return (
+                <TouchableOpacity
+                  key={item}
+                  activeOpacity={0.84}
+                  onPress={() => setReason(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item} шалтгаан сонгох`}
+                  accessibilityState={{ selected: active }}
+                  style={[styles.chip, active ? styles.chipActive : null]}
+                >
+                  <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{item}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sectionTitle}>Зураг</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+            {photos.map((uri) => (
+              <TouchableOpacity
+                key={uri}
+                activeOpacity={0.86}
+                onPress={() => setPhotos((current) => current.filter((item) => item !== uri))}
+                accessibilityRole="button"
+                accessibilityLabel="Зураг устгах"
+              >
+                <Image source={{ uri }} style={styles.photo} />
+                <View style={styles.photoRemove}>
+                  <Ionicons name="close-circle" size={20} color={C.error} />
+                </View>
               </TouchableOpacity>
             ))}
-          </View>
-
-          <Text style={{ ...F.h4, color: C.white, marginTop: R.md, marginBottom: R.sm }}>Зураг</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: R.lg }}>
-            {photos.map((uri, i) => (
-              <TouchableOpacity key={i} onPress={() => setPhotos(photos.filter((_, j) => j !== i))}>
-                <Image source={{ uri }} style={st.photo} /><View style={st.photoX}><Ionicons name="close-circle" size={20} color={C.brand} /></View>
+            {photos.length < 4 ? (
+              <TouchableOpacity
+                activeOpacity={0.84}
+                style={styles.addPhoto}
+                onPress={pickImage}
+                accessibilityRole="button"
+                accessibilityLabel="Зураг нэмэх"
+              >
+                <Ionicons name="camera-outline" size={24} color={C.textMuted} />
+                <Text style={styles.addPhotoText}>Нэмэх</Text>
               </TouchableOpacity>
-            ))}
-            {photos.length < 4 && (
-              <TouchableOpacity style={st.addPhoto} onPress={pickImage}><Ionicons name="camera-outline" size={24} color={C.textMuted} /></TouchableOpacity>
-            )}
+            ) : null}
           </ScrollView>
 
-          <TouchableOpacity style={[st.submitBtn, returnMut.isPending && { opacity: 0.5 }]}
-            disabled={returnMut.isPending} onPress={() => { if (!reason) return Alert.alert('Шалтгаан сонгоно уу'); returnMut.mutate({ reason, images: photos }); }}>
-            {returnMut.isPending ? <ActivityIndicator color={C.white} /> : <Text style={{ ...F.body, color: C.white, fontWeight: '800' }}>Буцаалт хүсэх</Text>}
-          </TouchableOpacity>
-        </>
-      )}
-    </ScrollView>
+          <AppButton
+            label={returnMut.isPending ? 'Илгээж байна' : 'Буцаалт хүсэх'}
+            icon="send-outline"
+            disabled={returnMut.isPending}
+            onPress={submit}
+          />
+        </View>
+      ) : null}
+    </AppScreen>
   );
 }
 
-const st = StyleSheet.create({
-  empty: { alignItems: 'center', paddingVertical: 60 },
-  card: { backgroundColor: C.bgCard, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.border },
-  chip: { backgroundColor: C.bgInput, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  photo: { width: 70, height: 70, borderRadius: 10, marginRight: R.sm },
-  photoX: { position: 'absolute', top: -6, right: 2 },
-  addPhoto: { width: 70, height: 70, borderRadius: 10, backgroundColor: C.bgInput, alignItems: 'center', justifyContent: 'center' },
-  submitBtn: { backgroundColor: C.brand, borderRadius: 14, padding: R.lg, alignItems: 'center' },
+function resolveOrders(data: any): any[] {
+  if (Array.isArray(data?.orders)) return data.orders;
+  if (Array.isArray(data?.data?.orders)) return data.data.orders;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data)) return data;
+  return [];
+}
+
+function getOrderId(order: any) {
+  return String(order.id ?? order._id ?? order.orderId ?? order.orderNumber ?? '');
+}
+
+function shortId(value: any) {
+  const id = String(value ?? '').trim();
+  return id ? id.slice(-6).toLocaleUpperCase('en-US') : 'ORDER';
+}
+
+function itemSummary(items: any) {
+  if (!Array.isArray(items) || items.length === 0) return 'Бараа бүртгэгдээгүй';
+  return items.map((item: any) => item.name ?? item.productName ?? item.product?.name ?? 'Бараа').join(', ');
+}
+
+function formatMoney(value: number) {
+  return `${Number(value || 0).toLocaleString('mn-MN')}₮`;
+}
+
+const styles = StyleSheet.create({
+  noticeCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, marginBottom: R.md },
+  noticeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.primaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeText: { flex: 1 },
+  noticeTitle: { ...F.small, color: C.text, fontWeight: '900' },
+  noticeSub: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  sectionTitle: { ...F.h4, color: C.text, marginBottom: R.sm },
+  centerCard: { alignItems: 'center', gap: R.sm, marginBottom: R.md },
+  emptyTitle: { ...F.body, color: C.text, fontWeight: '900', textAlign: 'center' },
+  mutedText: { ...F.small, color: C.textMuted, lineHeight: 20 },
+  emptyActions: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: R.sm,
+    marginTop: R.sm,
+  },
+  emptyButton: { flex: 1 },
+  orderList: { gap: R.sm, marginBottom: R.md },
+  orderCard: { padding: R.md },
+  orderCardActive: { borderColor: C.primary, backgroundColor: C.primaryDim },
+  orderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: R.md },
+  orderNumber: { ...F.small, color: C.primary, fontWeight: '900' },
+  orderTotal: { ...F.h4, color: C.brand, marginVertical: 4 },
+  formBlock: { gap: R.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.md },
+  chip: {
+    backgroundColor: C.bgSection,
+    borderRadius: R.full,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  chipActive: { backgroundColor: C.primary, borderColor: C.primary },
+  chipText: { ...F.small, color: C.textSub, fontWeight: '800' },
+  chipTextActive: { color: C.bgCard },
+  photoRow: { gap: R.sm, paddingBottom: R.md },
+  photo: { width: 72, height: 72, borderRadius: UI.controlRadius, backgroundColor: C.bgSection },
+  photoRemove: { position: 'absolute', top: -6, right: -4, backgroundColor: C.bgCard, borderRadius: R.full },
+  addPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.bgSection,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  addPhotoText: { ...F.tiny, color: C.textMuted, fontWeight: '800' },
 });

@@ -1,148 +1,196 @@
-import { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
-import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { HerderAPI } from '../../src/features/herder/api';
 import type { HerderOrderStatus } from '../../src/features/herder/types';
-import { C, R } from '../../src/shared/design';
-
-/**
- * Orders list. Tap a card → order detail where the status transition and
- * tracking note live. Filtering stays client-agnostic so "all" tab acts
- * as the source of truth the detail screen can read from query cache.
- */
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const STATUS_LABEL: Record<HerderOrderStatus, string> = {
-  pending:   'Хүлээгдэж',
+  pending: 'Хүлээгдэж',
   confirmed: 'Баталгаажсан',
   preparing: 'Бэлтгэж',
-  shipped:   'Илгээсэн',
+  shipped: 'Илгээсэн',
   delivered: 'Хүргэгдсэн',
   cancelled: 'Цуцалсан',
 };
 
 const STATUS_COLOR: Record<HerderOrderStatus, string> = {
-  pending:   C.gold,
+  pending: C.gold,
   confirmed: C.primary,
   preparing: C.secondary,
-  shipped:   C.herder,
+  shipped: C.herder,
   delivered: C.success,
   cancelled: C.error,
 };
 
+const FILTERS = ['all', 'pending', 'confirmed', 'preparing', 'shipped'] as const;
+type HerderOrderFilter = (typeof FILTERS)[number];
+
+function normalizeOrderFilter(value?: string | string[] | null): HerderOrderFilter {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return FILTERS.includes(raw as HerderOrderFilter) ? (raw as HerderOrderFilter) : 'all';
+}
+
 export default function HerderOrders() {
-  const [filter, setFilter] = useState<HerderOrderStatus | 'all'>('all');
+  const params = useLocalSearchParams<{ status?: string }>();
+  const [filter, setFilter] = useState<HerderOrderFilter>(() => normalizeOrderFilter(params.status));
+  const layout = useAppLayoutMetrics();
+
+  useEffect(() => {
+    setFilter(normalizeOrderFilter(params.status));
+  }, [params.status]);
+
+  const selectFilter = (nextFilter: HerderOrderFilter) => {
+    setFilter(nextFilter);
+    router.replace(
+      nextFilter === 'all'
+        ? ('/herder-admin/orders' as any)
+        : ({ pathname: '/herder-admin/orders' as any, params: { status: nextFilter } } as any),
+    );
+  };
 
   const { data, refetch, isRefetching } = useQuery({
     queryKey: ['herder', 'my', 'orders', filter],
-    queryFn:  () => HerderAPI.my.orders.list(filter === 'all' ? {} : { status: filter }),
+    queryFn: () => HerderAPI.my.orders.list(filter === 'all' ? {} : { status: filter }),
   });
 
   const orders = data?.orders ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Захиалга</Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', paddingHorizontal: 12, gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-        {(['all', 'pending', 'confirmed', 'preparing', 'shipped'] as const).map((f) => (
-          <TouchableOpacity
-            key={f}
-            onPress={() => setFilter(f)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: R.full,
-              backgroundColor: filter === f ? C.herder : C.bgSection,
-              borderWidth: 1,
-              borderColor: filter === f ? C.herder : C.border,
-            }}
-          >
-            <Text
-              style={{
-                color: filter === f ? '#fff' : C.text,
-                fontSize: 11,
-                fontWeight: '700',
-              }}
-            >
-              {f === 'all' ? 'Бүгд' : STATUS_LABEL[f]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <FlatList
         data={orders}
-        keyExtractor={(o) => o._id}
-        contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.herder} />}
-        renderItem={({ item: o }) => (
+        keyExtractor={(order) => order._id}
+        contentContainerStyle={{
+          padding: UI.screenPad,
+          paddingTop: layout.screenTop,
+          paddingBottom: layout.screenBottom,
+        }}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.herder} />
+        }
+        ListHeaderComponent={
+          <>
+            <AppTopBar eyebrow="Малчин" title="Захиалга" showBack={false} />
+            <AppHeader
+              title="Захиалга"
+              subtitle="Малчнаас ирсэн захиалгын төлөв, хүргэлтийн мэдээлэл."
+              icon="receipt-outline"
+              accent={C.herder}
+              style={{ marginBottom: R.md }}
+            />
+            <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.md, flexWrap: 'wrap' }}>
+              {FILTERS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  activeOpacity={0.84}
+                  onPress={() => selectFilter(item)}
+                  style={{
+                    minHeight: 36,
+                    paddingHorizontal: R.md,
+                    paddingVertical: R.sm,
+                    borderRadius: R.full,
+                    backgroundColor: filter === item ? C.herder : C.bgSection,
+                    borderWidth: 1,
+                    borderColor: filter === item ? C.herder : C.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      ...F.tiny,
+                    color: filter === item ? C.bgCard : C.text,
+                      fontWeight: '800',
+                    }}
+                  >
+                    {item === 'all' ? 'Бүгд' : STATUS_LABEL[item]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        }
+        renderItem={({ item: order }) => (
           <TouchableOpacity
-            onPress={() => router.push({ pathname: '/(herder)/order/[id]', params: { id: o._id } } as never)}
-            activeOpacity={0.7}
-            style={{
-              backgroundColor: C.bgCard,
-              borderRadius: R.lg,
-              padding: 14,
-              marginBottom: 10,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}
+            activeOpacity={0.86}
+            accessibilityLabel={`Захиалга ${order.orderNumber}`}
+            onPress={() =>
+              router.push({ pathname: '/herder-admin/order/[id]', params: { id: order._id } } as never)
+            }
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: C.text, fontWeight: '800', fontSize: 15 }}>
-                #{o.orderNumber}
-              </Text>
-              <View
-                style={{
-                  backgroundColor: STATUS_COLOR[o.status] + '22',
-                  borderRadius: R.full,
-                  paddingHorizontal: 10,
-                  paddingVertical: 3,
-                }}
-              >
-                <Text style={{ color: STATUS_COLOR[o.status], fontSize: 11, fontWeight: '700' }}>
-                  {STATUS_LABEL[o.status]}
+            <AppCard style={{ padding: R.md, marginBottom: R.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ ...F.body, color: C.text, fontWeight: '900' }}>
+                  #{order.orderNumber}
                 </Text>
+                <StatusBadge status={order.status} />
               </View>
-            </View>
-            <Text style={{ color: C.textSub, fontSize: 12, marginTop: 4 }}>
-              {o.buyer?.name ?? 'Үйлчлүүлэгч'} · {o.delivery?.address?.district ?? ''}
-            </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 6 }}>
-              <Text style={{ color: C.herder, fontSize: 16, fontWeight: '900' }}>
-                {o.total.toLocaleString()}₮
+              <Text style={{ ...F.tiny, color: C.textSub, marginTop: R.xs }}>
+                {order.buyer?.name ?? 'Үйлчлүүлэгч'} · {order.delivery?.address?.district ?? ''}
               </Text>
-              <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
-            </View>
-            {o.delivery?.requiresColdChain && (
-              <View
-                style={{
-                  backgroundColor: C.primaryDim,
-                  borderRadius: R.full,
-                  paddingHorizontal: 10,
-                  paddingVertical: 3,
-                  alignSelf: 'flex-start',
-                  marginTop: 6,
-                }}
-              >
-                <Text style={{ color: C.primary, fontSize: 11, fontWeight: '700' }}>
-                  ❄ Хүйтэн сүлжээ
-                </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: R.sm }}>
+                <Text style={{ ...F.h3, color: C.herder }}>{formatMoney(order.total)}</Text>
+                <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
               </View>
-            )}
+              {order.delivery?.requiresColdChain ? (
+                <View
+                  style={{
+                    backgroundColor: C.primaryDim,
+                    borderRadius: R.full,
+                    paddingHorizontal: R.sm,
+                    paddingVertical: 3,
+                    alignSelf: 'flex-start',
+                    marginTop: R.sm,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Ionicons name="snow-outline" size={12} color={C.primary} />
+                  <Text style={{ ...F.tiny, color: C.primary, fontWeight: '800' }}>
+                    Хүйтэн сүлжээ
+                  </Text>
+                </View>
+              ) : null}
+            </AppCard>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          <View style={{ alignItems: 'center', marginTop: 60 }}>
-            <Ionicons name="receipt-outline" size={48} color={C.textMuted} />
-            <Text style={{ color: C.textSub, marginTop: 12 }}>Захиалга байхгүй</Text>
-          </View>
+          <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
+            <Ionicons name="receipt-outline" size={44} color={C.textMuted} />
+            <Text style={{ ...F.body, color: C.textSub }}>Захиалга байхгүй</Text>
+            <AppButton
+              label="Бараа нэмэх"
+              icon="add"
+              variant="ghost"
+              onPress={() => router.push('/herder-admin/listing-form' as never)}
+            />
+          </AppCard>
         }
       />
     </View>
   );
+}
+
+function StatusBadge({ status }: { status: HerderOrderStatus }) {
+  return (
+    <View
+      style={{
+        backgroundColor: STATUS_COLOR[status] + '22',
+        borderRadius: R.full,
+        paddingHorizontal: R.sm,
+        paddingVertical: 3,
+      }}
+    >
+      <Text style={{ ...F.tiny, color: STATUS_COLOR[status], fontWeight: '800' }}>
+        {STATUS_LABEL[status]}
+      </Text>
+    </View>
+  );
+}
+
+function formatMoney(value: number) {
+  return `${Number(value || 0).toLocaleString()}₮`;
 }

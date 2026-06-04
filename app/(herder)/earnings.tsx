@@ -1,198 +1,174 @@
 import { useMemo } from 'react';
-import { View, Text, ScrollView, RefreshControl } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { RefreshControl, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { HerderAPI } from '../../src/features/herder/api';
 import type { EarningsSummary } from '../../src/features/herder/types';
-import { C, R, F } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
-const MONTHS = ['1-р сар', '2-р сар', '3-р сар', '4-р сар', '5-р сар', '6-р сар',
-                '7-р сар', '8-р сар', '9-р сар', '10-р сар', '11-р сар', '12-р сар'];
+const MONTHS = [
+  '1-р сар',
+  '2-р сар',
+  '3-р сар',
+  '4-р сар',
+  '5-р сар',
+  '6-р сар',
+  '7-р сар',
+  '8-р сар',
+  '9-р сар',
+  '10-р сар',
+  '11-р сар',
+  '12-р сар',
+];
 
 type MonthBucket = { key: string; label: string; total: number; count: number };
 
 function aggregateByMonth(payouts: EarningsSummary['recentPayouts']): MonthBucket[] {
   const map = new Map<string, MonthBucket>();
-  for (const p of payouts) {
-    const iso = p.escrow?.releasedAt;
+  for (const payout of payouts) {
+    const iso = payout.escrow?.releasedAt;
     if (!iso) continue;
-    const d = new Date(iso);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = `${d.getFullYear()} · ${MONTHS[d.getMonth()]}`;
+    const date = new Date(iso);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${date.getFullYear()} · ${MONTHS[date.getMonth()]}`;
     const current = map.get(key) ?? { key, label, total: 0, count: 0 };
-    current.total += p.escrow?.holdAmount ?? 0;
+    current.total += payout.escrow?.holdAmount ?? 0;
     current.count += 1;
     map.set(key, current);
   }
   return [...map.values()].sort((a, b) => (a.key < b.key ? 1 : -1));
 }
 
-/**
- * Earnings tab — minimal view of the three escrow buckets and recent payouts.
- * Expanded reporting (monthly breakdown, export) arrives in M6.
- */
 export default function HerderEarnings() {
   const { data, refetch, isRefetching } = useQuery({
     queryKey: ['herder', 'my', 'earnings'],
-    queryFn:  () => HerderAPI.my.earnings(),
+    queryFn: () => HerderAPI.my.earnings(),
   });
 
   const byMonth = useMemo(() => aggregateByMonth(data?.recentPayouts ?? []), [data?.recentPayouts]);
-  const monthMax = byMonth.reduce((m, b) => Math.max(m, b.total), 0);
-
-  const BUCKETS = [
-    {
-      icon:  'checkmark-circle' as const,
-      label: 'Хүлээн авсан',
-      hint:  'Таны дансанд шилжсэн',
-      total: data?.released.total ?? 0,
-      count: data?.released.count ?? 0,
-      color: C.success,
-    },
-    {
-      icon:  'lock-closed' as const,
-      label: 'Escrow-д хадгалагдаж байна',
-      hint:  'Хүргэлт баталгаажаад 48 цагийн дараа суллагдана',
-      total: data?.held.total ?? 0,
-      count: data?.held.count ?? 0,
-      color: C.gold,
-    },
-    {
-      icon:  'time' as const,
-      label: 'Төлөгдөөгүй',
-      hint:  'Худалдан авагчаас төлбөр хүлээж байна',
-      total: data?.pending.total ?? 0,
-      count: data?.pending.count ?? 0,
-      color: C.textSub,
-    },
-  ];
+  const monthMax = byMonth.reduce((max, bucket) => Math.max(max, bucket.total), 0);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.herder} />}
+    <AppScreen
+      refreshControl={
+        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.herder} />
+      }
     >
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Орлого</Text>
-        <Text style={{ color: C.textSub, fontSize: 13, marginTop: 4 }}>
-          Платформын хураамж: {data?.commissionRate ?? 10}%
-        </Text>
+      <AppTopBar eyebrow="Малчин" title="Орлого" showBack={false} />
+      <AppHeader
+        title="Орлого"
+        subtitle={`Платформын хураамж: ${data?.commissionRate ?? 10}%`}
+        icon="wallet-outline"
+        accent={C.herder}
+      />
+
+      <View style={{ gap: R.sm, marginBottom: R.lg }}>
+        <AppMetricCard
+          label="Хүлээн авсан"
+          value={formatMoney(data?.released.total)}
+          icon="checkmark-circle-outline"
+          accent={C.success}
+        />
+        <AppMetricCard
+          label="Escrow-д хадгалагдаж байна"
+          value={formatMoney(data?.held.total)}
+          icon="lock-closed-outline"
+          accent={C.gold}
+        />
+        <AppMetricCard
+          label="Төлөгдөөгүй"
+          value={formatMoney(data?.pending.total)}
+          icon="time-outline"
+          accent={C.textSub}
+        />
       </View>
 
-      <View style={{ padding: 12, gap: 10 }}>
-        {BUCKETS.map((b) => (
-          <View
-            key={b.label}
-            style={{
-              backgroundColor: C.bgCard,
-              borderRadius: R.lg,
-              padding: 16,
-              borderLeftWidth: 3,
-              borderLeftColor: b.color,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Ionicons name={b.icon} size={22} color={b.color} />
-              <Text style={{ color: C.text, fontWeight: '700', fontSize: 14, flex: 1 }}>
-                {b.label}
-              </Text>
-              <Text style={{ color: C.textMuted, fontSize: 12 }}>{b.count} захиалга</Text>
-            </View>
-            <Text style={{ color: b.color, fontSize: 24, fontWeight: '900', marginTop: 8 }}>
-              {b.total.toLocaleString()}₮
-            </Text>
-            <Text style={{ color: C.textSub, fontSize: 12, marginTop: 4 }}>{b.hint}</Text>
-          </View>
-        ))}
-      </View>
-
-      {byMonth.length > 0 && (
-        <View style={{ margin: 12 }}>
-          <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>Сараар</Text>
-          {byMonth.map((b) => (
-            <View
-              key={b.key}
-              style={{
-                backgroundColor: C.bgCard,
-                borderRadius: R.lg,
-                padding: 12,
-                marginBottom: 8,
-                borderWidth: 1,
-                borderColor: C.border,
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>{b.label}</Text>
-                <Text style={{ color: C.herder, fontWeight: '800', fontSize: 15 }}>
-                  {b.total.toLocaleString()}₮
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <View
-                  style={{
-                    flex: 1,
-                    height: 6,
-                    backgroundColor: C.bgSection,
-                    borderRadius: R.full,
-                    overflow: 'hidden',
-                  }}
-                >
+      {byMonth.length > 0 ? (
+        <View style={{ marginBottom: R.lg }}>
+          <Text style={{ ...F.h3, color: C.text, marginBottom: R.sm }}>Сараар</Text>
+          <View style={{ gap: R.sm }}>
+            {byMonth.map((bucket) => (
+              <AppCard key={bucket.key} style={{ padding: R.md }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ ...F.small, color: C.text, fontWeight: '800' }}>
+                    {bucket.label}
+                  </Text>
+                  <Text style={{ ...F.small, color: C.herder, fontWeight: '900' }}>
+                    {formatMoney(bucket.total)}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, marginTop: R.sm }}>
                   <View
                     style={{
-                      width: `${monthMax > 0 ? (b.total / monthMax) * 100 : 0}%`,
-                      height: '100%',
-                      backgroundColor: C.herder,
+                      flex: 1,
+                      height: 6,
+                      backgroundColor: C.bgSection,
+                      borderRadius: R.full,
+                      overflow: 'hidden',
                     }}
-                  />
+                  >
+                    <View
+                      style={{
+                        width: `${monthMax > 0 ? (bucket.total / monthMax) * 100 : 0}%`,
+                        height: '100%',
+                        backgroundColor: C.herder,
+                      }}
+                    />
+                  </View>
+                  <Text style={{ ...F.tiny, color: C.textMuted }}>{bucket.count}</Text>
                 </View>
-                <Text style={{ color: C.textMuted, fontSize: 11 }}>{b.count}</Text>
+              </AppCard>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      <Text style={{ ...F.h3, color: C.text, marginBottom: R.sm }}>Сүүлийн тооцоо</Text>
+      {(data?.recentPayouts ?? []).length ? (
+        <View style={{ gap: R.sm }}>
+          {(data?.recentPayouts ?? []).map((payout) => (
+            <AppCard key={payout._id} style={{ padding: R.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.md }}>
+                <View
+                  style={{
+                    width: UI.iconBox,
+                    height: UI.iconBox,
+                    borderRadius: UI.controlRadius,
+                    backgroundColor: C.success + '18',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="cash-outline" size={20} color={C.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ ...F.small, color: C.text, fontWeight: '800' }}>
+                    #{payout.orderNumber}
+                  </Text>
+                  <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>
+                    {payout.escrow?.releasedAt
+                      ? new Date(payout.escrow.releasedAt).toLocaleDateString('mn-MN')
+                      : ''}
+                  </Text>
+                </View>
+                <Text style={{ ...F.body, color: C.success, fontWeight: '900' }}>
+                  +{formatMoney(payout.escrow?.holdAmount)}
+                </Text>
               </View>
-            </View>
+            </AppCard>
           ))}
         </View>
+      ) : (
+        <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+          <Ionicons name="wallet-outline" size={34} color={C.textMuted} />
+          <Text style={{ ...F.small, color: C.textSub }}>Одоогоор тооцоо байхгүй</Text>
+        </AppCard>
       )}
-
-      <View style={{ margin: 12 }}>
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>Сүүлийн тооцоо</Text>
-        {(data?.recentPayouts ?? []).map((p) => (
-          <View
-            key={p._id}
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: C.bgCard,
-              borderRadius: R.lg,
-              padding: 14,
-              marginBottom: 8,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}
-          >
-            <View>
-              <Text style={{ color: C.text, fontWeight: '600' }}>#{p.orderNumber}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>
-                {p.escrow?.releasedAt
-                  ? new Date(p.escrow.releasedAt).toLocaleDateString('mn-MN')
-                  : ''}
-              </Text>
-            </View>
-            <Text style={{ color: C.success, fontWeight: '800', fontSize: 16 }}>
-              +{(p.escrow?.holdAmount ?? 0).toLocaleString()}₮
-            </Text>
-          </View>
-        ))}
-        {!data?.recentPayouts?.length && (
-          <View style={{ alignItems: 'center', padding: 40 }}>
-            <Ionicons name="wallet-outline" size={40} color={C.textMuted} />
-            <Text style={{ color: C.textSub, marginTop: 8 }}>Одоогоор тооцоо байхгүй</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
+    </AppScreen>
   );
+}
+
+function formatMoney(value: number | undefined) {
+  return `${Number(value || 0).toLocaleString()}₮`;
 }

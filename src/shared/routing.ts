@@ -1,45 +1,37 @@
 import { router } from 'expo-router';
+import { authRoleHintForPublicPath, homeRouteForBackendRole } from './roleAccess';
+import { normalizePublicRouteParam } from './routeNormalization';
+
+export { normalizeAuthRoleParam, normalizePublicRouteParam } from './routeNormalization';
+
+export function inferAuthRoleFromReturnTo(value?: string | string[] | null): string | null {
+  const route = normalizePublicRouteParam(value);
+  if (!route) return null;
+  const pathOnly = route.split(/[?#]/)[0];
+
+  return authRoleHintForPublicPath(pathOnly);
+}
+
+export function routeAfterAuth(
+  role: string | null | undefined,
+  returnTo?: string | string[] | null,
+): void {
+  const safeReturnTo = normalizePublicRouteParam(returnTo);
+  if (safeReturnTo) {
+    router.replace(safeReturnTo as never);
+    return;
+  }
+  routeByRole(role);
+}
 
 /**
  * Route a freshly-authenticated user to their home group based on
  * the backend `role` field (lowercase) returned in the login response.
  *
- * Backend role mapping:
- *   buyer       → /(tabs)                   — default buyer home
- *   seller      → /(owner)/dashboard         — shop owner (STORE in app)
- *   store       → /(owner)/dashboard         — legacy alias
- *   owner       → /(owner)/dashboard         — legacy alias
- *   affiliate   → /(seller)/dashboard        — commission marketer
- *   delivery    → /(driver)/deliveries       — courier
- *   driver      → /(driver)/deliveries       — alias
- *   herder      → /(herder)/dashboard        — Малчнаас шууд seller
- *   coordinator → /(coordinator)/dashboard   — sum-level onboarding helper
- *   admin       → /(tabs)
+ * Backend role mapping lives in `src/shared/roleAccess.ts` so route
+ * guards and post-login routing stay in sync.
  */
 export function routeByRole(role: string | null | undefined): void {
-  const r = (role ?? '').toLowerCase();
-
-  if (r === 'seller' || r === 'store' || r === 'owner') {
-    router.replace('/(owner)/dashboard' as never);
-    return;
-  }
-  if (r === 'affiliate') {
-    router.replace('/(seller)/dashboard' as never);
-    return;
-  }
-  if (r === 'delivery' || r === 'driver') {
-    router.replace('/(driver)/deliveries' as never);
-    return;
-  }
-  if (r === 'herder') {
-    router.replace('/(herder)/dashboard' as never);
-    return;
-  }
-  if (r === 'coordinator') {
-    router.replace('/(coordinator)/dashboard' as never);
-    return;
-  }
-  // buyer / admin / unknown
-  router.replace('/(tabs)' as never);
+  router.replace(homeRouteForBackendRole(role) as never);
 }
 

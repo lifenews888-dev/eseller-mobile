@@ -1,75 +1,83 @@
 import { useEffect, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Switch,
   Text,
-  ScrollView,
   TextInput,
   TouchableOpacity,
-  Image,
-  Alert,
-  Switch,
-  ActivityIndicator,
+  View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { HerderAPI } from '../../src/features/herder/api';
-import { uploadMultipleImages } from '../../src/lib/uploadImage';
-import * as HerderQueue from '../../src/features/herder/queue';
 import { CATEGORIES } from '../../src/features/herder/constants';
+import * as HerderQueue from '../../src/features/herder/queue';
 import type { ProductWritable } from '../../src/features/herder/types';
+import { uploadMultipleImages } from '../../src/lib/uploadImage';
 import { isOfflineError } from '../../src/services/api';
-import { C, R } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import {
+  AppButton,
+  AppCard,
+  AppHeader,
+  AppScreen,
+  AppTopBar,
+  useAppLayoutMetrics,
+} from '../../src/shared/ui/AppUI';
 
 type FormState = {
-  name:              string;
-  description:       string;
-  price:             string;
-  salePrice:         string;
-  category:          string;
-  stock:             string;
+  name: string;
+  description: string;
+  price: string;
+  salePrice: string;
+  category: string;
+  stock: string;
   requiresColdChain: boolean;
-  images:            string[];
+  images: string[];
 };
 
 const EMPTY: FormState = {
-  name:              '',
-  description:       '',
-  price:             '',
-  salePrice:         '',
-  category:          CATEGORIES[0],
-  stock:             '',
+  name: '',
+  description: '',
+  price: '',
+  salePrice: '',
+  category: CATEGORIES[0],
+  stock: '',
   requiresColdChain: false,
-  images:            [],
+  images: [],
 };
 
 export default function HerderListingForm() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEdit = !!id;
   const qc = useQueryClient();
+  const layout = useAppLayoutMetrics();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [hydrated, setHydrated] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const existing = useQuery({
     queryKey: ['herder', 'my', 'products', 'detail', id],
-    queryFn:  () => HerderAPI.detail(id as string),
-    enabled:  isEdit,
+    queryFn: () => HerderAPI.detail(id as string),
+    enabled: isEdit,
   });
 
   useEffect(() => {
     if (isEdit && existing.data && !hydrated) {
-      const p = existing.data;
+      const product = existing.data;
       setForm({
-        name:              p.name ?? '',
-        description:       p.description ?? '',
-        price:             String(p.price ?? ''),
-        salePrice:         p.salePrice != null ? String(p.salePrice) : '',
-        category:          p.category ?? CATEGORIES[0],
-        stock:             p.stock != null ? String(p.stock) : '',
-        requiresColdChain: !!p.requiresColdChain,
-        images:            p.images ?? [],
+        name: product.name ?? '',
+        description: product.description ?? '',
+        price: String(product.price ?? ''),
+        salePrice: product.salePrice != null ? String(product.salePrice) : '',
+        category: product.category ?? CATEGORIES[0],
+        stock: product.stock != null ? String(product.stock) : '',
+        requiresColdChain: !!product.requiresColdChain,
+        images: product.images ?? [],
       });
       setHydrated(true);
     }
@@ -85,10 +93,6 @@ export default function HerderListingForm() {
       router.back();
     },
     onError: async (e: Error, payload) => {
-      // Transport-level failure → park it in the offline queue so the
-      // herder doesn't have to re-type the form once wifi comes back.
-      // 4xx/5xx from the server go straight to the alert — retrying
-      // a validation error would just fail again.
       if (isOfflineError(e)) {
         try {
           if (isEdit && id) {
@@ -97,14 +101,12 @@ export default function HerderListingForm() {
             await HerderQueue.enqueue({ kind: 'create', payload });
           }
           qc.invalidateQueries({ queryKey: ['herder', 'queue'] });
-          Alert.alert(
-            'Офлайн горимд хадгаллаа',
-            'Интернэт холбогдмогц автоматаар илгээнэ.',
-            [{ text: 'OK', onPress: () => router.back() }],
-          );
+          Alert.alert('Офлайн горимд хадгаллаа', 'Интернет холбогдмогц автоматаар илгээнэ.', [
+            { text: 'OK', onPress: () => router.back() },
+          ]);
           return;
         } catch {
-          // fall through to generic alert
+          // Fall through to generic alert.
         }
       }
       Alert.alert('Алдаа', e.message);
@@ -112,17 +114,18 @@ export default function HerderListingForm() {
   });
 
   const pickImage = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.8,
     });
-    if (r.canceled) return;
-    const localUris = r.assets.map((a) => a.uri);
+    if (result.canceled) return;
+
+    const localUris = result.assets.map((asset) => asset.uri);
     setUploading(true);
     try {
       const cloudUrls = await uploadMultipleImages(localUris);
-      setForm((f) => ({ ...f, images: [...f.images, ...cloudUrls].slice(0, 5) }));
+      setForm((current) => ({ ...current, images: [...current.images, ...cloudUrls].slice(0, 5) }));
     } catch {
       Alert.alert('Алдаа', 'Зураг хуулахад алдаа гарлаа');
     } finally {
@@ -131,7 +134,7 @@ export default function HerderListingForm() {
   };
 
   const removeImage = (uri: string) =>
-    setForm((f) => ({ ...f, images: f.images.filter((u) => u !== uri) }));
+    setForm((current) => ({ ...current, images: current.images.filter((item) => item !== uri) }));
 
   const onSubmit = () => {
     const price = Number(form.price);
@@ -139,20 +142,22 @@ export default function HerderListingForm() {
     const stock = form.stock ? Number(form.stock) : undefined;
 
     if (!form.name.trim()) return Alert.alert('Алдаа', 'Нэр оруулна уу');
-    if (!Number.isFinite(price) || price <= 0)
+    if (!Number.isFinite(price) || price <= 0) {
       return Alert.alert('Алдаа', 'Үнэ 0-ээс их байх ёстой');
-    if (salePrice != null && (!Number.isFinite(salePrice) || salePrice >= price))
-      return Alert.alert('Алдаа', 'Хямдралтай үнэ нь үндсэн үнээс бага байх ёстой');
+    }
+    if (salePrice != null && (!Number.isFinite(salePrice) || salePrice >= price)) {
+      return Alert.alert('Алдаа', 'Хямдралтай үнэ үндсэн үнээс бага байх ёстой');
+    }
 
     save.mutate({
-      name:              form.name.trim(),
-      description:       form.description.trim() || undefined,
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
       price,
       salePrice,
-      category:          form.category,
+      category: form.category,
       stock,
       requiresColdChain: form.requiresColdChain,
-      images:            form.images,
+      images: form.images,
     });
   };
 
@@ -164,34 +169,28 @@ export default function HerderListingForm() {
     );
   }
 
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ paddingBottom: 140 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View
-        style={{
-          padding: 16,
-          paddingTop: 60,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={C.text} />
-        </TouchableOpacity>
-        <Text style={{ color: C.text, fontSize: 20, fontWeight: '900' }}>
-          {isEdit ? 'Бараа засах' : 'Шинэ бараа'}
-        </Text>
-      </View>
+  const submitLabel = save.isPending ? 'Хадгалж байна...' : isEdit ? 'Хадгалах' : 'Нийтлэх';
 
-      <View style={{ padding: 12, gap: 14 }}>
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <AppScreen
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: layout.screenBottom + 96 }}
+      >
+      <AppTopBar eyebrow="Малчин" title={isEdit ? 'Бараа засах' : 'Шинэ бараа'} />
+
+      <AppHeader
+        title={isEdit ? 'Бараа засах' : 'Шинэ бараа'}
+        subtitle="Малчнаас шууд хүргэх бүтээгдэхүүний мэдээлэл."
+        icon="leaf-outline"
+        accent={C.herder}
+      />
+
+      <AppCard style={{ gap: R.md, marginBottom: R.md }}>
         <Field label="Нэр">
           <TextInput
             value={form.name}
-            onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+            onChangeText={(value) => setForm((current) => ({ ...current, name: value }))}
             placeholder="Жишээ: Хонины мах"
             placeholderTextColor={C.textMuted}
             style={inputStyle}
@@ -201,21 +200,23 @@ export default function HerderListingForm() {
         <Field label="Тайлбар">
           <TextInput
             value={form.description}
-            onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
+            onChangeText={(value) => setForm((current) => ({ ...current, description: value }))}
             placeholder="Бараа болон малын тухай мэдээлэл"
             placeholderTextColor={C.textMuted}
             multiline
             numberOfLines={3}
-            style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]}
+            style={[inputStyle, { minHeight: 92, textAlignVertical: 'top' }]}
           />
         </Field>
 
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flexDirection: 'row', gap: R.sm }}>
           <View style={{ flex: 1 }}>
             <Field label="Үнэ (₮)">
               <TextInput
                 value={form.price}
-                onChangeText={(v) => setForm((f) => ({ ...f, price: v.replace(/\D/g, '') }))}
+                onChangeText={(value) =>
+                  setForm((current) => ({ ...current, price: value.replace(/\D/g, '') }))
+                }
                 placeholder="0"
                 placeholderTextColor={C.textMuted}
                 keyboardType="number-pad"
@@ -227,8 +228,10 @@ export default function HerderListingForm() {
             <Field label="Хямдрал (₮)">
               <TextInput
                 value={form.salePrice}
-                onChangeText={(v) => setForm((f) => ({ ...f, salePrice: v.replace(/\D/g, '') }))}
-                placeholder="—"
+                onChangeText={(value) =>
+                  setForm((current) => ({ ...current, salePrice: value.replace(/\D/g, '') }))
+                }
+                placeholder="-"
                 placeholderTextColor={C.textMuted}
                 keyboardType="number-pad"
                 style={inputStyle}
@@ -238,28 +241,29 @@ export default function HerderListingForm() {
         </View>
 
         <Field label="Ангилал">
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {CATEGORIES.map((cat) => (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+            {CATEGORIES.map((category) => (
               <TouchableOpacity
-                key={cat}
-                onPress={() => setForm((f) => ({ ...f, category: cat }))}
+                key={category}
+                activeOpacity={0.84}
+                onPress={() => setForm((current) => ({ ...current, category }))}
                 style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
+                  paddingHorizontal: R.md,
+                  paddingVertical: R.sm,
                   borderRadius: R.full,
-                  backgroundColor: form.category === cat ? C.herder : C.bgCard,
+                  backgroundColor: form.category === category ? C.herder : C.bgSection,
                   borderWidth: 1,
-                  borderColor: form.category === cat ? C.herder : C.border,
+                  borderColor: form.category === category ? C.herder : C.border,
                 }}
               >
                 <Text
                   style={{
-                    color: form.category === cat ? '#fff' : C.text,
-                    fontWeight: '700',
-                    fontSize: 13,
+                    ...F.tiny,
+                    color: form.category === category ? C.bgCard : C.text,
+                    fontWeight: '800',
                   }}
                 >
-                  {cat}
+                  {category}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -269,140 +273,141 @@ export default function HerderListingForm() {
         <Field label="Нөөц">
           <TextInput
             value={form.stock}
-            onChangeText={(v) => setForm((f) => ({ ...f, stock: v.replace(/\D/g, '') }))}
+            onChangeText={(value) =>
+              setForm((current) => ({ ...current, stock: value.replace(/\D/g, '') }))
+            }
             placeholder="0"
             placeholderTextColor={C.textMuted}
             keyboardType="number-pad"
             style={inputStyle}
           />
         </Field>
+      </AppCard>
 
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: C.bgCard,
-            borderRadius: R.lg,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: C.border,
-          }}
-        >
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={{ color: C.text, fontWeight: '700', fontSize: 14 }}>
-              ❄ Хүйтэн сүлжээ шаардлагатай
+      <AppCard style={{ marginBottom: R.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: R.md }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>
+              Хүйтэн сүлжээ шаардлагатай
             </Text>
-            <Text style={{ color: C.textSub, fontSize: 12, marginTop: 2 }}>
-              Мах, сүү, бяслаг зэрэг түргэн муудах бараанд
+            <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
+              Мах, сүү, бяслаг зэрэг түргэн муудах бараанд.
             </Text>
           </View>
           <Switch
             value={form.requiresColdChain}
-            onValueChange={(v) => setForm((f) => ({ ...f, requiresColdChain: v }))}
+            onValueChange={(value) =>
+              setForm((current) => ({ ...current, requiresColdChain: value }))
+            }
             trackColor={{ false: C.border2, true: C.herder }}
-            thumbColor="#fff"
+            thumbColor={C.bgCard}
           />
         </View>
+      </AppCard>
 
-        <Field label={`Зураг (${form.images.length}/5)`}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {form.images.map((uri) => (
-              <View key={uri} style={{ position: 'relative' }}>
-                <Image
-                  source={{ uri }}
-                  style={{ width: 80, height: 80, borderRadius: R.md, backgroundColor: C.bgSection }}
-                />
-                <TouchableOpacity
-                  onPress={() => removeImage(uri)}
-                  style={{
-                    position: 'absolute',
-                    top: -6,
-                    right: -6,
-                    backgroundColor: C.error,
-                    borderRadius: 12,
-                    width: 24,
-                    height: 24,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="close" size={14} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {form.images.length < 5 && (
+      <AppCard style={{ gap: R.sm, marginBottom: R.md }}>
+        <Text style={{ ...F.small, color: C.textSub, fontWeight: '800' }}>
+          Зураг ({form.images.length}/5)
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+          {form.images.map((uri) => (
+            <View key={uri} style={{ position: 'relative' }}>
+              <Image
+                source={{ uri }}
+                style={{ width: 80, height: 80, borderRadius: UI.controlRadius, backgroundColor: C.bgSection }}
+              />
               <TouchableOpacity
-                onPress={pickImage}
-                disabled={uploading}
+                activeOpacity={0.84}
+                onPress={() => removeImage(uri)}
                 style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: R.md,
-                  backgroundColor: C.bgSection,
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  borderStyle: 'dashed',
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  backgroundColor: C.error,
+                  borderRadius: R.full,
+                  width: 24,
+                  height: 24,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                {uploading
-                  ? <ActivityIndicator size="small" color={C.herder} />
-                  : <>
-                      <Ionicons name="camera" size={22} color={C.herder} />
-                      <Text style={{ color: C.herder, fontSize: 10, marginTop: 4, fontWeight: '700' }}>
-                        Нэмэх
-                      </Text>
-                    </>
-                }
+                <Ionicons name="close" size={14} color={C.bgCard} />
               </TouchableOpacity>
-            )}
-          </View>
-        </Field>
-      </View>
+            </View>
+          ))}
+          {form.images.length < 5 ? (
+            <TouchableOpacity
+              activeOpacity={0.84}
+              onPress={pickImage}
+              disabled={uploading}
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: UI.controlRadius,
+                backgroundColor: C.bgSection,
+                borderWidth: 1,
+                borderColor: C.border,
+                borderStyle: 'dashed',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color={C.herder} />
+              ) : (
+                <>
+                  <Ionicons name="camera-outline" size={22} color={C.herder} />
+                  <Text style={{ ...F.tiny, color: C.herder, marginTop: 4, fontWeight: '800' }}>
+                    Нэмэх
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </AppCard>
 
-      <View style={{ padding: 12, paddingBottom: 32 }}>
-        <TouchableOpacity
-          onPress={onSubmit}
+      </AppScreen>
+
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: R.md,
+          backgroundColor: C.bgCard,
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+        }}
+      >
+        <AppButton
+          label={submitLabel}
+          icon="checkmark"
           disabled={save.isPending || uploading}
-          style={{
-            backgroundColor: (save.isPending || uploading) ? C.textMuted : C.herder,
-            borderRadius: R.lg,
-            padding: 16,
-            alignItems: 'center',
-          }}
-        >
-          {save.isPending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-              {isEdit ? 'Хадгалах' : 'Нийтлэх'}
-            </Text>
-          )}
-        </TouchableOpacity>
+          onPress={onSubmit}
+          style={{ backgroundColor: C.herder, borderColor: C.herder }}
+        />
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const inputStyle = {
-  backgroundColor: C.bgCard,
-  borderRadius: R.lg,
+  backgroundColor: C.bgInput,
+  borderRadius: UI.controlRadius,
   borderWidth: 1,
   borderColor: C.border,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
+  paddingHorizontal: R.md,
+  paddingVertical: R.md,
   color: C.text,
   fontSize: 15,
 } as const;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View>
-      <Text style={{ color: C.textSub, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
-        {label}
-      </Text>
+    <View style={{ gap: R.sm }}>
+      <Text style={{ ...F.small, color: C.textSub, fontWeight: '800' }}>{label}</Text>
       {children}
     </View>
   );

@@ -1,69 +1,283 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Share, Image, RefreshControl } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, RefreshControl, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { get } from '../../src/services/api';
-import { C, R, F } from '../../src/shared/design';
 import * as Clipboard from 'expo-clipboard';
+import { get } from '../../src/services/api';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
-const fmt = (n: number) => n.toLocaleString() + '₮';
+const fmt = (n: number) => `${Number(n || 0).toLocaleString()}₮`;
+
+type CatalogSort = 'clicks' | 'earnings';
+type CatalogRoutePatch = {
+  search?: string;
+  sort?: CatalogSort;
+};
+
+function normalizeQueryParam(value?: string | string[] | null) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw?.trim() ?? '';
+}
+
+function normalizeSortParam(value?: string | string[] | null): CatalogSort {
+  return value === 'earnings' ? 'earnings' : 'clicks';
+}
 
 export default function CatalogScreen() {
-  const { data, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['seller-catalog'], queryFn: () => get('/affiliate/links') });
+  const params = useLocalSearchParams<{ q?: string; sort?: CatalogSort }>();
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['seller-catalog'],
+    queryFn: () => get('/affiliate/links'),
+  });
   const products = (data as any)?.links || (data as any)?.products || [];
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<'clicks' | 'earnings'>('clicks');
+  const [search, setSearch] = useState(() => normalizeQueryParam(params.q));
+  const [sort, setSort] = useState<CatalogSort>(() => normalizeSortParam(params.sort));
+
+  useEffect(() => {
+    setSearch(normalizeQueryParam(params.q));
+    setSort(normalizeSortParam(params.sort));
+  }, [params.q, params.sort]);
+
+  const replaceCatalogRoute = (patch: CatalogRoutePatch) => {
+    const nextSearch = patch.search ?? search;
+    const nextSort = patch.sort ?? sort;
+    const routeParams: Record<string, string> = {};
+
+    if (nextSearch.trim()) routeParams.q = nextSearch.trim();
+    if (nextSort !== 'clicks') routeParams.sort = nextSort;
+
+    router.replace(
+      Object.keys(routeParams).length
+        ? ({ pathname: '/seller/catalog' as any, params: routeParams } as any)
+        : ('/seller/catalog' as any),
+    );
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    replaceCatalogRoute({ search: value });
+  };
+
+  const handleSearchClear = () => {
+    setSearch('');
+    replaceCatalogRoute({ search: '' });
+  };
+
+  const handleSortPress = (nextSort: CatalogSort) => {
+    setSort(nextSort);
+    replaceCatalogRoute({ sort: nextSort });
+  };
 
   const filtered = products
-    .filter((p: any) => !search || p.name?.toLowerCase().includes(search.toLowerCase()))
-    .sort((a: any, b: any) => sort === 'clicks' ? (b.clicks || 0) - (a.clicks || 0) : (b.earnings || 0) - (a.earnings || 0));
+    .filter((product: any) => !search || product.name?.toLowerCase().includes(search.toLowerCase()))
+    .sort((a: any, b: any) =>
+      sort === 'clicks' ? (b.clicks || 0) - (a.clicks || 0) : (b.earnings || 0) - (a.earnings || 0),
+    );
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: R.lg, paddingBottom: 60 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.seller} />}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm, backgroundColor: C.bgCard, borderRadius: R.md, paddingHorizontal: 14, marginBottom: R.md, borderWidth: 0.5, borderColor: C.border }}>
+    <AppScreen
+      refreshControl={
+        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.seller} />
+      }
+    >
+      <AppTopBar eyebrow="Борлуулагч" title="Каталог" showBack={false} />
+      <AppHeader
+        title="Каталог"
+        subtitle="Бараагаа сонгоод referral линк үүсгэнэ."
+        icon="cube-outline"
+        accent={C.seller}
+      />
+
+      <View style={st.searchBox}>
         <Ionicons name="search" size={18} color={C.textMuted} />
-        <TextInput style={{ flex: 1, color: C.white, paddingVertical: R.md }} placeholder="Бараа хайх..." placeholderTextColor={C.textMuted} value={search} onChangeText={setSearch} />
+        <TextInput
+          style={st.searchInput}
+          placeholder="Бараа хайх..."
+          placeholderTextColor={C.textMuted}
+          value={search}
+          onChangeText={handleSearchChange}
+        />
+        {search ? (
+          <TouchableOpacity
+            activeOpacity={0.84}
+            accessibilityLabel="Хайлтыг цэвэрлэх"
+            onPress={handleSearchClear}
+            style={st.clearButton}
+          >
+            <Ionicons name="close-circle" size={18} color={C.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.lg }}>
-        {(['clicks', 'earnings'] as const).map(s => (
-          <TouchableOpacity key={s} style={[st.sortChip, sort === s && { backgroundColor: C.seller, borderColor: C.seller }]} onPress={() => setSort(s)}>
-            <Text style={{ ...F.tiny, color: sort === s ? C.white : C.textMuted, fontWeight: '600' }}>{s === 'clicks' ? 'Клик' : 'Орлого'}</Text>
+      <View style={st.sortRow}>
+        {(['clicks', 'earnings'] as const).map((key) => (
+          <TouchableOpacity
+            key={key}
+            activeOpacity={0.86}
+            accessibilityLabel={key === 'clicks' ? 'Кликээр эрэмбэлэх' : 'Орлогоор эрэмбэлэх'}
+            style={[st.sortChip, sort === key && st.sortChipActive]}
+            onPress={() => handleSortPress(key)}
+          >
+            <Text style={[st.sortText, sort === key && st.sortTextActive]}>
+              {key === 'clicks' ? 'Клик' : 'Орлого'}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {filtered.map((p: any) => (
-        <View key={p.id} style={st.card}>
-          <View style={{ flexDirection: 'row', gap: R.md, marginBottom: R.md }}>
-            <View style={st.cardImg}>{p.image ? <Image source={{ uri: p.image }} style={{ width: '100%', height: '100%', borderRadius: 10 }} /> : <Ionicons name="cube" size={24} color={C.textMuted} />}</View>
-            <View style={{ flex: 1 }}><Text style={{ ...F.body, color: C.white, fontWeight: '700' }} numberOfLines={2}>{p.name}</Text><Text style={{ ...F.small, color: C.seller, fontWeight: '600', marginTop: 2 }}>{p.commissionRate || p.commission || 10}% комисс</Text></View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.md }}>
-            {[{ v: p.clicks || 0, l: 'Клик' }, { v: p.conversions || 0, l: 'Хөрвөлт' }, { v: fmt(p.earnings || 0), l: 'Орлого' }].map((s, i) => (
-              <View key={i} style={{ flex: 1, backgroundColor: C.bgSection, borderRadius: R.sm, padding: R.sm, alignItems: 'center' }}>
-                <Text style={{ ...F.body, color: i === 2 ? C.seller : C.white, fontWeight: '800' }}>{s.v}</Text><Text style={{ ...F.tiny, color: C.textMuted }}>{s.l}</Text>
+      {isLoading ? (
+        <AppCard style={st.emptyCard}>
+          <Ionicons name="hourglass-outline" size={22} color={C.seller} />
+          <Text style={st.emptyText}>Каталог ачаалж байна...</Text>
+        </AppCard>
+      ) : null}
+
+      {!isLoading && filtered.length === 0 ? (
+        <AppCard style={st.emptyCard}>
+          <Ionicons name="cube-outline" size={24} color={C.textMuted} />
+          <Text style={st.emptyText}>Одоогоор тохирох бараа алга.</Text>
+          {search ? (
+            <AppButton
+              label="Хайлтыг цэвэрлэх"
+              icon="close"
+              variant="ghost"
+              onPress={handleSearchClear}
+            />
+          ) : null}
+        </AppCard>
+      ) : null}
+
+      {filtered.map((product: any, index: number) => {
+        const shareUrl = product.shareUrl || `https://eseller.mn/product/${product.id}`;
+
+        return (
+          <AppCard key={product.id ?? `${product.name}-${index}`} style={st.card}>
+            <View style={st.productTop}>
+              <View style={st.cardImg}>
+                {product.image ? (
+                  <Image source={{ uri: product.image }} style={st.image} />
+                ) : (
+                  <Ionicons name="cube" size={24} color={C.textMuted} />
+                )}
               </View>
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', gap: R.sm }}>
-            <TouchableOpacity style={[st.actionBtn, { backgroundColor: C.primaryDim }]} onPress={() => Clipboard.setStringAsync(p.shareUrl || `https://eseller.mn/product/${p.id}`)}>
-              <Ionicons name="copy-outline" size={16} color={C.primary} /><Text style={{ ...F.tiny, color: C.primary, fontWeight: '700' }}>Хуулах</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[st.actionBtn, { backgroundColor: C.seller }]} onPress={() => Share.share({ message: `${p.name}\n${p.shareUrl || `https://eseller.mn/product/${p.id}`}` })}>
-              <Ionicons name="share-social" size={16} color={C.white} /><Text style={{ ...F.tiny, color: C.white, fontWeight: '700' }}>Share</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ))}
-    </ScrollView>
+              <View style={{ flex: 1 }}>
+                <Text style={st.productName} numberOfLines={2}>
+                  {product.name}
+                </Text>
+                <Text style={st.commissionText}>
+                  {product.commissionRate || product.commission || 10}% комисс
+                </Text>
+              </View>
+            </View>
+
+            <View style={st.metricsRow}>
+              {[
+                { v: product.clicks || 0, l: 'Клик' },
+                { v: product.conversions || 0, l: 'Хөрвөлт' },
+                { v: fmt(product.earnings || 0), l: 'Орлого' },
+              ].map((metric, i) => (
+                <View key={metric.l} style={st.metricCell}>
+                  <Text style={[st.metricValue, i === 2 && { color: C.seller }]} numberOfLines={1}>
+                    {metric.v}
+                  </Text>
+                  <Text style={st.metricLabel}>{metric.l}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={st.actionRow}>
+              <AppButton
+                label="Хуулах"
+                icon="copy-outline"
+                variant="ghost"
+                style={{ flex: 1 }}
+                textStyle={{ color: C.primary }}
+                onPress={() => Clipboard.setStringAsync(shareUrl)}
+              />
+              <AppButton
+                label="Хуваалцах"
+                icon="share-social-outline"
+                variant="seller"
+                style={{ flex: 1 }}
+                onPress={() => Share.share({ message: `${product.name}\n${shareUrl}` })}
+              />
+            </View>
+          </AppCard>
+        );
+      })}
+    </AppScreen>
   );
 }
 
 const st = StyleSheet.create({
-  sortChip: { backgroundColor: C.bgCard, borderRadius: 20, paddingHorizontal: R.lg, paddingVertical: R.sm, borderWidth: 0.5, borderColor: C.border },
-  card: { backgroundColor: C.bgCard, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 0.5, borderColor: C.border },
-  cardImg: { width: 56, height: 56, borderRadius: 10, backgroundColor: C.bgSection, alignItems: 'center', justifyContent: 'center' },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, padding: 10 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgCard,
+    minHeight: 46,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: 14,
+    marginBottom: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  searchInput: { flex: 1, color: C.text, paddingVertical: R.md },
+  clearButton: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortRow: { flexDirection: 'row', gap: R.sm, marginBottom: R.lg },
+  sortChip: {
+    backgroundColor: C.bgCard,
+    minHeight: 38,
+    borderRadius: R.full,
+    paddingHorizontal: R.lg,
+    paddingVertical: R.sm,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortChipActive: { backgroundColor: C.seller, borderColor: C.seller },
+  sortText: { ...F.tiny, color: C.textSub, fontWeight: '700' },
+  sortTextActive: { color: C.bgCard },
+  card: { marginBottom: R.sm },
+  productTop: { flexDirection: 'row', gap: R.md, marginBottom: R.md },
+  cardImg: {
+    width: 56,
+    height: 56,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.bgSection,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  image: { width: '100%', height: '100%' },
+  productName: { ...F.body, color: C.text, fontWeight: '800' },
+  commissionText: { ...F.small, color: C.seller, fontWeight: '700', marginTop: 2 },
+  metricsRow: { flexDirection: 'row', gap: R.sm, marginBottom: R.md },
+  metricCell: {
+    flex: 1,
+    minHeight: 58,
+    backgroundColor: C.bgSection,
+    borderRadius: R.sm,
+    padding: R.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricValue: { ...F.body, color: C.text, fontWeight: '900' },
+  metricLabel: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  actionRow: { flexDirection: 'row', gap: R.sm },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: R.sm,
+    marginBottom: R.md,
+  },
+  emptyText: { ...F.small, color: C.textSub, textAlign: 'center' },
 });

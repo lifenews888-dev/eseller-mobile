@@ -17,11 +17,14 @@ import {
   type HerderReview,
 } from '../../../src/features/herder';
 import { useMalchnaasEnabled } from '../../../src/config/remoteFlags';
+import { C, R, UI } from '../../../src/shared/design';
+import { AppTopBar, useAppLayoutMetrics } from '../../../src/shared/ui/AppUI';
 
 function fmt(n: number) { return n.toLocaleString() + '₮'; }
 
 export default function HerderProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const layout = useAppLayoutMetrics();
   const herderId = String(id ?? '');
   const malchnaasEnabled = useMalchnaasEnabled();
 
@@ -56,7 +59,7 @@ export default function HerderProfileScreen() {
   if (!malchnaasEnabled) {
     return (
       <View style={s.center}>
-        <Ionicons name="leaf-outline" size={48} color="#ccc" />
+        <Ionicons name="leaf-outline" size={48} color={C.textMuted} />
         <Text style={s.muted}>Малчнаас шууд идэвхгүй байна.</Text>
       </View>
     );
@@ -77,7 +80,7 @@ export default function HerderProfileScreen() {
   if (!profile) {
     return (
       <View style={s.center}>
-        <Ionicons name="person-outline" size={48} color="#ccc" />
+        <Ionicons name="person-outline" size={48} color={C.textMuted} />
         <Text style={s.muted}>Малчны профайл олдсонгүй.</Text>
         <TouchableOpacity style={s.secondaryBtn} onPress={() => router.back()}>
           <Text style={s.secondaryBtnText}>Буцах</Text>
@@ -93,9 +96,13 @@ export default function HerderProfileScreen() {
   return (
     <ScrollView
       style={s.root}
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={{ paddingBottom: layout.screenBottom }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
     >
+      <View style={[s.topBarWrap, { paddingTop: layout.screenTop }]}>
+        <AppTopBar eyebrow="Малчнаас" title={profile.herderName} style={{ marginBottom: 0 }} />
+      </View>
+
       {/* Cover + back */}
       <View style={s.cover}>
         {profile.coverImage ? (
@@ -103,9 +110,6 @@ export default function HerderProfileScreen() {
         ) : (
           <View style={s.coverFallback} />
         )}
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       {/* Header card */}
@@ -113,10 +117,10 @@ export default function HerderProfileScreen() {
         <View style={s.avatarWrap}>
           {profile.avatar
             ? <Image source={{ uri: profile.avatar }} style={s.avatar} />
-            : <View style={[s.avatar, s.avatarFallback]}><Ionicons name="person" size={32} color="#fff" /></View>}
+            : <View style={[s.avatar, s.avatarFallback]}><Ionicons name="person" size={32} color={C.bgCard} /></View>}
           {profile.isVerified && (
             <View style={s.verifiedDot}>
-              <Ionicons name="checkmark" size={12} color="#fff" />
+              <Ionicons name="checkmark" size={12} color={C.bgCard} />
             </View>
           )}
         </View>
@@ -124,7 +128,7 @@ export default function HerderProfileScreen() {
         <Text style={s.name}>{profile.herderName}</Text>
 
         <View style={s.metaRow}>
-          <Ionicons name="location-outline" size={14} color="#78716c" />
+          <Ionicons name="location-outline" size={14} color={C.textSub} />
           <Text style={s.metaText}>
             {profile.provinceName}{profile.district ? ` · ${profile.district}` : ''}
           </Text>
@@ -132,7 +136,7 @@ export default function HerderProfileScreen() {
 
         {typeof profile.rating === 'number' && (
           <View style={s.metaRow}>
-            <Ionicons name="star" size={14} color="#F59E0B" />
+            <Ionicons name="star" size={14} color={C.gold} />
             <Text style={s.metaText}>
               {profile.rating.toFixed(1)}
               {profile.orderCount ? ` · ${profile.orderCount} захиалга` : ''}
@@ -169,7 +173,7 @@ export default function HerderProfileScreen() {
           <ProductGridSkeleton count={4} />
         ) : products.length === 0 ? (
           <View style={s.emptyBox}>
-            <Ionicons name="leaf-outline" size={36} color="#ccc" />
+            <Ionicons name="leaf-outline" size={36} color={C.textMuted} />
             <Text style={s.muted}>Одоогоор бүтээгдэхүүн байхгүй</Text>
           </View>
         ) : (
@@ -188,7 +192,7 @@ export default function HerderProfileScreen() {
           <ActivityIndicator color={BRAND} style={{ marginTop: 10 }} />
         ) : (reviewsQ.data?.reviews.length ?? 0) === 0 ? (
           <View style={s.emptyBox}>
-            <Ionicons name="chatbubble-ellipses-outline" size={36} color="#ccc" />
+            <Ionicons name="chatbubble-ellipses-outline" size={36} color={C.textMuted} />
             <Text style={s.muted}>Одоогоор үнэлгээ байхгүй</Text>
           </View>
         ) : (
@@ -213,7 +217,7 @@ function ReviewRow({ r }: { r: HerderReview }) {
               key={n}
               name={n <= r.rating ? 'star' : 'star-outline'}
               size={13}
-              color={n <= r.rating ? '#F59E0B' : '#D6D3D1'}
+              color={n <= r.rating ? C.gold : C.border2}
             />
           ))}
         </View>
@@ -238,13 +242,13 @@ function ProductTile({ p }: { p: HerderProduct }) {
   return (
     <TouchableOpacity
       style={s.tile}
-      onPress={() => router.push(`/(customer)/herder-product/${p.id}` as never)}
+      onPress={() => router.push(`/herder-product/${p.id}` as never)}
       activeOpacity={0.85}
     >
       <View style={s.tileImg}>
         {p.images?.[0]
           ? <Image source={{ uri: p.images[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          : <View style={s.tileImgFallback}><Ionicons name="leaf-outline" size={28} color="#ccc" /></View>}
+          : <View style={s.tileImgFallback}><Ionicons name="leaf-outline" size={28} color={C.textMuted} /></View>}
       </View>
       <View style={{ padding: 10 }}>
         <Text style={s.tileName} numberOfLines={2}>{p.name}</Text>
@@ -255,46 +259,46 @@ function ProductTile({ p }: { p: HerderProduct }) {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', gap: 10, padding: 24 },
-  muted: { fontSize: 14, color: '#78716c' },
+  root: { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', gap: 10, padding: UI.screenPad },
+  muted: { fontSize: 14, color: C.textSub },
 
-  cover: { height: 140, backgroundColor: '#e7e5e4', position: 'relative' },
+  cover: { height: 140, backgroundColor: C.bgSection, position: 'relative' },
   coverFallback: { flex: 1, backgroundColor: BRAND, opacity: 0.15 },
-  backBtn: { position: 'absolute', top: 44, left: 16, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  topBarWrap: { paddingHorizontal: UI.screenPad, paddingBottom: R.md, backgroundColor: C.bg },
 
-  headerCard: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: '#f5f5f4' },
+  headerCard: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: C.border },
   avatarWrap: { marginTop: -48, marginBottom: 10 },
-  avatar: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: '#fff', backgroundColor: '#e7e5e4' },
+  avatar: { width: 84, height: 84, borderRadius: R.full, borderWidth: 3, borderColor: C.bgCard, backgroundColor: C.bgSection },
   avatarFallback: { backgroundColor: BRAND, justifyContent: 'center', alignItems: 'center' },
-  verifiedDot: { position: 'absolute', right: 2, bottom: 2, width: 24, height: 24, borderRadius: 12, backgroundColor: BRAND, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  name: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 6 },
+  verifiedDot: { position: 'absolute', right: 2, bottom: 2, width: 24, height: 24, borderRadius: R.full, backgroundColor: BRAND, borderWidth: 2, borderColor: C.bgCard, justifyContent: 'center', alignItems: 'center' },
+  name: { fontSize: 22, fontWeight: '800', color: C.text, marginBottom: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
-  metaText: { fontSize: 13, color: '#44403c' },
-  bio: { fontSize: 14, color: '#57534e', lineHeight: 20, marginTop: 10 },
+  metaText: { fontSize: 13, color: C.textSub },
+  bio: { fontSize: 14, color: C.textSub, lineHeight: 20, marginTop: 10 },
 
   statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 14 },
-  pill: { flex: 1, backgroundColor: '#F0FDF4', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  pill: { flex: 1, backgroundColor: C.secondaryDim, borderRadius: R.md, paddingVertical: 12, alignItems: 'center' },
   pillValue: { fontSize: 16, fontWeight: '800', color: BRAND },
-  pillLabel: { fontSize: 11, color: '#065F46', marginTop: 2 },
+  pillLabel: { fontSize: 11, color: C.secondary, marginTop: 2 },
 
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#292524', marginBottom: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 10 },
   emptyBox: { alignItems: 'center', paddingVertical: 40, gap: 8 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { width: '48%' as any, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e7e5e4', overflow: 'hidden' },
-  tileImg: { height: 120, backgroundColor: '#f5f5f4' },
+  tile: { width: '48%' as any, backgroundColor: C.bgCard, borderRadius: R.md, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  tileImg: { height: 120, backgroundColor: C.bgSection },
   tileImgFallback: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tileName: { fontSize: 13, fontWeight: '600', color: '#292524', marginBottom: 4, minHeight: 34 },
+  tileName: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 4, minHeight: 34 },
   tilePrice: { fontSize: 14, fontWeight: '800', color: BRAND },
 
-  secondaryBtn: { borderWidth: 1, borderColor: BRAND, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 },
+  secondaryBtn: { borderWidth: 1, borderColor: BRAND, borderRadius: R.md, paddingHorizontal: 18, paddingVertical: 10 },
   secondaryBtnText: { color: BRAND, fontWeight: '700' },
 
-  reviewCard: { backgroundColor: '#fafaf9', borderWidth: 1, borderColor: '#f5f5f4', borderRadius: 12, padding: 12 },
+  reviewCard: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 12 },
   reviewHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  reviewName: { fontSize: 13, fontWeight: '700', color: '#292524' },
+  reviewName: { fontSize: 13, fontWeight: '700', color: C.text },
   reviewStars: { flexDirection: 'row', gap: 2 },
-  reviewText: { fontSize: 13, color: '#44403c', lineHeight: 18, marginBottom: 6 },
-  reviewDate: { fontSize: 11, color: '#a8a29e' },
+  reviewText: { fontSize: 13, color: C.textSub, lineHeight: 18, marginBottom: 6 },
+  reviewDate: { fontSize: 11, color: C.textMuted },
 });

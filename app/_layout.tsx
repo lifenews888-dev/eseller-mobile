@@ -1,7 +1,8 @@
 import React, {
   useState, useEffect, useRef
 } from 'react'
-import { Stack, router }     from 'expo-router'
+import { Stack, router, usePathname } from 'expo-router'
+import { View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates  from 'expo-updates'
 import { SafeAreaProvider }
@@ -12,7 +13,6 @@ import { GestureHandlerRootView }
   from 'react-native-gesture-handler'
 import AsyncStorage
   from '@react-native-async-storage/async-storage'
-import * as Notifications from 'expo-notifications'
 import * as Sentry from '@sentry/react-native'
 
 // Sentry init — production-only, guard against missing native module
@@ -31,26 +31,22 @@ import { useRemoteConfig } from '../src/config/remoteFlags'
 import { routeByRole } from '../src/shared/routing'
 import { runSessionGate } from '../src/shared/sessionGate'
 import {
+  configureNotificationHandler,
   registerPushToken,
   resolveNotificationRoute,
+  setupNotificationListeners,
 } from '../src/lib/notifications'
 import { C }        from '../src/shared/design'
 import SplashScreen
   from '../src/shared/ui/SplashScreen'
 import OnboardingScreen
   from '../src/shared/ui/OnboardingScreen'
+import { AppShellBottomNav }
+  from '../src/shared/ui/AppUI'
 import { ErrorBoundary }
   from '../src/shared/ui/ErrorBoundary'
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert:  true,
-    shouldPlaySound:  true,
-    shouldSetBadge:   true,
-    shouldShowBanner: true,
-    shouldShowList:   true,
-  }),
-})
+configureNotificationHandler()
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +69,7 @@ function AppContent() {
   const [gateRunning, setGateRunning] = useState(true)
   const [gateBlocked, setGateBlocked] = useState(false)
   const { user } = useAuth()
+  const pathname = usePathname()
   const hasAutoRouted = useRef(false)
 
   // Run the gate exactly once. It reads SecureStore('token'), prompts
@@ -113,7 +110,7 @@ function AppContent() {
   useEffect(() => {
     if (gateRunning) return
     if (!gateBlocked) return
-    try { router.replace('/(auth)/login' as never) } catch {}
+    try { router.replace('/login' as never) } catch {}
   }, [gateRunning, gateBlocked])
 
   // OTA update шалгах
@@ -149,13 +146,19 @@ function AppContent() {
   // Push token бүртгэх + foreground/tap listeners (нэвтэрсэн үед)
   useEffect(() => {
     if (!user) return
+    const isAuthEntry =
+      pathname === '/login' ||
+      pathname === '/register' ||
+      pathname === '/otp' ||
+      pathname === '/forgot-password' ||
+      pathname.startsWith('/(auth)')
+    if (pathname !== '/' && !isAuthEntry) return
 
     registerPushToken()
 
-    const receivedSub = Notifications.addNotificationReceivedListener((n) => {
+    const cleanup = setupNotificationListeners((n) => {
       console.log('[Push]', n.request.content.title, n.request.content.body)
-    })
-    const responseSub = Notifications.addNotificationResponseReceivedListener((r) => {
+    }, (r) => {
       const route = resolveNotificationRoute(r)
       try {
         router.push(route as never)
@@ -164,10 +167,7 @@ function AppContent() {
       }
     })
 
-    return () => {
-      receivedSub.remove()
-      responseSub.remove()
-    }
+    return cleanup
   }, [user])
 
   // Auto-route DRIVER/SELLER to their own navigation group on cold start.
@@ -182,7 +182,7 @@ function AppContent() {
       routeByRole(role)
     }, 100)
     return () => clearTimeout(timer)
-  }, [user, showSplash, showOnboarding])
+  }, [user, showSplash, showOnboarding, pathname])
 
   const finishOnboarding = async () => {
     try {
@@ -215,11 +215,17 @@ function AppContent() {
 
   // 3. Main app
   return (
-    <Stack
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View style={{ flex: 1 }}>
+        <Stack
       screenOptions={{
         headerShown:  false,
         contentStyle: { backgroundColor: C.bg },
         animation:    'slide_from_right',
+        headerStyle:  { backgroundColor: C.bgCard },
+        headerShadowVisible: false,
+        headerTintColor: C.text,
+        headerTitleStyle: { color: C.text, fontSize: 16, fontWeight: '800' },
       }}
     >
       <Stack.Screen name="(tabs)" />
@@ -233,46 +239,60 @@ function AppContent() {
       />
       <Stack.Screen name="cart" />
       <Stack.Screen name="checkout" />
-      <Stack.Screen name="orders" />
       <Stack.Screen
         name="chat/[id]"
         options={{ animation: 'slide_from_right' }}
       />
-      <Stack.Screen name="search" />
+      <Stack.Screen name="track/search" />
       <Stack.Screen name="track/[code]" />
+      <Stack.Screen name="terms" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy" options={{ headerShown: false }} />
+      <Stack.Screen name="partner" options={{ headerShown: false }} />
+      <Stack.Screen name="feedback" options={{ headerShown: false }} />
+      <Stack.Screen name="[slug]" options={{ headerShown: false }} />
       <Stack.Screen
         name="feed/create"
         options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
       />
       <Stack.Screen name="storefront/[slug]" />
       {/* Customer screens */}
-      <Stack.Screen name="(customer)/flash-sale" options={{ headerShown: true, title: 'Flash Sale 🔥' }} />
-      <Stack.Screen name="(customer)/wallet" options={{ headerShown: true, title: 'Хэтэвч' }} />
-      <Stack.Screen name="(customer)/addresses" options={{ headerShown: true, title: 'Хаяг' }} />
-      <Stack.Screen name="(customer)/returns" options={{ headerShown: true, title: 'Буцаалт' }} />
-      <Stack.Screen name="(customer)/coupons" options={{ headerShown: true, title: 'Купон' }} />
-      <Stack.Screen name="(customer)/edit-profile" options={{ headerShown: true, title: 'Профайл засах' }} />
-      <Stack.Screen name="(customer)/notification-settings" options={{ headerShown: true, title: 'Мэдэгдэл' }} />
-      <Stack.Screen name="(customer)/help" options={{ headerShown: true, title: 'Тусламж' }} />
-      <Stack.Screen name="(customer)/register-shop" options={{ headerShown: true, title: 'Дэлгүүр нээх' }} />
-      <Stack.Screen name="(customer)/tier-details" options={{ headerShown: true, title: 'Түвшин' }} />
-      <Stack.Screen name="(customer)/security" options={{ headerShown: true, title: 'Аюулгүй байдал' }} />
-      <Stack.Screen name="(customer)/about" options={{ headerShown: true, title: 'Тухай' }} />
-      <Stack.Screen name="(customer)/contact" options={{ headerShown: true, title: 'Холбоо барих' }} />
-      <Stack.Screen name="(customer)/legal/privacy" options={{ headerShown: true, title: 'Нууцлалын бодлого' }} />
-      <Stack.Screen name="(customer)/legal/terms" options={{ headerShown: true, title: 'Үйлчилгээний нөхцөл' }} />
+      <Stack.Screen name="(customer)/flash-sale" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/addresses" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/returns" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/coupons" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/edit-profile" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/notification-settings" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/help" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/register-shop" options={{ headerShown: false }} />
+      <Stack.Screen name="open-shop" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/services" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/tier-details" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/security" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/about" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/contact" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/legal/privacy" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/legal/terms" options={{ headerShown: false }} />
       <Stack.Screen name="receipt/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="review/[orderId]" options={{ headerShown: false }} />
       {/* Seller + Driver groups now have their own Tabs layout */}
       <Stack.Screen name="(owner)" options={{ headerShown: false }} />
+      <Stack.Screen name="owner" options={{ headerShown: false }} />
       <Stack.Screen name="(seller)" options={{ headerShown: false }} />
+      <Stack.Screen name="seller" options={{ headerShown: false }} />
       <Stack.Screen name="(driver)" options={{ headerShown: false }} />
+      <Stack.Screen name="driver" options={{ headerShown: false }} />
       <Stack.Screen name="(herder)" options={{ headerShown: false }} />
+      <Stack.Screen name="herder-admin" options={{ headerShown: false }} />
       <Stack.Screen name="(coordinator)" options={{ headerShown: false }} />
-      <Stack.Screen name="feed/[id]" options={{ headerShown: true, title: 'Зарын дэлгэрэнгүй' }} />
-      <Stack.Screen name="(customer)/wishlist" options={{ headerShown: true, title: 'Хадгалсан' }} />
-      <Stack.Screen name="chat/ai-support" options={{ headerShown: true, title: 'AI Туслах' }} />
-    </Stack>
+      <Stack.Screen name="coordinator" options={{ headerShown: false }} />
+      <Stack.Screen name="feed/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="(customer)/wishlist" options={{ headerShown: false }} />
+      <Stack.Screen name="chat/ai-support" options={{ headerShown: false }} />
+        </Stack>
+      </View>
+      <AppShellBottomNav />
+    </View>
   )
 }
 

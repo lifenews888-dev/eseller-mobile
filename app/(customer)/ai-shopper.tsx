@@ -1,11 +1,19 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
-  KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-
-const API = process.env.EXPO_PUBLIC_API_URL || 'https://eseller.mn';
+import { Ionicons } from '@expo/vector-icons';
+import { apiUrl } from '../../src/config/apiBase';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 interface Message {
   id: string;
@@ -21,9 +29,13 @@ const QUICK_PROMPTS = [
 ];
 
 export default function AIShopperScreen() {
-  const router = useRouter();
+  const layout = useAppLayoutMetrics();
   const [messages, setMessages] = useState<Message[]>([
-    { id: '0', role: 'assistant', content: 'Сайн байна уу! Би таны хувийн худалдааны туслах. Юу хайж байна вэ?' },
+    {
+      id: '0',
+      role: 'assistant',
+      content: 'Сайн байна уу! Би таны хувийн худалдааны туслах. Юу хайж байна вэ?',
+    },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +43,7 @@ export default function AIShopperScreen() {
 
   async function send(text?: string) {
     const msg = text ?? input.trim();
-    if (!msg) return;
+    if (!msg || loading) return;
     setInput('');
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: msg };
@@ -39,7 +51,7 @@ export default function AIShopperScreen() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API}/api/ai/shop`, {
+      const res = await fetch(apiUrl('/ai/shop'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,20 +79,28 @@ export default function AIShopperScreen() {
 
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.back}>
-          <Text style={{ color: '#fff', fontSize: 20 }}>←</Text>
-        </TouchableOpacity>
-        <View>
-          <Text style={s.headerTitle}>AI Худалдааны туслах</Text>
-          <Text style={s.headerSub}>Бараа хайх, зөвлөгөө авах</Text>
-        </View>
+      <View style={[s.headerWrap, { paddingTop: layout.screenTop }]}>
+        <AppTopBar eyebrow="Дэлгүүр" title="AI туслах" showBack={false} />
+        <AppHeader
+          title="AI худалдааны туслах"
+          subtitle="Бараа хайх, зөвлөгөө авах"
+          icon="sparkles-outline"
+          accent={C.brand}
+          style={{ marginBottom: 0 }}
+        />
       </View>
 
       <View style={s.quickRow}>
-        {QUICK_PROMPTS.map((q) => (
-          <TouchableOpacity key={q} onPress={() => send(q)} style={s.quickChip}>
-            <Text style={s.quickText}>{q}</Text>
+        {QUICK_PROMPTS.map((prompt) => (
+          <TouchableOpacity
+            key={prompt}
+            accessibilityRole="button"
+            accessibilityLabel={`${prompt} асуух`}
+            activeOpacity={0.86}
+            onPress={() => send(prompt)}
+            style={s.quickChip}
+          >
+            <Text style={s.quickText}>{prompt}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -88,8 +108,8 @@ export default function AIShopperScreen() {
       <FlatList
         ref={listRef}
         data={messages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={{ padding: 12, gap: 8 }}
+        keyExtractor={(message) => message.id}
+        contentContainerStyle={[s.messageList, { paddingBottom: R.lg + layout.insets.bottom }]}
         renderItem={({ item }) => (
           <View style={[s.bubble, item.role === 'user' ? s.userBubble : s.aiBubble]}>
             <Text style={[s.bubbleText, item.role === 'user' ? s.userText : s.aiText]}>
@@ -99,29 +119,34 @@ export default function AIShopperScreen() {
         )}
       />
 
-      {loading && (
+      {loading ? (
         <View style={s.loadingRow}>
-          <ActivityIndicator size="small" color="#1B3A5C" />
-          <Text style={{ fontSize: 11, color: '#888', marginLeft: 6 }}>Хайж байна...</Text>
+          <ActivityIndicator size="small" color={C.brand} />
+          <Text style={s.loadingText}>Хайж байна...</Text>
         </View>
-      )}
+      ) : null}
 
-      <View style={s.inputRow}>
+      <View style={[s.inputRow, { paddingBottom: layout.insets.bottom + R.md }]}>
         <TextInput
+          accessibilityLabel="AI туслахаас хайх зүйлээ бичих"
           style={s.input}
           value={input}
           onChangeText={setInput}
           placeholder="Юу хайж байна вэ?"
+          placeholderTextColor={C.textMuted}
           returnKeyType="send"
           onSubmitEditing={() => send()}
           multiline
         />
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="AI туслах руу илгээх"
+          activeOpacity={0.86}
           onPress={() => send()}
-          style={[s.sendBtn, !input.trim() && { opacity: 0.4 }]}
+          style={[s.sendBtn, (!input.trim() || loading) && s.sendBtnDisabled]}
           disabled={!input.trim() || loading}
         >
-          <Text style={{ color: '#fff', fontSize: 18 }}>↑</Text>
+          <Ionicons name="arrow-up" size={18} color={C.bgCard} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -129,22 +154,67 @@ export default function AIShopperScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  header: { backgroundColor: '#1B3A5C', padding: 16, paddingTop: 52, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  back: { padding: 4 },
-  headerTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  headerSub: { color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 1 },
-  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 10, backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#e5e5e5' },
-  quickChip: { backgroundColor: '#EEF2F7', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 5 },
-  quickText: { fontSize: 11, color: '#1B3A5C' },
-  bubble: { maxWidth: '80%', borderRadius: 12, padding: 10 },
-  userBubble: { backgroundColor: '#1B3A5C', alignSelf: 'flex-end', borderBottomRightRadius: 3 },
-  aiBubble: { backgroundColor: '#fff', alignSelf: 'flex-start', borderBottomLeftRadius: 3, borderWidth: 0.5, borderColor: '#e5e5e5' },
-  bubbleText: { fontSize: 13, lineHeight: 19 },
-  userText: { color: '#fff' },
-  aiText: { color: '#222' },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', padding: 8, paddingHorizontal: 16 },
-  inputRow: { flexDirection: 'row', gap: 8, padding: 10, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: '#e5e5e5' },
-  input: { flex: 1, backgroundColor: '#F5F7FA', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, maxHeight: 100 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1B3A5C', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
+  container: { flex: 1, backgroundColor: C.bg },
+  headerWrap: { padding: R.lg, paddingBottom: R.sm },
+  quickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: R.xs,
+    paddingHorizontal: R.lg,
+    paddingBottom: R.md,
+  },
+  quickChip: {
+    backgroundColor: C.bgCard,
+    borderRadius: R.full,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  quickText: { ...F.tiny, color: C.textSub, fontWeight: '800' },
+  messageList: { padding: R.lg, paddingBottom: R.lg, gap: R.sm },
+  bubble: { maxWidth: '82%', borderRadius: UI.cardRadius, padding: R.md },
+  userBubble: { backgroundColor: C.brand, alignSelf: 'flex-end', borderBottomRightRadius: R.xs },
+  aiBubble: {
+    backgroundColor: C.bgCard,
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: R.xs,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  bubbleText: { ...F.small, lineHeight: 20 },
+  userText: { color: C.bgCard },
+  aiText: { color: C.text },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: R.lg, paddingBottom: R.sm },
+  loadingText: { ...F.tiny, color: C.textSub, marginLeft: R.xs },
+  inputRow: {
+    flexDirection: 'row',
+    gap: R.sm,
+    padding: R.md,
+    backgroundColor: C.bgCard,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    fontSize: 14,
+    color: C.text,
+    maxHeight: 110,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  sendBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+  },
+  sendBtnDisabled: { backgroundColor: C.border2 },
 });
