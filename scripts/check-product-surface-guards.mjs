@@ -21,7 +21,15 @@ const surfaces = [
   },
   {
     file: 'app/(tabs)/store.tsx',
-    requires: ['filterPublicProducts', 'firstProductImage', 'getPublicProductPrice'],
+    requires: [
+      'filterPublicProducts',
+      'firstProductImage',
+      'getPublicProductPrice',
+      'isError',
+      "retry: false",
+      'disabled={!id}',
+      'Дэлгүүр ачаалж чадсангүй',
+    ],
   },
   {
     file: 'app/(tabs)/search.tsx',
@@ -29,11 +37,36 @@ const surfaces = [
   },
   {
     file: 'app/(tabs)/feed.tsx',
-    requires: ['filterPublicProducts', 'firstProductImage', 'getPublicProductPrice'],
+    requires: [
+      'filterPublicProducts',
+      'firstProductImage',
+      'getPublicProductPrice',
+      'isError',
+      "retry: false",
+      'disabled={!itemId}',
+      'Зарууд ачаалж чадсангүй',
+    ],
   },
   {
     file: 'app/feed/[id].tsx',
-    requires: ['getPublicProductQualityIssue', 'getPublicProductPrice'],
+    requires: [
+      'getPublicProductQualityIssue',
+      'getPublicProductPrice',
+      'loadFeedDetail',
+      'normalizeFeedDetail',
+      'extractFeedItems',
+      "retry: false",
+      'Зар ачаалж чадсангүй',
+    ],
+  },
+  {
+    file: 'app/(tabs)/shops.tsx',
+    requires: [
+      '/storefront/${slug}',
+      'isError',
+      "retry: false",
+      'Дэлгүүрүүд ачаалж чадсангүй',
+    ],
   },
   {
     file: 'app/(tabs)/social.tsx',

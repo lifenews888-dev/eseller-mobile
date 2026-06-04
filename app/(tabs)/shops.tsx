@@ -101,8 +101,10 @@ export default function ShopsScreen() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isError,
     isLoading,
     isRefetching,
+    error,
     refetch,
   } = useInfiniteQuery({
     queryKey: ['shops', search, filter, sort],
@@ -293,7 +295,24 @@ export default function ShopsScreen() {
         renderItem={({ item }) => <ShopCard item={item} />}
         ListEmptyComponent={
           <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
-            {isLoading ? (
+            {isError ? (
+              <>
+                <Ionicons name="cloud-offline-outline" size={44} color={C.textMuted} />
+                <Text style={{ ...F.body, color: C.text, fontWeight: '800', textAlign: 'center' }}>
+                  Дэлгүүрүүд ачаалж чадсангүй
+                </Text>
+                <Text style={{ ...F.small, color: C.textMuted, textAlign: 'center' }}>
+                  {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+                </Text>
+                <AppButton
+                  label="Дахин оролдох"
+                  icon="refresh"
+                  variant="secondary"
+                  onPress={() => refetch()}
+                  style={{ minWidth: 160 }}
+                />
+              </>
+            ) : isLoading ? (
               <>
                 <ActivityIndicator color={C.brand} />
                 <Text style={{ ...F.small, color: C.textMuted }}>Дэлгүүрүүд ачааллаж байна...</Text>
@@ -318,6 +337,7 @@ function ShopCard({ item }: { item: any }) {
   const reviews = Number(item.reviewCount ?? item.reviewsCount ?? 0);
   const productCount = Number(item.productCount ?? item.productsCount ?? item.products?.length ?? 0);
   const slug = item.slug ?? item.storefrontSlug ?? item.id ?? item._id;
+  const name = item.name ?? item.title ?? 'Дэлгүүр';
   const accent = service ? C.secondary : C.primary;
 
   return (
@@ -325,10 +345,10 @@ function ShopCard({ item }: { item: any }) {
       activeOpacity={0.86}
       disabled={!slug}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name ?? 'Дэлгүүр'} дэлгүүр нээх`}
+      accessibilityLabel={`${name} дэлгүүр нээх`}
       accessibilityState={{ disabled: !slug }}
       onPress={() => {
-        if (slug) router.push(`/${slug}` as any);
+        if (slug) router.push(`/storefront/${slug}` as any);
       }}
     >
       <AppCard style={{ flexDirection: 'row', alignItems: 'center', gap: R.md, padding: R.md, marginBottom: R.sm }}>
@@ -354,7 +374,7 @@ function ShopCard({ item }: { item: any }) {
             {item.verified || item.isVerified ? <Ionicons name="checkmark-circle" size={12} color={C.secondary} /> : null}
           </View>
           <Text numberOfLines={1} style={{ ...F.body, color: C.text, fontWeight: '900' }}>
-            {item.name}
+            {name}
           </Text>
           <Text numberOfLines={1} style={{ ...F.tiny, color: C.textMuted, marginTop: 3 }}>
             ★ {rating ? rating.toFixed(1) : '-'} - {reviews} сэтгэгдэл - {productCount} бараа

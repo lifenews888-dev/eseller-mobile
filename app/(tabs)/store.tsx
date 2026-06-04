@@ -88,7 +88,7 @@ function BuyerStoreScreen() {
     return [allCategory, activeCategory, ...remainingCategories];
   }, [activeCategory, category]);
 
-  const { data, isLoading, isRefetching, refetch } = useQuery({
+  const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
     queryKey: ['store-products', search, category, filters, saleOnly],
     queryFn: () => get('/search', {
       q: search,
@@ -99,6 +99,7 @@ function BuyerStoreScreen() {
       sort: filters.sortBy || 'newest',
       ...(saleOnly ? { flashSale: true } : {}),
     }),
+    retry: false,
   });
 
   const products = filterPublicProducts((data as any)?.products || []);
@@ -291,11 +292,11 @@ function BuyerStoreScreen() {
         <FlatList
           data={products}
           numColumns={2}
-          keyExtractor={(item: any) => item._id || item.id}
+          keyExtractor={(item: any, index) => String(item._id || item.id || index)}
           contentContainerStyle={{
             padding: UI.screenPad,
             paddingTop: layout.screenTop,
-            paddingBottom: layout.screenBottom,
+            paddingBottom: layout.screenBottom + 24,
           }}
           ListHeaderComponent={header}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={STORE_MARKET_ACCENT} />}
@@ -303,10 +304,19 @@ function BuyerStoreScreen() {
           ListEmptyComponent={
             <AppCard style={{ marginTop: R.lg }}>
               <EmptyState
-                icon="cube-outline"
-                title="Бараа олдсонгүй"
-                subtitle="Хайлтаа өөрчилж эсвэл шүүлтүүрээ суллаад дахин үзнэ үү."
-                cta={hasActiveStoreQuery ? {
+                icon={isError ? 'cloud-offline-outline' : 'cube-outline'}
+                title={isError ? 'Дэлгүүр ачаалж чадсангүй' : 'Бараа олдсонгүй'}
+                subtitle={
+                  isError
+                    ? ((error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.')
+                    : 'Хайлтаа өөрчилж эсвэл шүүлтүүрээ суллаад дахин үзнэ үү.'
+                }
+                cta={isError ? {
+                  label: 'Дахин оролдох',
+                  icon: 'refresh-outline',
+                  accent: STORE_MARKET_ACCENT,
+                  onPress: () => refetch(),
+                } : hasActiveStoreQuery ? {
                   label: 'Шүүлтүүр цэвэрлэх',
                   icon: 'refresh-outline',
                   accent: STORE_MARKET_ACCENT,
@@ -596,6 +606,8 @@ function BuyerProductCard({ item }: { item: any }) {
   return (
     <TouchableOpacity
       activeOpacity={0.86}
+      disabled={!id}
+      accessibilityState={{ disabled: !id }}
       onPress={() => router.push(`/product/${id}` as any)}
       style={{ flex: 1, margin: R.xs }}
     >

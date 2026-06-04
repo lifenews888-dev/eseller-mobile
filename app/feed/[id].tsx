@@ -34,13 +34,15 @@ export default function FeedDetailScreen() {
   const [saved, setSaved] = useState(false)
   const [imageIndex, setImageIndex] = useState(0)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['feed', id],
-    queryFn: () => get(`/feed/${id}`),
+    queryFn: () => loadFeedDetail(String(id)),
     enabled: !!id,
+    retry: false,
   })
 
-  const item = (data as any)?.listing || (data as any)
+  const item = normalizeFeedDetail(data)
+  const itemId = item?.id ?? item?._id
 
   if (isLoading) {
     return (
@@ -53,7 +55,40 @@ export default function FeedDetailScreen() {
     )
   }
 
-  if (!item?.id) {
+  if (isError) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Зар" title="Дэлгэрэнгүй" />
+        <View style={st.center}>
+          <AppCard style={{ alignItems: 'center', width: '100%' }}>
+            <Ionicons name="cloud-offline-outline" size={48} color={C.textMuted} />
+            <Text style={{ ...F.body, color: C.text, fontWeight: '800', marginTop: R.md }}>Зар ачаалж чадсангүй</Text>
+            <Text style={{ ...F.small, color: C.textMuted, marginTop: R.xs, textAlign: 'center' }}>
+              {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: R.sm, marginTop: R.lg }}>
+              <AppButton
+                label={isRefetching ? 'Шалгаж байна' : 'Дахин оролдох'}
+                icon="refresh"
+                onPress={() => refetch()}
+                disabled={isRefetching}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                label="Буцах"
+                icon="arrow-back"
+                variant="secondary"
+                onPress={() => router.back()}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </AppCard>
+        </View>
+      </AppScreen>
+    )
+  }
+
+  if (!itemId) {
     return (
       <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
         <AppTopBar eyebrow="Зар" title="Дэлгэрэнгүй" />
@@ -85,7 +120,7 @@ export default function FeedDetailScreen() {
   const seller = item.seller || item.shop || item.owner || {}
   const sellerName = seller.name || item.sellerName || item.shopName || 'Зарлагч'
   const sellerPhone = seller.phone || item.phone || item.contactPhone
-  const productId = item.productId || item.product?.id || item.id
+  const productId = item.productId || item.product?.id || itemId
 
   function handleOrder() {
     if (qualityIssue) {
@@ -109,7 +144,7 @@ export default function FeedDetailScreen() {
 
   function handleShare() {
     Share.share({
-      message: `${title} - ${fmt(price)}\nhttps://eseller.mn/feed/${id}`,
+      message: `${title} - ${fmt(price)}\nhttps://eseller.mn/feed/${itemId}`,
     })
   }
 
@@ -119,7 +154,7 @@ export default function FeedDetailScreen() {
       return
     }
 
-    router.push({ pathname: '/register', params: { role: 'affiliate', returnTo: `/feed/${id}` } } as any)
+    router.push({ pathname: '/register', params: { role: 'affiliate', returnTo: `/feed/${itemId}` } } as any)
   }
 
   return (
@@ -365,3 +400,34 @@ const st = StyleSheet.create({
     justifyContent: 'center',
   },
 })
+
+async function loadFeedDetail(id: string) {
+  try {
+    return await get(`/feed/${id}`)
+  } catch (detailError) {
+    const list = await get('/feed', { limit: 100 })
+    const found = extractFeedItems(list).find((item: any) =>
+      String(item?.id ?? item?._id ?? '') === id,
+    )
+    if (found) return found
+    throw detailError
+  }
+}
+
+function normalizeFeedDetail(data: unknown): any | null {
+  const value = data as any
+  return value?.listing ?? value?.post ?? value?.item ?? value?.product ?? value ?? null
+}
+
+function extractFeedItems(data: unknown): any[] {
+  const value = data as any
+  if (Array.isArray(value)) return value
+  return [
+    ...(Array.isArray(value?.posts) ? value.posts : []),
+    ...(Array.isArray(value?.items) ? value.items : []),
+    ...(Array.isArray(value?.vip) ? value.vip : []),
+    ...(Array.isArray(value?.featured) ? value.featured : []),
+    ...(Array.isArray(value?.discounted) ? value.discounted : []),
+    ...(Array.isArray(value?.normal) ? value.normal : []),
+  ]
+}

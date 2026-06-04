@@ -205,10 +205,11 @@ function BuyerFeedScreen() {
     replaceFeedRoute({ category: nextCategory })
   }
 
-  const { data, isLoading, isRefetching, refetch } = useQuery({
+  const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
     queryKey: ['feed', category, search, district, sort],
     queryFn:  () =>
       get('/feed', { category, q: search, district, sort, limit: 20 }),
+    retry: false,
   })
 
   const rawPosts = Array.isArray(data)
@@ -480,8 +481,8 @@ function BuyerFeedScreen() {
       ) : (
         <FlatList
           data={posts}
-          keyExtractor={(p: any) => p.id || p._id}
-          contentContainerStyle={{ padding: 10, paddingBottom: layout.screenBottom }}
+          keyExtractor={(p: any, index) => String(p.id || p._id || index)}
+          contentContainerStyle={{ padding: 10, paddingBottom: layout.screenBottom + 24 }}
           ListHeaderComponent={
             <View style={{
               flexDirection: 'row',
@@ -512,16 +513,19 @@ function BuyerFeedScreen() {
             />
           }
           renderItem={({ item }: any) => {
+            const itemId = item.id || item._id
             const badge = getFeedBadge(item)
             const price = getPublicProductPrice(item)
-            const image = firstProductImage(item, '')
+            const image = firstProductImage(item)
             const originalPrice = item.salePrice ? item.price : item.originalPrice
             return (
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel={`${item.title || item.name || 'Зар'} зарын дэлгэрэнгүй`}
                 activeOpacity={0.86}
-                onPress={() => router.push(`/feed/${item.id || item._id}` as any)}
+                disabled={!itemId}
+                accessibilityState={{ disabled: !itemId }}
+                onPress={() => router.push(`/feed/${itemId}` as any)}
                 style={{
                   flexDirection: 'row', backgroundColor: C.bgCard,
                   borderRadius: R.lg, marginBottom: 10, overflow: 'hidden',
@@ -633,24 +637,30 @@ function BuyerFeedScreen() {
           }}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 60 }}>
-              <Ionicons name="megaphone-outline" size={64} color={C.border} />
-              <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 16 }}>
-                Зар байхгүй байна
+              <Ionicons name={isError ? 'cloud-offline-outline' : 'megaphone-outline'} size={64} color={C.border} />
+              <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 16, fontWeight: '800' }}>
+                {isError ? 'Зарууд ачаалж чадсангүй' : 'Зар байхгүй байна'}
               </Text>
-              <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 4 }}>
-                Эхний зараа нэмээрэй!
+              <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 4, textAlign: 'center' }}>
+                {isError ? ((error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.') : 'Эхний зараа нэмээрэй!'}
               </Text>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel="Шинэ зар нэмэх"
-                onPress={() => router.push('/feed/create' as any)}
+                accessibilityLabel={isError ? 'Заруудыг дахин ачаалах' : 'Шинэ зар нэмэх'}
+                onPress={() => {
+                  if (isError) {
+                    refetch()
+                    return
+                  }
+                  router.push('/feed/create' as any)
+                }}
                 style={{
-                  backgroundColor: C.brand, borderRadius: R.lg,
+                  backgroundColor: isError ? C.primary : C.brand, borderRadius: R.lg,
                   paddingHorizontal: 24, paddingVertical: 12, marginTop: 20,
                 }}
               >
                 <Text style={{ color: C.bgCard, fontWeight: '700' }}>
-                  Зар нэмэх
+                  {isError ? 'Дахин оролдох' : 'Зар нэмэх'}
                 </Text>
               </TouchableOpacity>
             </View>

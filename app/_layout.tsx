@@ -302,7 +302,7 @@ function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <ErrorBoundary>
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
             <AppContent />
           </ErrorBoundary>
         </QueryClientProvider>
