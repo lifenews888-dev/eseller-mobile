@@ -6,6 +6,8 @@ import { apiUrl } from '../../src/config/apiBase';
 import * as SecureStore from '../../src/shared/secureStore';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppCard, AppHeader, AppMetricCard, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { useAuth } from '../../src/store/auth';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -38,6 +40,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export default function AchievementsScreen() {
   const layout = useAppLayoutMetrics();
+  const user = useAuth((s) => s.user);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -45,6 +48,11 @@ export default function AchievementsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const headers = await authHeaders();
       const [achRes, streakRes] = await Promise.all([
@@ -63,7 +71,7 @@ export default function AchievementsScreen() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -74,6 +82,18 @@ export default function AchievementsScreen() {
     load();
   };
   const earnedCount = achievements.filter((item) => item.earned).length;
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Амжилт"
+        subtitle="Амжилт, badge болон оноогоо харахын тулд нэвтэрнэ үү."
+        icon="trophy-outline"
+        accent={C.gold}
+        returnTo="/achievements"
+      />
+    );
+  }
 
   if (loading) {
     return (

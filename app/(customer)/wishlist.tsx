@@ -4,24 +4,33 @@ import { router, Stack } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get } from '../../src/services/api';
 import { useCart } from '../../src/store/cart';
+import { useAuth } from '../../src/store/auth';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 import {
   firstProductImage,
   getProductName,
   getPublicProductPrice,
   getPublicProductQualityIssue,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 
 export default function WishlistScreen() {
   const qc = useQueryClient();
   const { add } = useCart();
+  const { user } = useAuth();
   const layout = useAppLayoutMetrics();
-  const { data, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['wishlist'], queryFn: () => get('/wishlist') });
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['wishlist'],
+    queryFn: () => get('/wishlist'),
+    enabled: !!user,
+  });
   const items = (data as any)?.items || (data as any)?.products || [];
 
   const removeMut = useMutation({
-    mutationFn: (id: string) => del(`/wishlist/${id}`),
+    mutationFn: (id: string) => del(`/wishlist/${encodeApiPathSegment(id)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wishlist'] }),
     onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Хадгалсан жагсаалтаас устгаж чадсангүй.'),
   });
@@ -45,6 +54,18 @@ export default function WishlistScreen() {
     }, 1);
     Alert.alert('Сагсанд нэмэгдлээ');
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Хадгалсан"
+        subtitle="Дуртай бараагаа хадгалах, сагслахын тулд нэвтэрнэ үү."
+        icon="heart-outline"
+        accent={C.error}
+        returnTo="/wishlist"
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -110,6 +131,7 @@ export default function WishlistScreen() {
 
 function WishlistRow({ item, onAdd, onRemove }: { item: any; onAdd: () => void; onRemove: () => void }) {
   const id = getProductId(item);
+  const routeId = encodeRouteParam(id);
   const product = wishlistProduct(item);
   const image = firstProductImage(product, '');
   const name = getProductName(product) || 'Бараа';
@@ -120,9 +142,14 @@ function WishlistRow({ item, onAdd, onRemove }: { item: any; onAdd: () => void; 
     <AppCard style={styles.rowCard}>
       <TouchableOpacity
         activeOpacity={0.86}
-        onPress={() => router.push(`/product/${id}` as any)}
+        onPress={() => {
+          if (routeId) router.push(`/product/${routeId}` as any);
+        }}
         accessibilityRole="button"
         accessibilityLabel={`${name} дэлгэрэнгүй харах`}
+        accessibilityState={{ disabled: !routeId }}
+        disabled={!routeId}
+        style={!routeId ? { opacity: 0.55 } : undefined}
       >
         {image ? (
           <Image source={{ uri: image }} style={styles.thumb} />

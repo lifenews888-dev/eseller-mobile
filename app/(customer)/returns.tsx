@@ -5,8 +5,11 @@ import { Stack, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { get, post } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 const REASONS = [
   'Бараа эвдэрсэн',
@@ -18,7 +21,12 @@ const REASONS = [
 ];
 
 export default function ReturnsScreen() {
-  const { data, isLoading } = useQuery({ queryKey: ['delivered-orders'], queryFn: () => get('/orders') });
+  const { user } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ['delivered-orders'],
+    queryFn: () => get('/orders'),
+    enabled: !!user,
+  });
   const orders = resolveOrders(data).filter((order: any) => order.status === 'delivered');
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -26,7 +34,7 @@ export default function ReturnsScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
 
   const returnMut = useMutation({
-    mutationFn: (body: any) => post(`/orders/${selected}/return`, body),
+    mutationFn: (body: any) => post(`/orders/${encodeApiPathSegment(selected)}/return`, body),
     onSuccess: () => {
       Alert.alert('Амжилттай', 'Буцаалтын хүсэлт илгээгдлээ.');
       setSelected(null);
@@ -53,6 +61,18 @@ export default function ReturnsScreen() {
     }
     returnMut.mutate({ reason, images: photos });
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Буцаалт"
+        subtitle="Захиалгын буцаалт, маргаан үүсгэхийн тулд нэвтэрнэ үү."
+        icon="refresh-outline"
+        accent={C.primary}
+        returnTo="/returns"
+      />
+    );
+  }
 
   return (
     <AppScreen>

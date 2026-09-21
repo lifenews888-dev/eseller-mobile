@@ -3,6 +3,7 @@ import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 export default function TrackSearchScreen() {
@@ -29,7 +30,7 @@ export default function TrackSearchScreen() {
       Alert.alert('Код оруулна уу', 'Захиалгын tracking кодоо бичнэ үү.');
       return;
     }
-    router.push(`/track/${encodeURIComponent(value)}` as never);
+    router.push(`/track/${encodeRouteParam(value)}` as never);
   };
 
   return (

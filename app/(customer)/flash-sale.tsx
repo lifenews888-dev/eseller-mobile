@@ -9,13 +9,18 @@ import { C, F, R, UI } from '../../src/shared/design';
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 type FlashProduct = {
-  id: string;
+  id?: string;
+  _id?: string;
   name?: string;
+  title?: string;
+  productName?: string;
   price?: number;
   salePrice?: number;
   originalPrice?: number;
@@ -147,6 +152,9 @@ export default function FlashSaleScreen() {
 }
 
 function ProductCard({ product }: { product: FlashProduct }) {
+  const id = product.id ?? product._id;
+  const routeId = encodeRouteParam(id);
+  const name = getProductName(product) || 'Хямдралтай бараа';
   const price = getPublicProductPrice(product);
   const image = firstProductImage(product, '');
   const original = product.originalPrice;
@@ -156,7 +164,17 @@ function ProductCard({ product }: { product: FlashProduct }) {
   const percent = Math.min(100, Math.max(0, Math.round((sold / Math.max(1, stock)) * 100)));
 
   return (
-    <TouchableOpacity activeOpacity={0.86} style={st.productTap} onPress={() => router.push(`/product/${product.id}` as any)}>
+    <TouchableOpacity
+      activeOpacity={0.86}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+      accessibilityState={{ disabled: !routeId }}
+      disabled={!routeId}
+      style={[st.productTap, !routeId && { opacity: 0.55 }]}
+      onPress={() => {
+        if (routeId) router.push(`/product/${routeId}` as any);
+      }}
+    >
       <AppCard style={st.productCard}>
         {discount > 0 ? (
           <View style={st.discountBadge}>
@@ -171,7 +189,7 @@ function ProductCard({ product }: { product: FlashProduct }) {
           )}
         </View>
         <Text style={st.productName} numberOfLines={2}>
-          {product.name || 'Хямдралтай бараа'}
+          {name}
         </Text>
         <View style={st.priceRow}>
           <Text style={st.price}>{fmt(price)}</Text>

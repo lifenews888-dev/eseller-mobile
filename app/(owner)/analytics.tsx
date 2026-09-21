@@ -19,7 +19,7 @@ export default function OwnerAnalytics() {
 
   const { data, refetch, isRefetching } = useQuery({
     queryKey: ['owner-analytics', period],
-    queryFn: () => get(`/seller/analytics?period=${period}`),
+    queryFn: () => get('/seller/analytics', { period }),
   });
 
   const stats = (data as any)?.stats || (data as any) || {};

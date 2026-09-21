@@ -4,8 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 const DISTRICTS = [
   'Баянгол',
@@ -21,7 +24,12 @@ const DISTRICTS = [
 export default function AddressesScreen() {
   const qc = useQueryClient();
   const layout = useAppLayoutMetrics();
-  const { data, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['addresses'], queryFn: () => get('/buyer/addresses') });
+  const { user } = useAuth();
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['addresses'],
+    queryFn: () => get('/buyer/addresses'),
+    enabled: !!user,
+  });
   const addresses = (data as any)?.addresses || [];
 
   const [showForm, setShowForm] = useState(false);
@@ -43,7 +51,7 @@ export default function AddressesScreen() {
   };
 
   const saveMut = useMutation({
-    mutationFn: (body: any) => editId ? put(`/buyer/addresses/${editId}`, body) : post('/buyer/addresses', body),
+    mutationFn: (body: any) => editId ? put(`/buyer/addresses/${encodeApiPathSegment(editId)}`, body) : post('/buyer/addresses', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['addresses'] });
       reset();
@@ -52,7 +60,7 @@ export default function AddressesScreen() {
   });
 
   const delMut = useMutation({
-    mutationFn: (id: string) => del(`/buyer/addresses/${id}`),
+    mutationFn: (id: string) => del(`/buyer/addresses/${encodeApiPathSegment(id)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['addresses'] }),
     onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Хаяг устгаж чадсангүй.'),
   });
@@ -79,6 +87,18 @@ export default function AddressesScreen() {
     }
     saveMut.mutate({ name, phone, district, detail, isDefault });
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Хүргэлтийн хаяг"
+        subtitle="Захиалгын хүргэлтийн хаягаа хадгалах, удирдахын тулд нэвтэрнэ үү."
+        icon="location-outline"
+        accent={C.primary}
+        returnTo="/addresses"
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>

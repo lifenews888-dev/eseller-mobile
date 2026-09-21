@@ -5,8 +5,10 @@ import { Stack } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { LoyaltyAPI } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -88,11 +90,13 @@ const normalizeTier = (value?: string) => (value ?? 'BRONZE').toLocaleUpperCase(
 
 export default function TierDetailsScreen() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [customPoints, setCustomPoints] = useState('');
 
   const loyaltyQ = useQuery({
     queryKey: ['loyalty'],
     queryFn: async () => unwrap<LoyaltyData>(await LoyaltyAPI.get()),
+    enabled: !!user,
   });
 
   const redeemMut = useMutation({
@@ -155,6 +159,18 @@ export default function TierDetailsScreen() {
       ],
     );
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Урамшууллын түвшин"
+        subtitle="Оноо, түвшин болон урамшууллаа харахын тулд нэвтэрнэ үү."
+        icon="trophy-outline"
+        accent={C.gold}
+        returnTo="/tier-details"
+      />
+    );
+  }
 
   if (loyaltyQ.isLoading) {
     return (

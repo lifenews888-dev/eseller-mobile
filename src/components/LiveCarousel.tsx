@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { LiveAPI, type LiveStreamItem } from '../services/api';
 import { C, F, R } from '../shared/design';
+import { encodeRouteParam } from '../shared/routeParams';
 import { AppCard } from '../shared/ui/AppUI';
 
 export function LiveCarousel() {
@@ -84,19 +85,31 @@ export function LiveCarousel() {
                 }}
               />
             ))
-          : list.map((stream) => <LiveCard key={stream.id} stream={stream} />)}
+          : list.map((stream, index) => <LiveCard key={stream.id || `${stream.title}-${index}`} stream={stream} />)}
       </ScrollView>
     </View>
   );
 }
 
 function LiveCard({ stream }: { stream: LiveStreamItem }) {
+  const id = stream.id ?? (stream as any)._id;
+  const routeId = encodeRouteParam(id);
   const viewerCount = stream.viewerCount ?? 0;
   const productCount = stream.products?.length ?? 0;
   const shopName = stream.shop?.name ?? 'Дэлгүүр';
 
   return (
-    <TouchableOpacity activeOpacity={0.86} onPress={() => router.push(`/live/${stream.id}` as any)}>
+    <TouchableOpacity
+      activeOpacity={0.86}
+      accessibilityRole="button"
+      accessibilityLabel={`${stream.title || 'Live'} live нээх`}
+      accessibilityState={{ disabled: !routeId }}
+      disabled={!routeId}
+      onPress={() => {
+        if (routeId) router.push(`/live/${routeId}` as any)
+      }}
+      style={!routeId ? { opacity: 0.55 } : undefined}
+    >
       <AppCard style={{ width: 180, padding: 0, overflow: 'hidden' }}>
         <View
           style={{

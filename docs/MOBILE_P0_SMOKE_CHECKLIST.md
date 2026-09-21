@@ -36,6 +36,10 @@ or:
 npm run smoke:meta
 npm run smoke:config
 npm run smoke:api-contract
+npm run smoke:api-auth-policy
+npm run smoke:public-browsing-auth
+npm run smoke:buyer-shortcuts
+npm run smoke:buyer-account-auth
 npm run typecheck
 npm run smoke:roles
 npm run smoke:herder-cart
@@ -44,6 +48,8 @@ npm run smoke:herder-offline
 npm run smoke:seller-dashboard
 npm run smoke:device-build
 npm run smoke:product-quality
+npm run smoke:api-paths
+npm run smoke:route-params
 npm run smoke:product-surfaces
 npm run smoke:route-aliases
 npm run smoke:route-links
@@ -57,6 +63,10 @@ On Windows PowerShell, if `npx` is blocked by execution policy:
 npm.cmd run smoke:meta
 npm.cmd run smoke:config
 npm.cmd run smoke:api-contract
+npm.cmd run smoke:api-auth-policy
+npm.cmd run smoke:public-browsing-auth
+npm.cmd run smoke:buyer-shortcuts
+npm.cmd run smoke:buyer-account-auth
 .\node_modules\.bin\tsc.cmd --noEmit
 npm.cmd run smoke:roles
 npm.cmd run smoke:herder-cart
@@ -65,6 +75,8 @@ npm.cmd run smoke:herder-offline
 npm.cmd run smoke:seller-dashboard
 npm.cmd run smoke:device-build
 npm.cmd run smoke:product-quality
+npm.cmd run smoke:api-paths
+npm.cmd run smoke:route-params
 npm.cmd run smoke:product-surfaces
 npm.cmd run smoke:route-aliases
 npm.cmd run smoke:route-links
@@ -78,6 +90,14 @@ npm.cmd run smoke:hygiene
 
 `smoke:api-contract` verifies the offline contract for `smoke:api`, including endpoint coverage, auth skip behavior, strict auth mode, tolerated warning statuses, env vars, and checklist examples. It does not call the backend.
 
+`smoke:api-auth-policy` verifies the API client's auth redirect policy without calling the backend: public browsing GETs do not carry `Authorization`, protected endpoints still do, and 401 handling can distinguish guest/public errors from real session expiry.
+
+`smoke:public-browsing-auth` verifies the buyer-facing Home, Store, Search, Feed, Shops, Social, flash sale, live, and product browsing API routes stay covered by the public auth policy, while protected account routes such as `/products/my` and `/orders` remain protected.
+
+`smoke:buyer-shortcuts` verifies Home, Profile, Services, and the buyer shell navigation only link to public Expo routes that exist, including screens provided through the `(customer)` route group.
+
+`smoke:buyer-account-auth` verifies buyer account screens such as wishlist, addresses, coupons, returns, wallet, loyalty tier, edit profile, and security show a login/register prompt before rendering private data, and that protected queries stay disabled until a user is available.
+
 `smoke:herder-api` verifies the offline contract for the Malchnaas `HerderAPI` wrapper, including public, herder-admin, coordinator, review, registration, fallback response, and shared type coverage. It does not call the backend.
 
 `smoke:herder-offline` verifies Malchnaas offline guardrails: 24h cache fallback, versioned storage keys, queued listing writes, queue drain semantics, listing-screen retry/discard integration, delivery-window fallback, and 21-aimag constants. It does not call the backend.
@@ -85,6 +105,8 @@ npm.cmd run smoke:hygiene
 `smoke:seller-dashboard` verifies the read-only seller-network dashboard contract: Sarana BFF-only GET routes, no direct Negd URL, no S2S key, no seller wallet action endpoints, no mutation hooks, payload guards, lead PII rejection, disabled payable bucket, feature-flag gating, and launch-checklist coverage. It does not call the backend.
 
 `smoke:device-build` verifies the native device-build contract without uploading anything: app ids, EAS project id, OTA update URL, required assets, internal preview distribution, production API target, and the tester build checklist.
+
+`smoke:api-paths` verifies dynamic API endpoint path segments use `encodeApiPathSegment` in app/component code, while route URLs continue to use route-specific helpers.
 
 `smoke:route-links` fails when runtime code links to Expo route-group URLs such as `/(tabs)` or `/(owner)`. Use public aliases such as `/store`, `/owner/orders`, `/seller/dashboard`, `/driver/deliveries`, `/herder-admin/orders`, and `/coordinator/dashboard`.
 

@@ -19,43 +19,61 @@ import { C, F, R, UI } from '../../src/shared/design';
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
+import { getShopName } from '../../src/shared/shopIdentity';
 import { AppButton, AppCard, AppIconButton, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { EmptyState } from '../../src/shared/ui/EmptyState';
 import { ProductCardSkeleton } from '../../src/shared/ui/Skeleton';
 
 type StoreTab = 'products' | 'about';
 
+function matchesStoreRoute(store: any, rawSlug: string, decodedSlug: string) {
+  const routeValues = [store?.slug, store?.storefrontSlug, store?.id, store?._id]
+    .filter((value) => value != null)
+    .map((value) => String(value));
+
+  return routeValues.some((value) => (
+    value === rawSlug ||
+    value === decodedSlug ||
+    encodeRouteParam(value) === rawSlug
+  ));
+}
+
 export default function StorefrontScreen() {
   const { slug } = useLocalSearchParams();
   const layout = useAppLayoutMetrics();
-  const slugValue = Array.isArray(slug) ? slug[0] : slug;
+  const slugValue = normalizeRouteParam(slug);
+  const decodedSlug = safeDecodeRouteParam(slugValue);
   const [tab, setTab] = useState<StoreTab>('products');
 
-  const { data: entity } = useQuery({
+  const { data: entity, isError: isEntityError, error: entityError, refetch: refetchEntity } = useQuery({
     queryKey: ['entity', slugValue],
     queryFn: async () => {
       const res = await get('/stores?limit=100');
       const stores = (res as any)?.stores ?? (res as any)?.entities ?? [];
-      return stores.find((store: any) =>
-        [store.slug, store.storefrontSlug, store.id, store._id].includes(slugValue),
-      ) ?? null;
+      return stores.find((store: any) => matchesStoreRoute(store, slugValue, decodedSlug)) ?? null;
     },
     enabled: !!slugValue,
+    retry: false,
   });
 
   const e = entity as any;
-  const entitySlug = e?.slug || e?.storefrontSlug || slugValue;
-  const storeName = e?.name || 'Дэлгүүр';
+  const entitySlug = e?.slug || e?.storefrontSlug || decodedSlug || slugValue;
+  const storeName = getShopName(e);
   const storeDescription = e?.description || e?.about || e?.tagline || 'Онлайн дэлгүүр';
   const phone = e?.phone || e?.contactPhone || '';
   const email = e?.email || e?.contactEmail || '';
-  const storeUrl = `https://eseller.mn/${entitySlug || slugValue || ''}`;
+  const storeRouteSlug = encodeRouteParam(entitySlug || slugValue);
+  const storeUrl = storeRouteSlug ? `https://eseller.mn/storefront/${storeRouteSlug}` : 'https://eseller.mn/shops';
 
-  const { data: products, isLoading, isRefetching, refetch } = useQuery({
-    queryKey: ['storefront-products', entitySlug],
-    queryFn: () => get(`/products?entitySlug=${entitySlug}&limit=20`),
-    enabled: !!slugValue,
+  const { data: products, isLoading, isError: isProductsError, error: productsError, isRefetching, refetch } = useQuery({
+    queryKey: ['storefront-products', storeRouteSlug],
+    queryFn: () => get('/products', { entitySlug, limit: 20 }),
+    enabled: !!storeRouteSlug,
+    retry: false,
   });
 
   const prds = filterPublicProducts((products as any)?.products || []);
@@ -166,16 +184,48 @@ export default function StorefrontScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}
         renderItem={({ item }) => <ProductCard item={item} />}
         ListEmptyComponent={
-          <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.md }}>
-            <Ionicons name="cube-outline" size={44} color={C.textMuted} />
-            <Text style={{ ...F.h4, color: C.text, textAlign: 'center' }}>Энэ дэлгүүрт бараа хараахан байхгүй</Text>
-            <Text style={{ ...F.small, color: C.textSub, textAlign: 'center' }}>
-              Бусад баталгаат дэлгүүр болон marketplace заруудыг үзээрэй.
-            </Text>
-            <View style={{ flexDirection: 'row', gap: R.sm }}>
-              <AppButton label="Marketplace" icon="grid-outline" onPress={() => router.push('/store' as any)} style={{ flex: 1 }} />
-              <AppButton label="Бусад дэлгүүр" icon="storefront-outline" variant="ghost" onPress={() => router.push('/shops' as any)} style={{ flex: 1 }} />
-            </View>
+          <AppCard style={{ marginTop: R.md }}>
+            {isEntityError || isProductsError ? (
+              <EmptyState
+                icon="cloud-offline-outline"
+                title="Дэлгүүр ачаалж чадсангүй"
+                subtitle={(productsError as Error)?.message || (entityError as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+                cta={{
+                  label: 'Дахин оролдох',
+                  icon: 'refresh-outline',
+                  accent: C.brand,
+                  onPress: () => {
+                    refetchEntity();
+                    refetch();
+                  },
+                }}
+                compact
+              />
+            ) : (
+              <>
+                <EmptyState
+                  icon="cube-outline"
+                  title="Энэ дэлгүүрт бараа хараахан байхгүй"
+                  subtitle="Бусад баталгаат дэлгүүр болон marketplace бараануудыг үзээрэй."
+                  compact
+                />
+                <View style={{ flexDirection: 'row', gap: R.sm, paddingHorizontal: R.lg, paddingBottom: R.lg }}>
+                  <AppButton
+                    label="Marketplace"
+                    icon="grid-outline"
+                    onPress={() => router.push('/store' as any)}
+                    style={{ flex: 1 }}
+                  />
+                  <AppButton
+                    label="Бусад дэлгүүр"
+                    icon="storefront-outline"
+                    variant="ghost"
+                    onPress={() => router.push('/shops' as any)}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </>
+            )}
           </AppCard>
         }
       />
@@ -293,10 +343,21 @@ function StorefrontHeader({
 }
 
 function ProductCard({ item }: { item: any }) {
+  const id = item.id || item._id;
+  const routeId = encodeRouteParam(id);
+  const name = getProductName(item) || 'Бараа';
+  const price = getPublicProductPrice(item);
+
   return (
     <TouchableOpacity
       activeOpacity={0.86}
-      onPress={() => router.push(`/product/${item.id || item._id}` as any)}
+      disabled={!id}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+      accessibilityState={{ disabled: !id }}
+      onPress={() => {
+        if (routeId) router.push(`/product/${routeId}` as any);
+      }}
       style={{ flex: 1, margin: R.xs }}
     >
       <AppCard style={{ padding: 0, overflow: 'hidden' }}>
@@ -307,10 +368,10 @@ function ProductCard({ item }: { item: any }) {
         />
         <View style={{ padding: R.sm }}>
           <Text style={{ ...F.small, color: C.text, fontWeight: '700' }} numberOfLines={2}>
-            {item.name}
+            {name}
           </Text>
           <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>
-            {formatMoney(getPublicProductPrice(item))}
+            {formatMoney(price)}
           </Text>
         </View>
       </AppCard>
@@ -377,13 +438,6 @@ function Badge({ icon, label, color }: { icon: ComponentProps<typeof Ionicons>['
 
 function storeInitials(name?: string) {
   return (name || 'Д').trim().slice(0, 2).toLocaleUpperCase('mn-MN');
-}
-
-function firstImage(item: any) {
-  const image = typeof item?.images?.[0] === 'string'
-    ? item.images[0]
-    : item?.images?.[0]?.url ?? item?.media?.[0]?.url;
-  return image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop';
 }
 
 function formatMoney(value?: number) {

@@ -4,12 +4,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 export default function CouponsScreen() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: () => get('/buyer/coupons') });
+  const { user } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ['coupons'],
+    queryFn: () => get('/buyer/coupons'),
+    enabled: !!user,
+  });
   const coupons = (data as any)?.coupons || [];
   const [code, setCode] = useState('');
 
@@ -31,6 +38,18 @@ export default function CouponsScreen() {
     }
     redeemMut.mutate(value);
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Купон"
+        subtitle="Купон, промо кодоо харах болон идэвхжүүлэхийн тулд нэвтэрнэ үү."
+        icon="ticket-outline"
+        accent={C.seller}
+        returnTo="/coupons"
+      />
+    );
+  }
 
   return (
     <AppScreen>

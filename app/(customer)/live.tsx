@@ -13,6 +13,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { LiveAPI, type LiveStreamItem } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type LiveTab = 'active' | 'scheduled';
@@ -166,6 +167,8 @@ export default function LiveListScreen() {
 }
 
 function LiveCard({ stream, mode }: { stream: LiveStreamItem; mode: LiveTab }) {
+  const id = stream.id ?? (stream as any)._id;
+  const routeId = encodeRouteParam(id);
   const viewerCount = stream.viewerCount ?? 0;
   const productCount = (stream.products?.length ?? 0) as number;
   const shopName = stream.shop?.name ?? 'Дэлгүүр';
@@ -176,9 +179,13 @@ function LiveCard({ stream, mode }: { stream: LiveStreamItem; mode: LiveTab }) {
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`${stream.title} live нээх`}
-      style={styles.cardTouchable}
+      accessibilityState={{ disabled: !routeId }}
+      disabled={!routeId}
+      style={[styles.cardTouchable, !routeId && { opacity: 0.55 }]}
       activeOpacity={0.86}
-      onPress={() => router.push(`/live/${stream.id}` as any)}
+      onPress={() => {
+        if (routeId) router.push(`/live/${routeId}` as any)
+      }}
     >
       <AppCard style={styles.card}>
         <View style={styles.thumbnail}>

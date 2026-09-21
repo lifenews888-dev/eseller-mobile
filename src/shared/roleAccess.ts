@@ -1,4 +1,5 @@
 export type RoleArea = 'owner' | 'seller' | 'driver' | 'herder' | 'coordinator';
+export type RoleAreaAccessState = 'login' | 'loading' | 'allowed' | 'denied';
 
 type RouteParams = Record<string, string | string[] | undefined>;
 
@@ -47,6 +48,17 @@ export const ROLE_LOGIN_HINT: Partial<Record<RoleArea, string>> = {
 export function canAccessRoleArea(area: RoleArea, backendRole?: string | null): boolean {
   const role = (backendRole || '').toLowerCase();
   return AREA_ROLES[area].includes(role);
+}
+
+export function roleAreaAccessState(
+  area: RoleArea,
+  token?: string | null,
+  backendRole?: string | null,
+  authLoading = false,
+): RoleAreaAccessState {
+  if (!token) return 'login';
+  if (authLoading || !backendRole) return 'loading';
+  return canAccessRoleArea(area, backendRole) ? 'allowed' : 'denied';
 }
 
 export function homeRouteForBackendRole(backendRole?: string | null): string {

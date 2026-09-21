@@ -18,6 +18,7 @@ import {
 } from '../../../src/features/herder';
 import { useMalchnaasEnabled } from '../../../src/config/remoteFlags';
 import { C, R, UI } from '../../../src/shared/design';
+import { encodeRouteParam } from '../../../src/shared/routeParams';
 import { AppTopBar, useAppLayoutMetrics } from '../../../src/shared/ui/AppUI';
 
 function fmt(n: number) { return n.toLocaleString() + '₮'; }
@@ -238,11 +239,19 @@ function StatPill({ label, value }: { label: string; value: string }) {
 }
 
 function ProductTile({ p }: { p: HerderProduct }) {
+  const id = p.id ?? (p as any)._id;
+  const routeId = encodeRouteParam(id);
   const price = p.salePrice ?? p.price;
   return (
     <TouchableOpacity
-      style={s.tile}
-      onPress={() => router.push(`/herder-product/${p.id}` as never)}
+      style={[s.tile, !routeId && { opacity: 0.55 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${p.name || 'Бараа'} барааны дэлгэрэнгүй`}
+      accessibilityState={{ disabled: !routeId }}
+      disabled={!routeId}
+      onPress={() => {
+        if (routeId) router.push(`/herder-product/${routeId}` as never)
+      }}
       activeOpacity={0.85}
     >
       <View style={s.tileImg}>

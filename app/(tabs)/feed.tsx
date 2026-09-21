@@ -1,43 +1,26 @@
-import React from 'react'
-import {
-  View, Text, FlatList,
-  TouchableOpacity, Image, ScrollView,
-  TextInput,
-  RefreshControl,
-} from 'react-native'
-import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Ionicons } from '@expo/vector-icons'
-import * as Haptics from 'expo-haptics'
-import { get }      from '../../src/services/api'
-import { useAuth }  from '../../src/store/auth'
-import { C, R, F, S, UI } from '../../src/shared/design'
-import { shadowStyle } from '../../src/shared/shadow'
-import { LIVE_FEED_CATEGORIES } from '../../src/shared/liveCategories'
-import {
-  filterPublicProducts,
-  firstProductImage,
-  getPublicProductPrice,
-} from '../../src/shared/productQuality'
-import { FeedItemSkeleton } from '../../src/shared/ui/Skeleton'
-import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
+import React, { useEffect, useState } from 'react';
+import { FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { get } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { C, F, R, S, UI } from '../../src/shared/design';
+import { shadowStyle } from '../../src/shared/shadow';
+import { LIVE_FEED_CATEGORIES } from '../../src/shared/liveCategories';
+import { filterPublicProducts, firstProductImage, getProductName, getPublicProductPrice } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { FeedItemSkeleton } from '../../src/shared/ui/Skeleton';
 
-// Lazy import for STORE variant — DRIVER/SELLER now live in their own groups
-const LazyStoreOrders = React.lazy(() => import('../(owner)/orders'))
+const LazyStoreOrders = React.lazy(() => import('../(owner)/orders'));
 
-const FEED_CATS = LIVE_FEED_CATEGORIES
-
-type FeedSort = 'newest' | 'price_asc' | 'price_desc' | 'popular'
-type FeedRoutePatch = {
-  category?: string
-  search?: string
-  district?: string
-  sort?: FeedSort
-}
+type FeedSort = 'newest' | 'price_asc' | 'price_desc' | 'popular';
+type IconName = keyof typeof Ionicons.glyphMap;
 
 const DISTRICTS = [
-  { key: '', label: 'Бүх дүүрэг' },
+  { key: '', label: 'Бүх байршил' },
   { key: 'СБД', label: 'СБД' },
   { key: 'ХУД', label: 'ХУД' },
   { key: 'БЗД', label: 'БЗД' },
@@ -46,42 +29,252 @@ const DISTRICTS = [
   { key: 'СХД', label: 'СХД' },
   { key: 'НД', label: 'НД' },
   { key: 'БНД', label: 'БНД' },
-]
+];
 
-const SORTS: Array<{ key: FeedSort; label: string }> = [
-  { key: 'newest', label: 'Шинэ' },
-  { key: 'price_asc', label: 'Үнэ ↑' },
-  { key: 'price_desc', label: 'Үнэ ↓' },
-  { key: 'popular', label: 'Эрэлттэй' },
-]
-
-function isFeedSort(value: unknown): value is FeedSort {
-  return value === 'newest' || value === 'price_asc' || value === 'price_desc' || value === 'popular'
-}
+const SORTS: Array<{ key: FeedSort; label: string; icon: IconName }> = [
+  { key: 'newest', label: 'Шинэ', icon: 'time-outline' },
+  { key: 'popular', label: 'Эрэлттэй', icon: 'trending-up-outline' },
+  { key: 'price_asc', label: 'Үнэ бага', icon: 'arrow-down-outline' },
+  { key: 'price_desc', label: 'Үнэ өндөр', icon: 'arrow-up-outline' },
+];
 
 const FEATURED_BUSINESSES = [
-  { initials: 'AM', type: 'Авто', name: 'AutoCity Mongolia', meta: 'Toyota, BMW, Hyundai · 48 машин', rating: '4.8', route: '/shops?q=AutoCity' },
-  { initials: 'MP', type: 'Барилга', name: 'Монголиан Пропертиз', meta: '15+ төсөл · 3,200+ айл', rating: '4.7', route: '/shops?q=property' },
-  { initials: 'RE', type: 'Агент', name: 'Б. Эрдэнэбат', meta: '12 жил туршлага · 800+ хэлцэл', rating: '4.9', route: '/shops?q=agent' },
-]
+  { initials: 'AC', type: 'Авто', name: 'AutoCity Mongolia', meta: 'Шалгасан авто зар', rating: '4.8', route: '/shops?q=AutoCity' },
+  { initials: 'MP', type: 'Үл хөдлөх', name: 'Mongolian Properties', meta: 'Орон сууц, оффис', rating: '4.7', route: '/shops?q=property' },
+  { initials: 'BS', type: 'Үйлчилгээ', name: 'Business Service', meta: 'Мэргэжлийн үйлчилгээ', rating: '4.9', route: '/shops?q=service' },
+];
 
-function FeedChipRow<T extends { key: string; label: string }>({
+function isFeedSort(value: unknown): value is FeedSort {
+  return value === 'newest' || value === 'price_asc' || value === 'price_desc' || value === 'popular';
+}
+
+function extractFeedItems(data: unknown): any[] {
+  const value = data as any;
+  if (Array.isArray(value)) return value;
+  return [
+    ...(Array.isArray(value?.posts) ? value.posts : []),
+    ...(Array.isArray(value?.items) ? value.items : []),
+    ...(Array.isArray(value?.vip) ? value.vip : []),
+    ...(Array.isArray(value?.featured) ? value.featured : []),
+    ...(Array.isArray(value?.discounted) ? value.discounted : []),
+    ...(Array.isArray(value?.normal) ? value.normal : []),
+  ];
+}
+
+function getFeedBadge(item: any) {
+  if (item?.vip || item?.isVip || item?.tier === 'VIP') return { label: 'VIP', bg: C.gold, color: C.text };
+  if (item?.discountPercent || item?.salePrice || item?.discounted) {
+    return { label: item.discountPercent ? `-${item.discountPercent}%` : 'Хямдрал', bg: C.brand, color: C.bgCard };
+  }
+  if (item?.featured) return { label: 'Онцлох', bg: C.primary, color: C.bgCard };
+  return null;
+}
+
+export default function FeedScreen() {
+  const { role } = useAuth();
+
+  if (role === 'STORE') {
+    return (
+      <React.Suspense fallback={<View style={styles.screen} />}>
+        <LazyStoreOrders />
+      </React.Suspense>
+    );
+  }
+
+  return <BuyerFeedScreen />;
+}
+
+function BuyerFeedScreen() {
+  const params = useLocalSearchParams<{ category?: string; q?: string; district?: string; sort?: string }>();
+  const layout = useAppLayoutMetrics();
+  const [category, setCategory] = useState('');
+  const [search, setSearch] = useState('');
+  const [district, setDistrict] = useState('');
+  const [sort, setSort] = useState<FeedSort>('newest');
+  const appliedSearch = typeof params.q === 'string' ? params.q : '';
+
+  useEffect(() => {
+    setCategory(typeof params.category === 'string' ? params.category : '');
+    setSearch(appliedSearch);
+    setDistrict(typeof params.district === 'string' ? params.district : '');
+    setSort(isFeedSort(params.sort) ? params.sort : 'newest');
+  }, [appliedSearch, params.category, params.district, params.sort]);
+
+  const replaceFeedRoute = (patch: { category?: string; search?: string; district?: string; sort?: FeedSort }) => {
+    const nextCategory = patch.category ?? category;
+    const nextSearch = patch.search ?? search;
+    const nextDistrict = patch.district ?? district;
+    const nextSort = patch.sort ?? sort;
+    const routeParams: Record<string, string> = {};
+
+    if (nextCategory) routeParams.category = nextCategory;
+    if (nextSearch.trim()) routeParams.q = nextSearch.trim();
+    if (nextDistrict) routeParams.district = nextDistrict;
+    if (nextSort !== 'newest') routeParams.sort = nextSort;
+
+    router.replace(Object.keys(routeParams).length ? ({ pathname: '/feed' as any, params: routeParams } as any) : ('/feed' as any));
+  };
+
+  const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
+    queryKey: ['feed', category, appliedSearch, district, sort],
+    queryFn: () => get('/feed', { category, q: appliedSearch, district, sort, limit: 20 }),
+    retry: false,
+  });
+
+  const posts = filterPublicProducts<any>(extractFeedItems(data));
+  const vipCount = posts.filter((post: any) => post.vip || post.isVip || post.tier === 'VIP').length;
+  const hasActiveFeedQuery = Boolean(category || appliedSearch || district || sort !== 'newest');
+  const hasPendingSearch = search.trim() !== appliedSearch.trim();
+
+  const submitSearch = () => replaceFeedRoute({ search });
+  const clearFeedFilters = () => {
+    Haptics.selectionAsync().catch(() => {});
+    setCategory('');
+    setSearch('');
+    setDistrict('');
+    setSort('newest');
+    router.replace('/feed' as any);
+  };
+
+  return (
+    <View style={styles.screen}>
+      <FlatList
+        data={isLoading ? [] : posts}
+        keyExtractor={(item: any, index) => String(item.id || item._id || item.slug || index)}
+        contentContainerStyle={{ paddingHorizontal: UI.screenPad, paddingBottom: layout.screenBottom + 24 }}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}
+        ListHeaderComponent={
+          <View style={{ paddingTop: layout.screenTop }}>
+            <AppTopBar eyebrow="eSeller" title="Зарын булан" showBack={false} />
+            <AppHeader
+              title="Зарын булан"
+              subtitle="Бараа, үйлчилгээ, авто, үл хөдлөх болон өдөр тутмын хэрэгцээг нэг дороос хайна."
+              icon="megaphone-outline"
+              accent={C.brand}
+              style={{ marginBottom: R.md }}
+            />
+
+            <AppCard style={styles.searchCard}>
+              <View style={styles.searchRow}>
+                <Ionicons name="search" size={19} color={C.textMuted} />
+                <TextInput
+                  accessibilityLabel="Зар хайх"
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Зар хайх..."
+                  placeholderTextColor={C.textMuted}
+                  returnKeyType="search"
+                  onSubmitEditing={submitSearch}
+                  style={styles.searchInput}
+                />
+                {search.length > 0 ? (
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Хайлтыг цэвэрлэх" hitSlop={8} onPress={() => { setSearch(''); replaceFeedRoute({ search: '' }); }}>
+                    <Ionicons name="close-circle" size={19} color={C.textMuted} />
+                  </TouchableOpacity>
+                ) : null}
+                {hasPendingSearch ? (
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Хайх" hitSlop={8} onPress={submitSearch}>
+                    <Ionicons name="arrow-forward-circle" size={24} color={C.primary} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <View style={styles.locationRow}>
+                <Ionicons name="navigate-outline" size={15} color={C.textMuted} />
+                <Text style={styles.locationText} numberOfLines={1}>
+                  {district ? `${district} байршлаар шүүж байна` : 'Байршил сонгоогүй'}
+                </Text>
+                {district ? (
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Байршлын шүүлтүүр цэвэрлэх" onPress={() => { setDistrict(''); replaceFeedRoute({ district: '' }); }}>
+                    <Text style={styles.inlineAction}>Цэвэрлэх</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </AppCard>
+
+            <SectionTitle title="Ангилал" action={hasActiveFeedQuery ? 'Цэвэрлэх' : undefined} onAction={clearFeedFilters} />
+            <HorizontalChips
+              items={LIVE_FEED_CATEGORIES.map((item) => ({ key: item.slug, label: item.name, icon: item.icon as IconName }))}
+              value={category}
+              onChange={(value) => { setCategory(value); replaceFeedRoute({ category: value }); }}
+            />
+
+            <SectionTitle title="Байршил" />
+            <HorizontalChips
+              items={DISTRICTS}
+              value={district}
+              onChange={(value) => { setDistrict(value); replaceFeedRoute({ district: value }); }}
+            />
+
+            <SectionTitle title="Эрэмбэлэх" />
+            <HorizontalChips
+              items={SORTS}
+              value={sort}
+              onChange={(value) => {
+                if (!isFeedSort(value)) return;
+                setSort(value);
+                replaceFeedRoute({ sort: value });
+              }}
+            />
+
+            <SectionTitle title="Онцлох бизнесүүд" action="Бүгдийг харах" onAction={() => router.push('/shops' as any)} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
+              {FEATURED_BUSINESSES.map((business) => <FeaturedBusinessCard key={business.name} business={business} />)}
+            </ScrollView>
+
+            <View style={styles.resultHeader}>
+              <View>
+                <Text style={styles.resultTitle}>{posts.length} зар олдлоо</Text>
+                <Text style={styles.resultMeta}>{vipCount} VIP зар байна</Text>
+              </View>
+              <AppButton label="Зар нэмэх" icon="add" onPress={() => router.push('/feed/create' as any)} style={styles.addButton} />
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.skeletonWrap}>{[1, 2, 3, 4].map((item) => <FeedItemSkeleton key={item} />)}</View>
+          ) : (
+            <EmptyFeedState
+              isError={isError}
+              message={(error as Error)?.message}
+              hasActiveFeedQuery={hasActiveFeedQuery}
+              onRetry={() => refetch()}
+              onClear={clearFeedFilters}
+            />
+          )
+        }
+        renderItem={({ item }) => <FeedCard item={item} />}
+      />
+
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Шинэ зар нэмэх"
+        activeOpacity={0.84}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          router.push('/feed/create' as any);
+        }}
+        style={[styles.fab, { bottom: layout.floatingBottom }]}
+      >
+        <Ionicons name="add" size={28} color={C.bgCard} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function HorizontalChips({
   items,
   value,
   onChange,
 }: {
-  items: T[]
-  value: string
-  onChange: (key: string) => void
+  items: Array<{ key: string; label: string; icon?: IconName }>;
+  value: string;
+  onChange: (key: string) => void;
 }) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8, gap: 6 }}
-    >
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
       {items.map((item) => {
-        const active = value === item.key
+        const active = value === item.key;
         return (
           <TouchableOpacity
             key={item.key || 'all'}
@@ -90,618 +283,302 @@ function FeedChipRow<T extends { key: string; label: string }>({
             accessibilityLabel={`${item.label} сонгох`}
             accessibilityState={{ selected: active }}
             onPress={() => onChange(item.key)}
-            style={{
-              paddingHorizontal: 13,
-              paddingVertical: 8,
-              borderRadius: R.full,
-              backgroundColor: active ? C.primary : C.bgSection,
-              borderWidth: 1,
-              borderColor: active ? C.primary : C.border,
-            }}
+            style={[styles.chip, active && styles.chipActive]}
           >
-            <Text style={{
-              color: active ? C.bgCard : C.textSub,
-              fontSize: 12,
-              fontWeight: active ? '800' : '600',
-            }}>
-              {item.label}
-            </Text>
+            {item.icon ? <Ionicons name={item.icon} size={14} color={active ? C.bgCard : C.textSub} /> : null}
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.label}</Text>
           </TouchableOpacity>
-        )
+        );
       })}
     </ScrollView>
-  )
+  );
 }
 
-function getFeedBadge(item: any) {
-  if (item?.vip || item?.isVip || item?.tier === 'VIP') {
-    return { label: 'ВИП', bg: C.gold, color: C.text }
-  }
-  if (item?.discountPercent || item?.salePrice || item?.discounted) {
-    return {
-      label: item.discountPercent ? `-${item.discountPercent}%` : 'Хямдрал',
-      bg: C.brand,
-      color: C.bgCard,
-    }
-  }
-  if (item?.featured) {
-    return { label: 'Онцлох', bg: C.gold, color: C.text }
-  }
-  return null
+function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  return (
+    <View style={styles.sectionTitleRow}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {action ? (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={action} onPress={onAction}>
+          <Text style={styles.sectionAction}>{action}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
 }
 
-export default function FeedScreen() {
-  const { role } = useAuth()
-
-  if (role === 'STORE') {
-    return (
-      <React.Suspense fallback={<View style={{ flex: 1, backgroundColor: C.bg }} />}>
-        <LazyStoreOrders />
-      </React.Suspense>
-    )
-  }
-
-  // BUYER / default — DRIVER/SELLER now have their own groups
-  return <BuyerFeedScreen />
+function FeaturedBusinessCard({ business }: { business: typeof FEATURED_BUSINESSES[number] }) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={`${business.name} бизнесийг нээх`}
+      activeOpacity={0.84}
+      onPress={() => router.push(business.route as any)}
+      style={styles.featuredCard}
+    >
+      <View style={styles.featuredLogo}>
+        <Text style={styles.featuredLogoText}>{business.initials}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.featuredType}>{business.type}</Text>
+        <Text numberOfLines={1} style={styles.featuredName}>{business.name}</Text>
+        <View style={styles.featuredMetaRow}>
+          <Text numberOfLines={1} style={styles.featuredMeta}>{business.meta}</Text>
+          <Ionicons name="star" size={11} color={C.gold} />
+          <Text style={styles.featuredRating}>{business.rating}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 }
 
-function BuyerFeedScreen() {
-  const params = useLocalSearchParams<{ category?: string; q?: string; district?: string; sort?: string }>()
-  const layout = useAppLayoutMetrics()
-  const [category, setCategory] = useState('')
-  const [search, setSearch] = useState('')
-  const [district, setDistrict] = useState('')
-  const [sort, setSort] = useState<FeedSort>('newest')
-
-  useEffect(() => {
-    setCategory(typeof params.category === 'string' ? params.category : '')
-    setSearch(typeof params.q === 'string' ? params.q : '')
-    setDistrict(typeof params.district === 'string' ? params.district : '')
-    setSort(isFeedSort(params.sort) ? params.sort : 'newest')
-  }, [params.category, params.q, params.district, params.sort])
-
-  const replaceFeedRoute = (patch: FeedRoutePatch) => {
-    const nextCategory = patch.category ?? category
-    const nextSearch = patch.search ?? search
-    const nextDistrict = patch.district ?? district
-    const nextSort = patch.sort ?? sort
-    const routeParams: Record<string, string> = {}
-
-    if (nextCategory) routeParams.category = nextCategory
-    if (nextSearch.trim()) routeParams.q = nextSearch.trim()
-    if (nextDistrict) routeParams.district = nextDistrict
-    if (nextSort !== 'newest') routeParams.sort = nextSort
-
-    router.replace(
-      Object.keys(routeParams).length
-        ? ({ pathname: '/feed' as any, params: routeParams } as any)
-        : ('/feed' as any),
-    )
-  }
-
-  const handleSearchChange = (value: string) => {
-    setSearch(value)
-    replaceFeedRoute({ search: value })
-  }
-
-  const handleSearchClear = () => {
-    setSearch('')
-    replaceFeedRoute({ search: '' })
-  }
-
-  const handleDistrictChange = (nextDistrict: string) => {
-    setDistrict(nextDistrict)
-    replaceFeedRoute({ district: nextDistrict })
-  }
-
-  const handleSortChange = (nextSort: string) => {
-    if (!isFeedSort(nextSort)) return
-    setSort(nextSort)
-    replaceFeedRoute({ sort: nextSort })
-  }
-
-  const handleCategoryChange = (nextCategory: string) => {
-    setCategory(nextCategory)
-    replaceFeedRoute({ category: nextCategory })
-  }
-
-  const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
-    queryKey: ['feed', category, search, district, sort],
-    queryFn:  () =>
-      get('/feed', { category, q: search, district, sort, limit: 20 }),
-    retry: false,
-  })
-
-  const rawPosts = Array.isArray(data)
-    ? data
-    : (data as any)?.posts ??
-      (data as any)?.items ??
-      [
-        ...((data as any)?.vip ?? []),
-        ...((data as any)?.featured ?? []),
-        ...((data as any)?.discounted ?? []),
-        ...((data as any)?.normal ?? []),
-      ]
-  const posts = filterPublicProducts<any>(rawPosts)
-  const totalCount = posts.length
-  const vipCount = posts.filter((p: any) => p.vip || p.isVip || p.tier === 'VIP').length
+function FeedCard({ item }: { item: any }) {
+  const itemId = item.id || item._id || item.slug;
+  const itemRouteId = encodeRouteParam(itemId);
+  const badge = getFeedBadge(item);
+  const price = getPublicProductPrice(item);
+  const image = firstProductImage(item);
+  const productName = getProductName(item) || 'Зар';
+  const originalPrice = item.salePrice ? item.price : item.originalPrice;
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-
-      {/* Header */}
-      <View style={{
-        paddingTop: layout.screenTop, paddingHorizontal: R.lg, paddingBottom: R.md,
-      }}>
-        <AppTopBar eyebrow="eSeller" title="Зарын булан" showBack={false} />
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: 12,
-        }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ ...F.h2, color: C.text }}>
-              Зарын булан
-            </Text>
-            <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 3, lineHeight: 18 }}>
-              Бараа, үйлчилгээ, орон сууц, авто — бүгдийг нэг дор
-            </Text>
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={`${productName} зарын дэлгэрэнгүй`}
+      accessibilityState={{ disabled: !itemRouteId }}
+      activeOpacity={0.86}
+      disabled={!itemRouteId}
+      onPress={() => itemRouteId && router.push(`/feed/${itemRouteId}` as any)}
+      style={styles.card}
+    >
+      <View style={styles.imageWrap}>
+        <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
+        {badge ? (
+          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+            <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
           </View>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Зар оруулах"
-            onPress={() => router.push('/feed/create' as any)}
-            style={{
-              backgroundColor: C.brand,
-              borderRadius: R.lg,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              ...shadowStyle({ color: C.brand, y: 3, blur: 12, opacity: 0.35, elevation: 8 }),
-            }}
-          >
-            <Ionicons name="add" size={17} color={C.bgCard} />
-            <Text style={{ color: C.bgCard, fontSize: 12, fontWeight: '900' }}>
-              Зар оруулах
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <View style={{
-          flexDirection: 'row', alignItems: 'center',
-          backgroundColor: C.bgSection, borderRadius: R.xl,
-          paddingHorizontal: 14, borderWidth: 1, borderColor: C.border,
-        }}>
-          <Ionicons name="search" size={18} color={C.textMuted} />
-          <TextInput
-            accessibilityLabel="Зар хайх"
-            value={search}
-            onChangeText={handleSearchChange}
-            placeholder="Зар хайх..."
-            placeholderTextColor={C.textMuted}
-            style={{ flex: 1, color: C.text, padding: 12, fontSize: 14 }}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Хайлтыг цэвэрлэх"
-              hitSlop={8}
-              onPress={handleSearchClear}
-            >
-              <Ionicons name="close-circle" size={18} color={C.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginTop: 10,
-          gap: 8,
-        }}>
-          <View style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 7,
-            backgroundColor: C.bgCard,
-            borderRadius: R.lg,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderWidth: 1,
-            borderColor: C.border,
-          }}>
-            <Ionicons name="navigate-outline" size={15} color={C.textMuted} />
-            <Text style={{ color: C.textSub, fontSize: 12, fontWeight: '700' }}>
-              {district || 'Байршил тодорхойлж байна...'}
-            </Text>
+        ) : null}
+        {item.imageCount > 1 ? (
+          <View style={styles.imageCount}>
+            <Ionicons name="images" size={10} color={C.bgCard} />
+            <Text style={styles.imageCountText}>{item.imageCount}</Text>
           </View>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Байршлын шүүлтүүр цэвэрлэх"
-            onPress={() => handleDistrictChange('')}
-            style={{
-              backgroundColor: C.bgSection,
-              borderRadius: R.full,
-              paddingHorizontal: 12,
-              paddingVertical: 9,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}
-          >
-            <Text style={{ color: C.primary, fontSize: 12, fontWeight: '800' }}>
-              Өөрчлөх
-            </Text>
-          </TouchableOpacity>
-        </View>
+        ) : null}
       </View>
-
-      {/* Featured businesses */}
-      <View style={{ marginBottom: 8 }}>
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 16,
-          marginBottom: 10,
-        }}>
-          <Text style={{ color: C.text, fontSize: 16, fontWeight: '900' }}>
-            Онцлох бизнесүүд
-          </Text>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Бүх дэлгүүрийг харах"
-            onPress={() => router.push('/shops' as any)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-          >
-            <Text style={{ color: C.primary, fontSize: 12, fontWeight: '800' }}>
-              Бүгдийг харах
-            </Text>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle} numberOfLines={2}>{productName}</Text>
+        <Text style={styles.price}>{formatPrice(price)}</Text>
+        {originalPrice && originalPrice > price ? <Text style={styles.oldPrice}>{formatPrice(originalPrice)}</Text> : null}
+        <View style={styles.metaRow}>
+          {item.district ? (
+            <View style={styles.metaItem}>
+              <Ionicons name="location-outline" size={12} color={C.textMuted} />
+              <Text style={styles.metaText} numberOfLines={1}>{item.district}</Text>
+            </View>
+          ) : null}
+          {item.createdAt ? <Text style={styles.metaText}>{timeAgo(item.createdAt)}</Text> : null}
+        </View>
+        <View style={styles.cardFooter}>
+          <View style={styles.metaItem}>
+            <Ionicons name="eye-outline" size={12} color={C.textMuted} />
+            <Text style={styles.metaText}>{item.views ?? item.viewCount ?? 0}</Text>
+          </View>
+          <View style={styles.detailLink}>
+            <Text style={styles.detailText}>Дэлгэрэнгүй</Text>
             <Ionicons name="arrow-forward" size={13} color={C.primary} />
-          </TouchableOpacity>
+          </View>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
-        >
-          {FEATURED_BUSINESSES.map((business) => (
-            <TouchableOpacity
-              key={business.name}
-              accessibilityRole="button"
-              accessibilityLabel={`${business.name} бизнесийг нээх`}
-              activeOpacity={0.84}
-              onPress={() => router.push(business.route as any)}
-              style={{
-                width: 228,
-                backgroundColor: C.bgCard,
-                borderRadius: R.lg,
-                padding: 12,
-                borderWidth: 1,
-                borderColor: C.border,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <View style={{
-                width: 44,
-                height: 44,
-                borderRadius: R.md,
-                backgroundColor: C.primary + '18',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <Text style={{ color: C.primary, fontSize: 14, fontWeight: '900' }}>
-                  {business.initials}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Text style={{ color: C.textMuted, fontSize: 10, fontWeight: '800' }}>
-                    {business.type}
-                  </Text>
-                  <Ionicons name="checkmark-circle" size={11} color={C.secondary} />
-                </View>
-                <Text numberOfLines={1} style={{ color: C.text, fontSize: 13, fontWeight: '900', marginTop: 2 }}>
-                  {business.name}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                  <Text numberOfLines={1} style={{ flex: 1, color: C.textMuted, fontSize: 10 }}>
-                    {business.meta}
-                  </Text>
-                  <Ionicons name="star" size={10} color={C.gold} />
-                  <Text style={{ color: C.textMuted, fontSize: 10, fontWeight: '700' }}>
-                    {business.rating}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
+    </TouchableOpacity>
+  );
+}
 
-      <FeedChipRow items={DISTRICTS} value={district} onChange={handleDistrictChange} />
-      <FeedChipRow items={SORTS} value={sort} onChange={handleSortChange} />
+function EmptyFeedState({
+  isError,
+  message,
+  hasActiveFeedQuery,
+  onRetry,
+  onClear,
+}: {
+  isError: boolean;
+  message?: string;
+  hasActiveFeedQuery: boolean;
+  onRetry: () => void;
+  onClear: () => void;
+}) {
+  const actionLabel = isError ? 'Дахин оролдох' : hasActiveFeedQuery ? 'Шүүлтүүр цэвэрлэх' : 'Зар нэмэх';
 
-      {/* Categories */}
-      <View>
-        <ScrollView
-          horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 12, paddingBottom: 10, gap: 6,
-          }}
-        >
-          {FEED_CATS.map(c => {
-            const active = category === c.slug
-            return (
-              <TouchableOpacity
-                key={c.slug || 'all'}
-                activeOpacity={0.84}
-                accessibilityRole="button"
-                accessibilityLabel={`${c.name} ангилал сонгох`}
-                accessibilityState={{ selected: active }}
-                onPress={() => handleCategoryChange(c.slug)}
-                style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  paddingHorizontal: 14, paddingVertical: 9,
-                  borderRadius: R.full, gap: 6,
-                  backgroundColor: active ? C.primary : C.bgSection,
-                  borderWidth: 1,
-                  borderColor: active ? C.primary : C.border,
-                }}
-              >
-                <Ionicons
-                  name={c.icon as any}
-                  size={14}
-                  color={active ? C.bgCard : C.textSub}
-                />
-                <Text style={{
-                  color: active ? C.bgCard : C.textSub,
-                  fontSize: 13, fontWeight: active ? '700' : '500',
-                }}>
-                  {c.name}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-      </View>
+  return (
+    <AppCard style={styles.emptyCard}>
+      <Ionicons name={isError ? 'cloud-offline-outline' : 'megaphone-outline'} size={46} color={C.textMuted} />
+      <Text style={styles.emptyTitle}>{isError ? 'Зарууд ачаалж чадсангүй' : 'Зар олдсонгүй'}</Text>
+      <Text style={styles.emptyText}>
+        {isError ? (message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.') : 'Шүүлтүүрээ өөрчлөх эсвэл шинэ зар нэмээрэй.'}
+      </Text>
+      <AppButton
+        label={actionLabel}
+        icon={isError ? 'refresh' : hasActiveFeedQuery ? 'close-circle-outline' : 'add'}
+        onPress={isError ? onRetry : hasActiveFeedQuery ? onClear : () => router.push('/feed/create' as any)}
+        style={{ marginTop: R.md, minWidth: 180 }}
+      />
+    </AppCard>
+  );
+}
 
-      {/* Feed list */}
-      {isLoading ? (
-        <View style={{ padding: 10 }}>
-          {[1, 2, 3, 4].map(i => (
-            <FeedItemSkeleton key={i} />
-          ))}
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(p: any, index) => String(p.id || p._id || index)}
-          contentContainerStyle={{ padding: 10, paddingBottom: layout.screenBottom + 24 }}
-          ListHeaderComponent={
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 10,
-              paddingHorizontal: 2,
-            }}>
-              <Text style={{ color: C.text, fontSize: 14, fontWeight: '900' }}>
-                {totalCount} зар олдлоо · {vipCount} ВИП
-              </Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Зар оруулах"
-                onPress={() => router.push('/feed/create' as any)}
-              >
-                <Text style={{ color: C.primary, fontSize: 12, fontWeight: '800' }}>
-                  Зар оруулах
-                </Text>
-              </TouchableOpacity>
-            </View>
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={C.brand}
-            />
-          }
-          renderItem={({ item }: any) => {
-            const itemId = item.id || item._id
-            const badge = getFeedBadge(item)
-            const price = getPublicProductPrice(item)
-            const image = firstProductImage(item)
-            const originalPrice = item.salePrice ? item.price : item.originalPrice
-            return (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`${item.title || item.name || 'Зар'} зарын дэлгэрэнгүй`}
-                activeOpacity={0.86}
-                disabled={!itemId}
-                accessibilityState={{ disabled: !itemId }}
-                onPress={() => router.push(`/feed/${itemId}` as any)}
-                style={{
-                  flexDirection: 'row', backgroundColor: C.bgCard,
-                  borderRadius: R.lg, marginBottom: 10, overflow: 'hidden',
-                  borderWidth: 1,
-                  borderColor: badge ? `${badge.bg}55` : C.border,
-                }}
-              >
-              {/* Image */}
-              <View style={{ position: 'relative' }}>
-                <Image
-                  source={{ uri: image }}
-                  style={{
-                    width: 110, height: 110, backgroundColor: C.bgSection,
-                  }}
-                  resizeMode="cover"
-                />
-                {badge && (
-                  <View style={{
-                    position: 'absolute', top: 4, left: 4,
-                    backgroundColor: badge.bg, borderRadius: R.xs,
-                    paddingHorizontal: 4, paddingVertical: 1,
-                    flexDirection: 'row', alignItems: 'center', gap: 2,
-                  }}>
-                    <Ionicons name="flash" size={8} color={badge.color} />
-                    <Text style={{ color: badge.color, fontSize: 8, fontWeight: '900' }}>
-                      {badge.label}
-                    </Text>
-                  </View>
-                )}
-                {item.imageCount > 1 && (
-                  <View style={{
-                    position: 'absolute', bottom: 4, right: 4,
-                    backgroundColor: `${C.text}B0`, borderRadius: R.sm,
-                    paddingHorizontal: 5, paddingVertical: 2,
-                    flexDirection: 'row', alignItems: 'center', gap: 2,
-                  }}>
-                    <Ionicons name="images" size={10} color={C.bgCard} />
-                    <Text style={{ color: C.bgCard, fontSize: 9, fontWeight: '600' }}>
-                      {item.imageCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Info */}
-              <View style={{ flex: 1, padding: 12, justifyContent: 'center' }}>
-                <Text
-                  style={{ color: C.text, fontWeight: '600', fontSize: 14 }}
-                  numberOfLines={2}
-                >
-                  {item.title || item.name}
-                </Text>
-                <Text style={{
-                  color: C.brand, fontWeight: '800', fontSize: 16, marginTop: 5,
-                }}>
-                  {price.toLocaleString() + '₮'}
-                </Text>
-                {originalPrice && originalPrice > price && (
-                  <Text style={{
-                    color: C.textMuted,
-                    fontSize: 11,
-                    textDecorationLine: 'line-through',
-                    marginTop: 1,
-                  }}>
-                    {originalPrice.toLocaleString()}₮
-                  </Text>
-                )}
-                <View style={{
-                  flexDirection: 'row', gap: 10, marginTop: 5, alignItems: 'center',
-                }}>
-                  {item.district && (
-                    <View style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 3,
-                    }}>
-                      <Ionicons name="location-outline" size={11} color={C.textMuted} />
-                      <Text style={{ color: C.textMuted, fontSize: 11 }}>
-                        {item.district}
-                      </Text>
-                    </View>
-                  )}
-                  {item.createdAt && (
-                    <Text style={{ color: C.textMuted, fontSize: 11 }}>
-                      {timeAgo(item.createdAt)}
-                    </Text>
-                  )}
-                </View>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginTop: 8,
-                }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="eye-outline" size={11} color={C.textMuted} />
-                    <Text style={{ color: C.textMuted, fontSize: 11 }}>
-                      {item.views ?? item.viewCount ?? 0}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                    <Text style={{ color: C.primary, fontSize: 12, fontWeight: '800' }}>
-                      Дэлгэрэнгүй
-                    </Text>
-                    <Ionicons name="arrow-forward" size={12} color={C.primary} />
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-            )
-          }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 60 }}>
-              <Ionicons name={isError ? 'cloud-offline-outline' : 'megaphone-outline'} size={64} color={C.border} />
-              <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 16, fontWeight: '800' }}>
-                {isError ? 'Зарууд ачаалж чадсангүй' : 'Зар байхгүй байна'}
-              </Text>
-              <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 4, textAlign: 'center' }}>
-                {isError ? ((error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.') : 'Эхний зараа нэмээрэй!'}
-              </Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={isError ? 'Заруудыг дахин ачаалах' : 'Шинэ зар нэмэх'}
-                onPress={() => {
-                  if (isError) {
-                    refetch()
-                    return
-                  }
-                  router.push('/feed/create' as any)
-                }}
-                style={{
-                  backgroundColor: isError ? C.primary : C.brand, borderRadius: R.lg,
-                  paddingHorizontal: 24, paddingVertical: 12, marginTop: 20,
-                }}
-              >
-                <Text style={{ color: C.bgCard, fontWeight: '700' }}>
-                  {isError ? 'Дахин оролдох' : 'Зар нэмэх'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
-      )}
-
-      {/* Floating + button */}
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Шинэ зар нэмэх"
-        activeOpacity={0.84}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-          router.push('/feed/create' as any)
-        }}
-        style={{
-          position: 'absolute', bottom: layout.floatingBottom, right: R.lg,
-          width: 56, height: 56, borderRadius: R.full,
-          backgroundColor: C.brand,
-          alignItems: 'center', justifyContent: 'center',
-          ...S.elevated,
-          ...shadowStyle({ color: C.brand, y: 4, blur: 16, opacity: 0.5, elevation: 12 }),
-        }}
-      >
-        <Ionicons name="add" size={28} color={C.bgCard} />
-      </TouchableOpacity>
-    </View>
-  )
+function formatPrice(value: number) {
+  return `${Math.round(value || 0).toLocaleString()}₮`;
 }
 
 function timeAgo(dateStr: string): string {
-  const now = Date.now()
-  const d = new Date(dateStr).getTime()
-  const diff = now - d
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'Саяхан'
-  if (mins < 60) return `${mins} мин`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs} цаг`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days} өдөр`
-  return new Date(dateStr).toLocaleDateString('mn-MN')
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Саяхан';
+  if (mins < 60) return `${mins} мин`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} цаг`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} өдөр`;
+  return new Date(dateStr).toLocaleDateString('mn-MN');
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  searchCard: { gap: R.md, marginBottom: R.lg },
+  searchRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: R.md,
+  },
+  searchInput: { flex: 1, color: C.text, fontSize: 15, paddingVertical: R.sm },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: R.sm },
+  locationText: { ...F.small, color: C.textSub, flex: 1, fontWeight: '700' },
+  inlineAction: { ...F.small, color: C.primary, fontWeight: '800' },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: R.sm,
+    marginTop: R.xs,
+  },
+  sectionTitle: { ...F.h4, color: C.text },
+  sectionAction: { ...F.small, color: C.primary, fontWeight: '800' },
+  chipRow: { gap: R.sm, paddingBottom: R.md },
+  chip: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.xs,
+    borderRadius: R.full,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.bgSection,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+  },
+  chipActive: { backgroundColor: C.primary, borderColor: C.primary },
+  chipText: { ...F.small, color: C.textSub, fontWeight: '700' },
+  chipTextActive: { color: C.bgCard, fontWeight: '900' },
+  featuredRow: { gap: R.sm, paddingBottom: R.lg },
+  featuredCard: {
+    width: 232,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.sm,
+    backgroundColor: C.bgCard,
+    borderRadius: UI.cardRadius,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: R.md,
+  },
+  featuredLogo: {
+    width: UI.iconBox,
+    height: UI.iconBox,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.primaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredLogoText: { ...F.h4, color: C.primary, fontWeight: '900' },
+  featuredType: { ...F.tiny, color: C.textMuted, fontWeight: '900' },
+  featuredName: { ...F.small, color: C.text, fontWeight: '900', marginTop: 2 },
+  featuredMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  featuredMeta: { ...F.tiny, color: C.textMuted, flex: 1 },
+  featuredRating: { ...F.tiny, color: C.textMuted, fontWeight: '800' },
+  resultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: R.md,
+    marginTop: R.xs,
+    marginBottom: R.sm,
+  },
+  resultTitle: { ...F.h4, color: C.text, fontWeight: '900' },
+  resultMeta: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  addButton: { minHeight: 40, paddingHorizontal: R.md },
+  skeletonWrap: { paddingTop: R.sm },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: C.bgCard,
+    borderRadius: UI.cardRadius,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: R.sm,
+    overflow: 'hidden',
+    ...S.card,
+  },
+  imageWrap: { position: 'relative', width: 112, minHeight: 116, backgroundColor: C.bgSection },
+  image: { width: 112, height: 116, backgroundColor: C.bgSection },
+  badge: {
+    position: 'absolute',
+    top: R.xs,
+    left: R.xs,
+    borderRadius: R.xs,
+    paddingHorizontal: R.xs,
+    paddingVertical: 2,
+  },
+  badgeText: { fontSize: 9, fontWeight: '900' },
+  imageCount: {
+    position: 'absolute',
+    right: R.xs,
+    bottom: R.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: `${C.text}B0`,
+    borderRadius: R.sm,
+    paddingHorizontal: R.xs,
+    paddingVertical: 2,
+  },
+  imageCountText: { color: C.bgCard, fontSize: 9, fontWeight: '800' },
+  cardBody: { flex: 1, padding: R.md },
+  cardTitle: { ...F.body, color: C.text, fontWeight: '800', lineHeight: 20 },
+  price: { color: C.brand, fontSize: 18, fontWeight: '900', marginTop: R.xs },
+  oldPrice: { ...F.tiny, color: C.textMuted, textDecorationLine: 'line-through', marginTop: 1 },
+  metaRow: { minHeight: 20, flexDirection: 'row', alignItems: 'center', gap: R.sm, marginTop: R.xs },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  metaText: { ...F.tiny, color: C.textMuted },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: R.sm },
+  detailLink: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  detailText: { ...F.small, color: C.primary, fontWeight: '900' },
+  emptyCard: { alignItems: 'center', marginTop: R.lg, paddingVertical: R.xxxl },
+  emptyTitle: { ...F.h3, color: C.text, marginTop: R.md, textAlign: 'center' },
+  emptyText: { ...F.small, color: C.textSub, textAlign: 'center', lineHeight: 20, marginTop: R.xs },
+  fab: {
+    position: 'absolute',
+    right: R.lg,
+    width: 56,
+    height: 56,
+    borderRadius: R.full,
+    backgroundColor: C.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...S.elevated,
+    ...shadowStyle({ color: C.brand, y: 4, blur: 16, opacity: 0.42, elevation: 12 }),
+  },
+});

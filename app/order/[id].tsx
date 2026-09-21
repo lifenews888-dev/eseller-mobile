@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { OrderAPI } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -41,10 +42,14 @@ const STATUS_LABELS: Record<string, string> = {
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const layout = useAppLayoutMetrics();
-  const { data, isLoading } = useQuery<any>({
-    queryKey: ['order', id],
-    queryFn: () => OrderAPI.detail(id!),
-    enabled: !!id,
+  const orderParam = normalizeRouteParam(id);
+  const orderId = safeDecodeRouteParam(orderParam);
+  const orderRouteParam = encodeRouteParam(orderId);
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery<any>({
+    queryKey: ['order', orderRouteParam],
+    queryFn: () => OrderAPI.detail(orderId),
+    enabled: !!orderRouteParam,
+    retry: false,
   });
 
   if (isLoading) {
@@ -54,6 +59,39 @@ export default function OrderDetailScreen() {
         <View style={[styles.center, { flex: 1 }]}>
           <ActivityIndicator size="large" color={C.brand} />
           <Text style={styles.loadingText}>Захиалгын мэдээлэл ачаалж байна...</Text>
+        </View>
+      </AppScreen>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Захиалга" title={`#${shortId(orderId, 6)}`} />
+        <View style={styles.emptyWrap}>
+          <AppCard style={styles.emptyCard}>
+            <Ionicons name="cloud-offline-outline" size={44} color={C.textMuted} />
+            <Text style={styles.emptyTitle}>Захиалга ачаалж чадсангүй</Text>
+            <Text style={styles.mutedText}>
+              {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: R.sm }}>
+              <AppButton
+                label={isRefetching ? 'Шалгаж байна' : 'Дахин оролдох'}
+                icon="refresh"
+                disabled={isRefetching}
+                onPress={() => refetch()}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                label="Жагсаалт"
+                icon="list-outline"
+                variant="ghost"
+                onPress={() => router.replace('/orders' as any)}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </AppCard>
         </View>
       </AppScreen>
     );
@@ -82,7 +120,8 @@ export default function OrderDetailScreen() {
   }
 
   const items = Array.isArray(order.items) ? order.items : [];
-  const orderKey = getOrderKey(order, id);
+  const orderKey = getOrderKey(order, orderId);
+  const orderRouteId = encodeRouteParam(orderKey);
   const displayId = shortId(order.orderNumber ?? orderKey, 6);
   const rawStatus = String(order.status ?? '').toLowerCase();
   const resolvedStatus = STATUS_ALIAS[rawStatus] ?? rawStatus;
@@ -211,7 +250,10 @@ export default function OrderDetailScreen() {
             variant="seller"
             style={styles.actionButton}
             accessibilityHint="Энэ захиалгын бараа болон үйлчилгээний үнэлгээ нээнэ"
-            onPress={() => router.push(`/review/${orderKey}` as any)}
+            disabled={!orderRouteId}
+            onPress={() => {
+              if (orderRouteId) router.push(`/review/${orderRouteId}` as any);
+            }}
           />
         ) : null}
         <AppButton
@@ -220,7 +262,10 @@ export default function OrderDetailScreen() {
           variant="ghost"
           style={styles.actionButton}
           accessibilityHint="Энэ захиалгын баримтыг нээнэ"
-          onPress={() => router.push(`/receipt/${orderKey}` as any)}
+          disabled={!orderRouteId}
+          onPress={() => {
+            if (orderRouteId) router.push(`/receipt/${orderRouteId}` as any);
+          }}
         />
       </View>
     </View>

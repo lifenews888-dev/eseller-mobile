@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { HerderAPI } from '../../src/features/herder/api';
 import type { HerderOrderStatus } from '../../src/features/herder/types';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam, normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const STATUS_LABEL: Record<HerderOrderStatus, string> = {
@@ -30,7 +31,7 @@ const FILTERS = ['all', 'pending', 'confirmed', 'preparing', 'shipped'] as const
 type HerderOrderFilter = (typeof FILTERS)[number];
 
 function normalizeOrderFilter(value?: string | string[] | null): HerderOrderFilter {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = normalizeRouteParam(value);
   return FILTERS.includes(raw as HerderOrderFilter) ? (raw as HerderOrderFilter) : 'all';
 }
 
@@ -112,13 +113,20 @@ export default function HerderOrders() {
             </View>
           </>
         }
-        renderItem={({ item: order }) => (
+        renderItem={({ item: order }) => {
+          const id = order._id ?? (order as any).id;
+          const routeId = encodeRouteParam(id);
+          return (
           <TouchableOpacity
             activeOpacity={0.86}
+            accessibilityRole="button"
             accessibilityLabel={`Захиалга ${order.orderNumber}`}
-            onPress={() =>
-              router.push({ pathname: '/herder-admin/order/[id]', params: { id: order._id } } as never)
-            }
+            accessibilityState={{ disabled: !routeId }}
+            disabled={!routeId}
+            onPress={() => {
+              if (routeId) router.push({ pathname: '/herder-admin/order/[id]', params: { id: routeId } } as never)
+            }}
+            style={!routeId ? { opacity: 0.55 } : undefined}
           >
             <AppCard style={{ padding: R.md, marginBottom: R.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -156,7 +164,7 @@ export default function HerderOrders() {
               ) : null}
             </AppCard>
           </TouchableOpacity>
-        )}
+        )}}
         ListEmptyComponent={
           <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
             <Ionicons name="receipt-outline" size={44} color={C.textMuted} />

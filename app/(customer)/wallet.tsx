@@ -15,8 +15,10 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { LoyaltyAPI, WalletAPI, type WalletHistoryEntry } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 type WalletTab = 'overview' | 'transactions' | 'topup' | 'payout';
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -92,6 +94,7 @@ function normalizeTxFilterParam(value?: string | string[] | null) {
 export default function WalletScreen() {
   const qc = useQueryClient();
   const params = useLocalSearchParams<{ tab?: string; type?: string }>();
+  const { user } = useAuth();
   const [tab, setTab] = useState<WalletTab>(() => normalizeWalletTab(params.tab));
   const [txFilter, setTxFilter] = useState<string | undefined>(() => normalizeTxFilterParam(params.type));
   const [txPage, setTxPage] = useState(1);
@@ -140,17 +143,19 @@ export default function WalletScreen() {
   const walletQ = useQuery({
     queryKey: ['wallet'],
     queryFn: async () => unwrap<WalletData>(await WalletAPI.getWallet()),
+    enabled: !!user,
   });
 
   const loyaltyQ = useQuery({
     queryKey: ['loyalty'],
     queryFn: async () => unwrap<LoyaltyData>(await LoyaltyAPI.get()),
+    enabled: !!user,
   });
 
   const txQ = useQuery({
     queryKey: ['wallet-transactions', txPage, txFilter],
     queryFn: async () => unwrap<TransactionData>(await WalletAPI.getTransactions(txPage, txFilter)),
-    enabled: tab === 'transactions' || tab === 'overview',
+    enabled: !!user && (tab === 'transactions' || tab === 'overview'),
   });
 
   const topupMut = useMutation({
@@ -224,6 +229,18 @@ export default function WalletScreen() {
       },
     ]);
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="eSeller хэтэвч"
+        subtitle="Хэтэвч, оноо болон гүйлгээний мэдээллээ харахын тулд нэвтэрнэ үү."
+        icon="wallet-outline"
+        accent={C.primary}
+        returnTo="/wallet"
+      />
+    );
+  }
 
   if (walletQ.isLoading) {
     return (

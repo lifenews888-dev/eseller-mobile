@@ -20,6 +20,7 @@ import { useMalchnaasEnabled } from '../../../src/config/remoteFlags';
 import { useCart } from '../../../src/store/cart';
 import { C, R, UI } from '../../../src/shared/design';
 import { getPublicProductQualityIssue } from '../../../src/shared/productQuality';
+import { encodeRouteParam } from '../../../src/shared/routeParams';
 import { AppTopBar, useAppLayoutMetrics } from '../../../src/shared/ui/AppUI';
 
 const { width } = Dimensions.get('window');
@@ -79,6 +80,7 @@ export default function HerderProductDetailScreen() {
   const total = unitPrice * qty;
   const province = PROVINCES.find((pr) => pr.code === p.herder?.province);
   const qualityIssue = getPublicProductQualityIssue(p);
+  const herderRouteId = encodeRouteParam(p.herder?.id);
 
   const addToCart = () => {
     if (qualityIssue) {
@@ -198,11 +200,14 @@ export default function HerderProductDetailScreen() {
           <View style={s.sectionPadded}>
             <Text style={s.sectionTitle}>Малчин</Text>
             <TouchableOpacity
-              style={s.herderCard}
+              style={[s.herderCard, !herderRouteId && { opacity: 0.55 }]}
               activeOpacity={0.8}
-              disabled={!p.herder.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.herder.herderName || 'Малчин'} профайл нээх`}
+              accessibilityState={{ disabled: !herderRouteId }}
+              disabled={!herderRouteId}
               onPress={() => {
-                if (p.herder?.id) router.push(`/herder-profile/${p.herder.id}` as never);
+                if (herderRouteId) router.push(`/herder-profile/${herderRouteId}` as never);
               }}
             >
               <View style={s.herderAvatar}>
@@ -226,9 +231,9 @@ export default function HerderProductDetailScreen() {
                   </View>
                 )}
               </View>
-              {p.herder.id && (
+              {herderRouteId ? (
                 <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
-              )}
+              ) : null}
             </TouchableOpacity>
           </View>
         )}

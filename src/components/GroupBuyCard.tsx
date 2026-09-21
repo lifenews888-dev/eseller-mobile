@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { apiUrl } from '../config/apiBase';
 import * as SecureStore from '../shared/secureStore';
+import { encodeApiPathSegment } from '../shared/apiPath';
 import { shadowStyle } from '../shared/shadow';
 import { C, F, R } from '../shared/design';
 import {
@@ -53,7 +54,7 @@ export function GroupBuyCard({
     setJoining(true);
     try {
       const token = await SecureStore.getItemAsync('token');
-      const res = await fetch(apiUrl(`/group-buy/${group.id}/join`), {
+      const res = await fetch(apiUrl(`/group-buy/${encodeApiPathSegment(group.id)}/join`), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });

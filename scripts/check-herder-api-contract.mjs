@@ -43,15 +43,15 @@ const endpointChecks = [
   },
   {
     name: 'public product detail',
-    snippets: ['withCache(`/herder/products/${id}`', 'get(`/herder/products/${id}`)'],
+    snippets: ['withCache(`/herder/products/${pathSegment(id)}`', 'get(`/herder/products/${pathSegment(id)}`)'],
   },
   {
     name: 'public herder profile',
-    snippets: ['withCache(`/herder/profile/${herderId}`', 'get(`/herder/profile/${herderId}`)'],
+    snippets: ['withCache(`/herder/profile/${pathSegment(herderId)}`', 'get(`/herder/profile/${pathSegment(herderId)}`)'],
   },
   {
     name: 'public herder reviews',
-    snippets: ['get(`/herder/profile/${herderId}/reviews`, params)'],
+    snippets: ['get(`/herder/profile/${pathSegment(herderId)}/reviews`, params)'],
   },
   {
     name: 'buyer review submit',
@@ -71,11 +71,11 @@ const endpointChecks = [
   },
   {
     name: 'herder product update',
-    snippets: ['put(`/herder/my/products/${id}`, payload)'],
+    snippets: ['put(`/herder/my/products/${pathSegment(id)}`, payload)'],
   },
   {
     name: 'herder product remove',
-    snippets: ['del(`/herder/my/products/${id}`)'],
+    snippets: ['del(`/herder/my/products/${pathSegment(id)}`)'],
   },
   {
     name: 'herder order list',
@@ -83,7 +83,7 @@ const endpointChecks = [
   },
   {
     name: 'herder order status update',
-    snippets: ['put(`/herder/my/orders/${id}/status`, { status, note })'],
+    snippets: ['put(`/herder/my/orders/${pathSegment(id)}/status`, { status, note })'],
   },
   {
     name: 'herder earnings',
@@ -95,7 +95,7 @@ const endpointChecks = [
   },
   {
     name: 'coordinator application review',
-    snippets: ['put(`/herder/coordinator/applications/${id}`, { action, reason })'],
+    snippets: ['put(`/herder/coordinator/applications/${pathSegment(id)}`, { action, reason })'],
   },
   {
     name: 'coordinator herder roster',
@@ -149,6 +149,8 @@ for (const contract of typeContracts) {
 
 expect(apiSource.includes('function unwrap<T>'), 'HerderAPI unwraps backend envelopes');
 expect(apiSource.includes("'success' in res && 'data' in res"), 'HerderAPI supports { success, data } wrapper');
+expect(apiSource.includes("import { encodeApiPathSegment } from '../../shared/apiPath'"), 'HerderAPI imports shared API path encoder');
+expect(apiSource.includes('const pathSegment = encodeApiPathSegment'), 'HerderAPI encodes dynamic path segments');
 expect(servicesSource.includes('src/features/herder/api.ts'), 'shared API file points to HerderAPI wrapper');
 expect(checklist.includes('npm run smoke:herder-api'), 'checklist documents smoke:herder-api');
 

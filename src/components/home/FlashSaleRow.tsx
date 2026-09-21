@@ -4,13 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { get } from '../../services/api';
 import { C, R } from '../../shared/design';
-import { filterPublicProducts } from '../../shared/productQuality';
+import { filterPublicProducts, getProductName } from '../../shared/productQuality';
+import { encodeRouteParam } from '../../shared/routeParams';
 import { H } from './tokens';
 import { SectionHeader } from './SectionHeader';
 
 interface FlashItem {
-  id: string;
-  name: string;
+  id?: string;
+  _id?: string;
+  name?: string;
+  title?: string;
+  productName?: string;
   salePrice?: number;
   originalPrice?: number;
   price?: number;
@@ -82,6 +86,9 @@ export function FlashSaleRow() {
         contentContainerStyle={{ paddingHorizontal: H.mx, gap: H.gap2 }}
       >
         {items.map((item) => {
+          const id = item.id ?? item._id;
+          const routeId = encodeRouteParam(id);
+          const name = getProductName(item) || 'Бараа';
           const sale = item.salePrice ?? item.price ?? 0;
           const original = item.originalPrice ?? 0;
           const pct =
@@ -89,8 +96,14 @@ export function FlashSaleRow() {
             (original > 0 && sale > 0 ? Math.round((1 - sale / original) * 100) : 0);
           return (
             <TouchableOpacity
-              key={item.id}
-              onPress={() => router.push(`/product/${item.id}` as never)}
+              key={id || name}
+              accessibilityRole="button"
+              accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+              accessibilityState={{ disabled: !routeId }}
+              disabled={!routeId}
+              onPress={() => {
+                if (routeId) router.push(`/product/${routeId}` as never)
+              }}
               activeOpacity={0.85}
               style={{
                 width: 118,
@@ -99,6 +112,7 @@ export function FlashSaleRow() {
                 overflow: 'hidden',
                 borderWidth: 0.5,
                 borderColor: H.cardBorder,
+                opacity: routeId ? 1 : 0.55,
                 ...H.shadow,
               }}
             >
@@ -143,7 +157,7 @@ export function FlashSaleRow() {
                   numberOfLines={1}
                   style={{ fontSize: 10, color: H.textSub, marginBottom: 3 }}
                 >
-                  {item.name}
+                  {name}
                 </Text>
                 <Text style={{ fontSize: 13, fontWeight: '900', color: C.error }}>
                   {sale.toLocaleString()}₮

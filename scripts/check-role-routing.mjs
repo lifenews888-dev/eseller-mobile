@@ -8,6 +8,7 @@ import {
   buildRoleReturnTo,
   canAccessRoleArea,
   homeRouteForBackendRole,
+  roleAreaAccessState,
   ROLE_AREA_HOME_ROUTE,
   ROLE_AREA_PUBLIC_PREFIX,
   ROLE_LOGIN_HINT,
@@ -64,6 +65,14 @@ checkAllows('herder', ['buyer', 'seller', 'affiliate', 'delivery', 'driver', 'co
 
 checkAllows('coordinator', ['coordinator', 'admin', 'superadmin'], true);
 checkAllows('coordinator', ['buyer', 'seller', 'affiliate', 'delivery', 'driver', 'herder'], false);
+
+check('owner access state without token', roleAreaAccessState('owner', null, null), 'login');
+check('owner access state while auth loading', roleAreaAccessState('owner', 'token', null, true), 'loading');
+check('owner access state without hydrated user', roleAreaAccessState('owner', 'token', null), 'loading');
+check('owner access state allowed', roleAreaAccessState('owner', 'token', 'seller'), 'allowed');
+check('owner access state denied', roleAreaAccessState('owner', 'token', 'buyer'), 'denied');
+check('driver access state allowed alias role', roleAreaAccessState('driver', 'token', 'delivery'), 'allowed');
+check('coordinator access state allowed admin', roleAreaAccessState('coordinator', 'token', 'admin'), 'allowed');
 
 check('owner login hint', ROLE_LOGIN_HINT.owner, 'seller');
 check('seller login hint', ROLE_LOGIN_HINT.seller, 'affiliate');
@@ -128,12 +137,29 @@ check('auth hint normalized owner returnTo', authRoleHintForPublicPath(normalize
 check('auth hint normalized herder returnTo', authRoleHintForPublicPath(normalizedHerderReturnTo), 'seller');
 
 const rootLayoutSource = fs.readFileSync(path.join(root, 'app/_layout.tsx'), 'utf8');
+const roleLayoutSources = [
+  'app/(owner)/_layout.tsx',
+  'app/(seller)/_layout.tsx',
+  'app/(driver)/_layout.tsx',
+  'app/(herder)/_layout.tsx',
+  'app/(coordinator)/_layout.tsx',
+].map((item) => fs.readFileSync(path.join(root, item), 'utf8'));
 check('root auth entry helper exists', rootLayoutSource.includes('function isAuthEntryPath'), true);
 check('root auto-route resets when logged out', rootLayoutSource.includes('hasAutoRouted.current = false'), true);
 check('root auto-route runs once per session', rootLayoutSource.includes('if (hasAutoRouted.current) return'), true);
 check(
   'root auto-route skips non-entry paths',
   rootLayoutSource.includes("pathname !== '/' && !isAuthEntryPath(pathname)"),
+  true,
+);
+check(
+  'role layouts use shared access state',
+  roleLayoutSources.every((source) => source.includes('roleAreaAccessState(')),
+  true,
+);
+check(
+  'role layouts wait while auth user hydrates',
+  roleLayoutSources.every((source) => source.includes("accessState === 'loading'")),
   true,
 );
 

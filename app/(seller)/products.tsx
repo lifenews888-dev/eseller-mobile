@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { get } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { getProductName } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 export default function SellerProductsScreen() {
@@ -17,9 +19,14 @@ export default function SellerProductsScreen() {
   const products = (data as any)?.links || (data as any)?.products || (Array.isArray(data) ? data : []);
 
   const shareProduct = async (product: any) => {
+    const id = product.productId ?? product.id ?? product._id;
+    const routeId = encodeRouteParam(id);
+    const name = getProductName(product) || 'Бараа';
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await Share.share({
-      message: `${product.name || product.productName} - ${formatMoney(product.price)}\nhttps://eseller.mn/product/${product.productId || product.id}?ref=me`,
+      message: routeId
+        ? `${name} - ${formatMoney(product.price)}\nhttps://eseller.mn/product/${routeId}?ref=me`
+        : `${name} - ${formatMoney(product.price)}`,
     });
   };
 
@@ -48,13 +55,20 @@ export default function SellerProductsScreen() {
             />
           </>
         }
-        renderItem={({ item: product }) => (
-          <ProductRow
-            product={product}
-            onOpen={() => router.push(`/product/${product.productId || product.id}` as any)}
-            onShare={() => shareProduct(product)}
-          />
-        )}
+        renderItem={({ item: product }) => {
+          const id = product.productId ?? product.id ?? product._id;
+          const routeId = encodeRouteParam(id);
+          return (
+            <ProductRow
+              product={product}
+              routeId={routeId}
+              onOpen={() => {
+                if (routeId) router.push(`/product/${routeId}` as any);
+              }}
+              onShare={() => shareProduct(product)}
+            />
+          );
+        }}
         ListEmptyComponent={
           <AppCard style={{ alignItems: 'center', gap: R.md, marginTop: R.lg }}>
             <Ionicons name="cube-outline" size={44} color={C.textMuted} />
@@ -76,20 +90,27 @@ export default function SellerProductsScreen() {
 
 function ProductRow({
   product,
+  routeId,
   onOpen,
   onShare,
 }: {
   product: any;
+  routeId: string;
   onOpen: () => void;
   onShare: () => void;
 }) {
   const image = product.image || product.images?.[0];
+  const name = getProductName(product) || 'Бараа';
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
-      accessibilityLabel={`${product.name || product.productName || 'Бараа'} дэлгэрэнгүй`}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} дэлгэрэнгүй`}
+      accessibilityState={{ disabled: !routeId }}
+      disabled={!routeId}
       onPress={onOpen}
+      style={!routeId ? { opacity: 0.55 } : undefined}
     >
       <AppCard style={{ padding: R.md, marginBottom: R.sm }}>
         <View style={{ flexDirection: 'row', gap: R.md, alignItems: 'center' }}>
@@ -118,7 +139,7 @@ function ProductRow({
 
           <View style={{ flex: 1 }}>
             <Text style={{ ...F.small, color: C.text, fontWeight: '800' }} numberOfLines={2}>
-              {product.name || product.productName}
+              {name}
             </Text>
             <Text style={{ ...F.body, color: C.seller, fontWeight: '900', marginTop: 4 }}>
               {formatMoney(product.price)}

@@ -83,6 +83,23 @@ expect(source.includes("status === 'skip'"), 'API smoke reports skipped checks')
 expect(source.includes("status === 'warn'"), 'API smoke reports warning checks');
 expect(source.includes('process.exitCode = 1'), 'API smoke fails on hard failures');
 
+const apiClientSource = fs.readFileSync(path.join(root, 'src/services/api.ts'), 'utf8');
+const apiAuthPolicySource = fs.readFileSync(path.join(root, 'src/shared/apiAuthPolicy.ts'), 'utf8');
+expect(apiClientSource.includes("../shared/apiAuthPolicy"), 'API client imports auth policy helpers');
+expect(apiAuthPolicySource.includes('export function requestHadAuthorization'), 'API client detects requests with Authorization');
+expect(apiAuthPolicySource.includes('export function isPublicBrowsingRequest'), 'API client classifies public browsing requests');
+expect(apiClientSource.includes('token && !isPublicBrowsingRequest(config)'), 'API client does not attach Authorization to public browsing requests');
+expect(apiClientSource.includes('Authorization SKIPPED (public browsing request)'), 'API client logs skipped public browsing Authorization');
+expect(apiClientSource.includes('onUnauthorized SKIPPED (unauthenticated request)'), 'API client does not auth-redirect guest 401 responses');
+expect(apiClientSource.includes('onUnauthorized SKIPPED (public browsing request)'), 'API client does not auth-redirect public browsing 401 responses');
+expect(apiClientSource.includes('!requestHadAuthorization(err.config)'), 'API client gates session invalidation on Authorization header');
+expect(apiClientSource.includes('isPublicBrowsingRequest(err.config)'), 'API client gates session invalidation on protected endpoints');
+expect(apiAuthPolicySource.includes("path === '/stories'"), 'API client treats stories as public browsing');
+expect(apiAuthPolicySource.includes("path === '/group-buy'"), 'API client treats group-buy as public browsing');
+expect(apiAuthPolicySource.includes("path === '/social/trending'"), 'API client treats social trending as public browsing');
+expect(apiAuthPolicySource.includes("path.startsWith('/feed/')"), 'API client treats feed detail as public browsing');
+expect(apiAuthPolicySource.includes("path.startsWith('/live/')"), 'API client treats live detail as public browsing');
+
 expect(checklist.includes('npm run smoke:api'), 'checklist documents smoke:api');
 expect(checklist.includes('ESELLER_API_BASE_URL=https://eseller.mn/api npm run smoke:api'), 'checklist documents base override');
 expect(checklist.includes('ESELLER_API_TOKEN=<jwt> npm run smoke:api'), 'checklist documents token auth');

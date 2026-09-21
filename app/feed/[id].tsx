@@ -18,11 +18,14 @@ import { get } from '../../src/services/api'
 import { useCart } from '../../src/store/cart'
 import { C, R, F, UI } from '../../src/shared/design'
 import {
+  getProductName,
   getProductImages,
   getPublicProductPrice,
   getPublicProductQualityIssue,
 } from '../../src/shared/productQuality'
-import { AppButton, AppCard, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
+import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams'
+import { getShopName } from '../../src/shared/shopIdentity'
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
 
 const W = Dimensions.get('window').width
 const fmt = (n: number) => `${Math.round(n || 0).toLocaleString()}₮`
@@ -33,23 +36,26 @@ export default function FeedDetailScreen() {
   const layout = useAppLayoutMetrics()
   const [saved, setSaved] = useState(false)
   const [imageIndex, setImageIndex] = useState(0)
+  const feedRouteParam = normalizeRouteParam(id)
+  const feedRouteId = encodeRouteParam(feedRouteParam)
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: ['feed', id],
-    queryFn: () => loadFeedDetail(String(id)),
-    enabled: !!id,
+    queryKey: ['feed-detail', feedRouteId],
+    queryFn: () => loadFeedDetail(feedRouteParam),
+    enabled: !!feedRouteId,
     retry: false,
   })
 
   const item = normalizeFeedDetail(data)
   const itemId = item?.id ?? item?._id
+  const itemRouteId = encodeRouteParam(itemId)
 
   if (isLoading) {
     return (
       <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
         <AppTopBar eyebrow="Зар" title="Дэлгэрэнгүй" />
         <View style={st.center}>
-          <Text style={{ color: C.textMuted }}>Ачааллаж байна...</Text>
+          <Text style={{ color: C.textMuted }}>Ачаалж байна...</Text>
         </View>
       </AppScreen>
     )
@@ -113,14 +119,21 @@ export default function FeedDetailScreen() {
   }
 
   const images = getProductImages(item)
-  const title = item.title || item.name || 'Зар'
+  const title = getProductName(item) || 'Зар'
   const price = getPublicProductPrice(item)
   const qualityIssue = getPublicProductQualityIssue(item)
   const category = item.categoryName || item.category || item.type || 'Дэлгүүр'
   const seller = item.seller || item.shop || item.owner || {}
-  const sellerName = seller.name || item.sellerName || item.shopName || 'Зарлагч'
+  const sellerDisplayName = getShopName(seller)
+  const sellerName =
+    sellerDisplayName !== 'Дэлгүүр'
+      ? sellerDisplayName
+      : item.sellerName || item.shopName || 'Зарлагч'
   const sellerPhone = seller.phone || item.phone || item.contactPhone
   const productId = item.productId || item.product?.id || itemId
+  const district = item.district || item.location || item.address
+  const views = item.views ?? item.viewCount ?? 0
+  const createdAt = item.createdAt || item.updatedAt
 
   function handleOrder() {
     if (qualityIssue) {
@@ -144,7 +157,7 @@ export default function FeedDetailScreen() {
 
   function handleShare() {
     Share.share({
-      message: `${title} - ${fmt(price)}\nhttps://eseller.mn/feed/${itemId}`,
+      message: `${title} - ${fmt(price)}\nhttps://eseller.mn/feed/${itemRouteId}`,
     })
   }
 
@@ -154,7 +167,7 @@ export default function FeedDetailScreen() {
       return
     }
 
-    router.push({ pathname: '/register', params: { role: 'affiliate', returnTo: `/feed/${itemId}` } } as any)
+    router.push({ pathname: '/register', params: { role: 'affiliate', returnTo: `/feed/${itemRouteId}` } } as any)
   }
 
   return (
@@ -198,19 +211,32 @@ export default function FeedDetailScreen() {
         </View>
       )}
 
-      <View style={{ padding: R.lg }}>
-        <View style={st.categoryChip}>
-          <Text style={{ color: C.textSub, fontSize: 12, fontWeight: '800' }}>
-            {category}
-          </Text>
-        </View>
+      <View style={st.content}>
+        <AppHeader
+          title={title}
+          subtitle={sellerName}
+          icon="megaphone-outline"
+          accent={C.brand}
+          style={st.heroCard}
+        />
 
-        <Text style={{ ...F.h2, color: C.text, marginTop: 12, marginBottom: R.sm }}>
-          {title}
-        </Text>
-        <Text style={{ color: C.brand, fontSize: 28, fontWeight: '900', marginBottom: R.md }}>
-          {qualityIssue?.code === 'invalid-price' ? 'Үнэ шалгалтад байна' : fmt(price)}
-        </Text>
+        <AppCard style={st.priceCard} elevated>
+          <View style={{ flex: 1 }}>
+            <Text style={st.priceLabel}>Үнэ</Text>
+            <Text style={st.priceText}>
+              {qualityIssue?.code === 'invalid-price' ? 'Үнэ шалгалтад байна' : fmt(price)}
+            </Text>
+          </View>
+          <View style={st.categoryChip}>
+            <Text style={st.categoryText} numberOfLines={1}>{category}</Text>
+          </View>
+        </AppCard>
+
+        <View style={st.metaGrid}>
+          <MetaPill icon="location-outline" label={district || 'Байршил ороогүй'} />
+          <MetaPill icon="eye-outline" label={`${views} үзсэн`} />
+          <MetaPill icon="time-outline" label={createdAt ? timeAgo(createdAt) : 'Огноо ороогүй'} />
+        </View>
 
         {qualityIssue ? (
           <View style={st.qualityBanner}>
@@ -221,11 +247,12 @@ export default function FeedDetailScreen() {
           </View>
         ) : null}
 
-        {item.description ? (
-          <Text style={{ ...F.body, color: C.textSub, marginBottom: R.lg, lineHeight: 22 }}>
-            {item.description}
+        <AppCard style={st.sectionCard}>
+          <Text style={st.sectionTitle}>Тайлбар</Text>
+          <Text style={st.description}>
+            {item.description || 'Энэ зард дэлгэрэнгүй тайлбар хараахан ороогүй байна.'}
           </Text>
-        ) : null}
+        </AppCard>
 
         <TouchableOpacity
           accessibilityRole="button"
@@ -242,10 +269,13 @@ export default function FeedDetailScreen() {
         </TouchableOpacity>
 
         {(sellerName || sellerPhone) ? (
-          <View style={st.sellerCard}>
-            <Ionicons name="person-circle" size={42} color={C.textMuted} />
+          <AppCard style={st.sellerCard}>
+            <View style={st.sellerAvatar}>
+              <Ionicons name="person" size={22} color={C.primary} />
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ ...F.body, color: C.text, fontWeight: '800' }}>{sellerName}</Text>
+              <Text style={st.sellerLabel}>Зарлагч</Text>
+              <Text style={st.sellerName}>{sellerName}</Text>
               {sellerPhone ? (
                 <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>{sellerPhone}</Text>
               ) : null}
@@ -261,7 +291,7 @@ export default function FeedDetailScreen() {
                 <Ionicons name="call" size={18} color={C.bgCard} />
               </TouchableOpacity>
             ) : null}
-          </View>
+          </AppCard>
         ) : null}
       </View>
       </ScrollView>
@@ -309,6 +339,8 @@ const st = StyleSheet.create({
     paddingHorizontal: R.lg,
     paddingBottom: R.md,
     backgroundColor: C.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
   emptyImage: {
     height: 220,
@@ -326,7 +358,7 @@ const st = StyleSheet.create({
     paddingVertical: 5,
   },
   categoryChip: {
-    alignSelf: 'flex-start',
+    maxWidth: 132,
     backgroundColor: C.bgSection,
     borderRadius: R.full,
     paddingHorizontal: 12,
@@ -334,6 +366,42 @@ const st = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
+  categoryText: { ...F.small, color: C.textSub, fontWeight: '800' },
+  content: {
+    padding: UI.screenPad,
+    gap: R.md,
+  },
+  heroCard: {
+    marginBottom: 0,
+  },
+  priceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.md,
+  },
+  priceLabel: { ...F.tiny, color: C.textMuted, fontWeight: '900', textTransform: 'uppercase' },
+  priceText: { color: C.brand, fontSize: 28, fontWeight: '900', marginTop: 2 },
+  metaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: R.sm,
+  },
+  metaPill: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.xs,
+    backgroundColor: C.bgCard,
+    borderRadius: R.full,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+  },
+  metaPillText: { ...F.small, color: C.textSub, fontWeight: '700' },
+  sectionCard: { gap: R.xs },
+  sectionTitle: { ...F.h4, color: C.text, fontWeight: '900' },
+  description: { ...F.body, color: C.textSub, lineHeight: 22 },
   affiliateBtn: {
     marginTop: R.sm,
     borderRadius: R.lg,
@@ -364,13 +432,18 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: R.md,
-    backgroundColor: C.bgCard,
-    borderRadius: R.lg,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-    marginTop: R.lg,
+    padding: R.md,
   },
+  sellerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.primaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerLabel: { ...F.tiny, color: C.textMuted, fontWeight: '900' },
+  sellerName: { ...F.body, color: C.text, fontWeight: '900', marginTop: 2 },
   callBtn: {
     backgroundColor: C.secondary,
     borderRadius: R.full,
@@ -401,17 +474,52 @@ const st = StyleSheet.create({
   },
 })
 
+function MetaPill({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  return (
+    <View style={st.metaPill}>
+      <Ionicons name={icon} size={14} color={C.textMuted} />
+      <Text style={st.metaPillText} numberOfLines={1}>{label}</Text>
+    </View>
+  )
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Саяхан'
+  if (mins < 60) return `${mins} мин`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} цаг`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days} өдөр`
+  return new Date(dateStr).toLocaleDateString('mn-MN')
+}
+
 async function loadFeedDetail(id: string) {
+  const routeId = encodeRouteParam(id)
+  const decodedId = safeDecodeRouteParam(id)
   try {
-    return await get(`/feed/${id}`)
+    return await get(`/feed/${routeId}`)
   } catch (detailError) {
     const list = await get('/feed', { limit: 100 })
-    const found = extractFeedItems(list).find((item: any) =>
-      String(item?.id ?? item?._id ?? '') === id,
-    )
+    const found = extractFeedItems(list).find((item: any) => matchesRouteId(item, id, routeId, decodedId))
     if (found) return found
     throw detailError
   }
+}
+
+function matchesRouteId(item: any, rawId: string, routeId: string, decodedId: string) {
+  const candidate = item?.id ?? item?._id ?? item?.slug ?? item?.listingId ?? item?.postId
+  if (candidate == null) return false
+
+  const candidateId = String(candidate)
+  const encodedCandidate = encodeRouteParam(candidateId)
+  return (
+    candidateId === rawId ||
+    candidateId === decodedId ||
+    encodedCandidate === rawId ||
+    encodedCandidate === routeId
+  )
 }
 
 function normalizeFeedDetail(data: unknown): any | null {

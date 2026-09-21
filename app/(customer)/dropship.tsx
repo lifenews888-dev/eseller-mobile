@@ -12,6 +12,7 @@ import {
   MIN_PUBLIC_PRODUCT_PRICE_MNT,
   isPlaceholderProductName,
 } from '../../src/shared/productQuality'
+import { normalizeRouteParam } from '../../src/shared/routeParams'
 import { AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
 
 const SOURCES = [
@@ -25,10 +26,6 @@ const DEFAULT_MARGIN = 20
 
 function sourceAccent(id: string) {
   return id.toLowerCase().includes('cj') ? C.primary : C.seller
-}
-
-function normalizeQueryParam(value?: string | string[] | null) {
-  return typeof value === 'string' ? value.trim() : ''
 }
 
 function normalizeSourceParam(value?: string | string[] | null) {
@@ -85,14 +82,14 @@ interface DropProduct {
 export default function DropshipScreen() {
   const params = useLocalSearchParams<{ q?: string; source?: string; margin?: string }>()
   const layout = useAppLayoutMetrics()
-  const [query,    setQuery]    = useState(() => normalizeQueryParam(params.q))
-  const [search,   setSearch]   = useState(() => normalizeQueryParam(params.q))
+  const [query,    setQuery]    = useState(() => normalizeRouteParam(params.q))
+  const [search,   setSearch]   = useState(() => normalizeRouteParam(params.q))
   const [source,   setSource]   = useState(() => normalizeSourceParam(params.source))
   const [margin,   setMargin]   = useState(() => normalizeMarginParam(params.margin))
   const [importing, setImporting] = useState<string | null>(null)
 
   useEffect(() => {
-    const nextQuery = normalizeQueryParam(params.q)
+    const nextQuery = normalizeRouteParam(params.q)
     setQuery(nextQuery)
     setSearch(nextQuery)
     setSource(normalizeSourceParam(params.source))
@@ -143,7 +140,7 @@ export default function DropshipScreen() {
 
   const { data, isLoading } = useQuery<{ products: DropProduct[] }>({
     queryKey:  ['dropship', search, source],
-    queryFn:   () => get(`/dropship/search?q=${encodeURIComponent(search)}&source=${source}`) as any,
+    queryFn:   () => get('/dropship/search', { q: search, source }) as any,
     enabled:   search.length > 0,
     retry:     false,
     staleTime: 60_000,

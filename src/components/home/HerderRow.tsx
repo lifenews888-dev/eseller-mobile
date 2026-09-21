@@ -8,8 +8,10 @@ import { C } from '../../shared/design';
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
 } from '../../shared/productQuality';
+import { encodeRouteParam } from '../../shared/routeParams';
 import { H } from './tokens';
 import { SectionHeader } from './SectionHeader';
 
@@ -49,13 +51,22 @@ export function HerderRow({ showHeader = true }: { showHeader?: boolean } = {}) 
           contentContainerStyle={{ paddingHorizontal: H.mx, gap: H.gap2 }}
         >
           {products.map((item) => {
+            const id = item.id ?? (item as any)._id;
+            const routeId = encodeRouteParam(id);
+            const name = getProductName(item) || 'Бараа';
             const image = firstProductImage(item, '');
             const price = getPublicProductPrice(item);
 
             return (
               <TouchableOpacity
-                key={item.id}
-                onPress={() => router.push(`/herder-product/${item.id}` as never)}
+                key={id || name}
+                accessibilityRole="button"
+                accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+                accessibilityState={{ disabled: !routeId }}
+                disabled={!routeId}
+                onPress={() => {
+                  if (routeId) router.push(`/herder-product/${routeId}` as never)
+                }}
                 activeOpacity={0.85}
                 style={{
                   width: 134,
@@ -64,6 +75,7 @@ export function HerderRow({ showHeader = true }: { showHeader?: boolean } = {}) 
                   overflow: 'hidden',
                   borderWidth: 0.5,
                   borderColor: H.cardBorder,
+                  opacity: routeId ? 1 : 0.55,
                   ...H.shadow,
                 }}
               >
@@ -95,7 +107,7 @@ export function HerderRow({ showHeader = true }: { showHeader?: boolean } = {}) 
                       marginBottom: 3,
                     }}
                   >
-                    {item.name}
+                    {name}
                   </Text>
                   <Text style={{ fontSize: 13, fontWeight: '900', color: C.secondary }}>
                     {price.toLocaleString()}₮

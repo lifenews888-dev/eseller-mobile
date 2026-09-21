@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { HerderAPI } from '../../src/features/herder/api';
 import type { ApplicationStatus } from '../../src/features/herder/types';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const STATUS_LABEL: Record<ApplicationStatus, string> = {
@@ -89,12 +90,20 @@ export default function CoordinatorApplications() {
             </View>
           </>
         }
-        renderItem={({ item }) => (
+        renderItem={({ item }) => {
+          const id = item.id ?? (item as any)._id;
+          const routeId = encodeRouteParam(id);
+          return (
           <TouchableOpacity
             activeOpacity={0.86}
-            onPress={() =>
-              router.push({ pathname: '/coordinator/application/[id]', params: { id: item.id } } as never)
-            }
+            accessibilityRole="button"
+            accessibilityLabel={`${item.herderName || 'Өргөдөл'} дэлгэрэнгүй`}
+            accessibilityState={{ disabled: !routeId }}
+            disabled={!routeId}
+            onPress={() => {
+              if (routeId) router.push({ pathname: '/coordinator/application/[id]', params: { id: routeId } } as never)
+            }}
+            style={!routeId ? { opacity: 0.55 } : undefined}
           >
             <AppCard style={{ padding: R.md, marginBottom: R.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: R.sm }}>
@@ -112,7 +121,7 @@ export default function CoordinatorApplications() {
               </View>
             </AppCard>
           </TouchableOpacity>
-        )}
+        )}}
         ListEmptyComponent={
           isLoading ? (
             <View style={{ alignItems: 'center', padding: R.xxl }}>

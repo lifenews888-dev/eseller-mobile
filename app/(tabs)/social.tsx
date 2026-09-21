@@ -14,13 +14,16 @@ import { useAuth } from '../../src/store/auth';
 import { useCart } from '../../src/store/cart';
 import { QuickBuyBottomSheet } from '../../src/components/QuickBuyBottomSheet';
 import { GroupBuyCard } from '../../src/components/GroupBuyCard';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { shadowStyle } from '../../src/shared/shadow';
 import { C, R, UI } from '../../src/shared/design';
 import {
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
   getPublicProductQualityIssue,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const { height: H } = Dimensions.get('window');
@@ -33,6 +36,11 @@ const SOCIAL_TABS: Array<{ key: SocialTab; label: string; accessibilityLabel: st
 
 function normalizeSocialTab(value?: string | string[] | null): SocialTab {
   return value === 'trending' || value === 'live' ? value : 'feed';
+}
+
+function getProductRouteId(product: any): string {
+  const id = product?.id ?? product?._id ?? product;
+  return encodeRouteParam(id);
 }
 
 function SocialHeader({ showCreate = false }: { showCreate?: boolean }) {
@@ -68,8 +76,11 @@ interface Post {
   products: {
     id: string;
     product: {
-      id: string;
-      name: string;
+      id?: string;
+      _id?: string;
+      name?: string;
+      title?: string;
+      productName?: string;
       price: number;
       salePrice: number | null;
       images: string[];
@@ -170,7 +181,7 @@ export default function SocialScreen() {
   function openStory(story: any) {
     setActiveStory(story);
     setStoryProgress(0);
-    fetch(apiUrl(`/stories/${story.id}/view`), { method: 'POST' }).catch(() => {});
+    fetch(apiUrl(`/stories/${encodeApiPathSegment(story.id)}/view`), { method: 'POST' }).catch(() => {});
   }
 
   function closeStory() {
@@ -260,6 +271,9 @@ export default function SocialScreen() {
       </View>
     );
   }
+
+  const storyRouteId = getProductRouteId(activeStory?.product);
+  const storyProductName = getProductName(activeStory?.product) || 'Бараа';
 
   return (
     <View style={s.screen}>
@@ -414,7 +428,7 @@ export default function SocialScreen() {
                 style={{ width: 52, height: 52, borderRadius: R.md }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: C.text }} numberOfLines={1}>
-                  {activeStory.product.name}
+                  {storyProductName}
                 </Text>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: C.primary }}>
                   {getPublicProductPrice(activeStory.product).toLocaleString()}₮
@@ -422,13 +436,15 @@ export default function SocialScreen() {
               </View>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={`${activeStory.product.name} авах`}
+                accessibilityLabel={`${storyProductName} авах`}
+                accessibilityState={{ disabled: !storyRouteId }}
+                disabled={!storyRouteId}
                 activeOpacity={0.84}
                 onPress={() => {
                   closeStory();
-                  router.push(`/product/${activeStory.product.id}` as any);
+                  if (storyRouteId) router.push(`/product/${storyRouteId}` as any);
                 }}
-                style={s.storyBuyBtn}
+                style={[s.storyBuyBtn, !storyRouteId && { opacity: 0.55 }]}
               >
                 <Text style={{ color: C.bgCard, fontSize: 12, fontWeight: '600' }}>Авах</Text>
               </TouchableOpacity>
@@ -504,8 +520,8 @@ function PostCard({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     addToCart(
       {
-        id: product.id,
-        name: product.name,
+        id: product.id ?? product._id ?? '',
+        name: getProductName(product) || 'Бараа',
         price: getPublicProductPrice(product),
         image: firstProductImage(product, '') || null,
         entityId: '',
@@ -517,9 +533,11 @@ function PostCard({
 
   async function handleShare() {
     const product = post.products[0]?.product;
+    const routeId = getProductRouteId(product);
+    const name = getProductName(product) || 'eseller.mn';
     await Share.share({
-      message: `${post.content ?? ''}\n\nhttps://eseller.mn/product/${product?.id}`,
-      title: product?.name ?? 'eseller.mn',
+      message: routeId ? `${post.content ?? ''}\n\nhttps://eseller.mn/product/${routeId}` : `${post.content ?? ''}`,
+      title: name,
     });
   }
 
@@ -567,28 +585,36 @@ function PostCard({
       {visibleProducts.length > 0 && (
         <View style={s.productsSection}>
           <Text style={s.productsSectionTitle}>Бүтээгдэхүүнүүд</Text>
-          {visibleProducts.map(({ id, product }) => (
+          {visibleProducts.map(({ id, product }) => {
+            const routeId = getProductRouteId(product);
+            const name = getProductName(product) || 'Бараа';
+
+            return (
             <TouchableOpacity
-              key={id}
+              key={id || routeId || name}
               accessibilityRole="button"
-              accessibilityLabel={`${product.name} бүтээгдэхүүн нээх`}
+              accessibilityLabel={`${name} бүтээгдэхүүн нээх`}
+              accessibilityState={{ disabled: !routeId }}
+              disabled={!routeId}
               activeOpacity={0.84}
-              onPress={() => router.push(`/product/${product.id}` as any)}
-              style={s.productCard}
+              onPress={() => {
+                if (routeId) router.push(`/product/${routeId}` as any);
+              }}
+              style={[s.productCard, !routeId && { opacity: 0.55 }]}
             >
               <Image
                 source={{ uri: firstProductImage(product) }}
                 style={s.productThumb}
               />
               <View style={s.productInfo}>
-                <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
+                <Text style={s.productName} numberOfLines={1}>{name}</Text>
                 <Text style={s.productPrice}>
                   {getPublicProductPrice(product).toLocaleString()}₮
                 </Text>
               </View>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={`${product.name} шууд авах`}
+                accessibilityLabel={`${name} шууд авах`}
                 activeOpacity={0.84}
                 onPress={() => setQuickBuyProduct(product)}
                 style={s.addCartBtn}
@@ -597,7 +623,7 @@ function PostCard({
                 <Text style={s.addCartBtnText}>Шууд авах</Text>
               </TouchableOpacity>
             </TouchableOpacity>
-          ))}
+          )})}
         </View>
       )}
 
@@ -748,8 +774,9 @@ function CommentModal({
                       accessibilityLabel="Бүтээгдэхүүн рүү очиж захиалах"
                       activeOpacity={0.84}
                       onPress={() => {
+                        const routeId = getProductRouteId(item.quickBuyProductId);
                         onClose();
-                        router.push(`/product/${item.quickBuyProductId}` as any);
+                        if (routeId) router.push(`/product/${routeId}` as any);
                       }}
                       style={s.botBuyBtn}
                     >

@@ -6,6 +6,8 @@ import { apiUrl } from '../../src/config/apiBase';
 import * as SecureStore from '../../src/shared/secureStore';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { useAuth } from '../../src/store/auth';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -64,11 +66,17 @@ async function fetchBNPL(): Promise<BNPLApp[]> {
 
 export default function BNPLScreen() {
   const layout = useAppLayoutMetrics();
+  const user = useAuth((s) => s.user);
   const [apps, setApps] = useState<BNPLApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       setApps(await fetchBNPL());
     } catch {
@@ -76,7 +84,7 @@ export default function BNPLScreen() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -90,6 +98,18 @@ export default function BNPLScreen() {
   const handlePay = (paymentId: string) => {
     Alert.alert('Төлбөр хийх', `Төлбөр төлөх хэсэг удахгүй нэмэгдэнэ. ID: ${paymentId}`);
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="BNPL"
+        subtitle="BNPL төлбөрийн хуваарь, зээлийн төлөвөө харахын тулд нэвтэрнэ үү."
+        icon="card-outline"
+        accent={C.primary}
+        returnTo="/bnpl"
+      />
+    );
+  }
 
   if (loading) {
     return (

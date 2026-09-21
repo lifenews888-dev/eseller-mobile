@@ -5,10 +5,12 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { get } from '../../services/api';
 import { C, R } from '../../shared/design';
+import { encodeRouteParam } from '../../shared/routeParams';
 import { H } from './tokens';
 
 interface Story {
-  id: string;
+  id?: string;
+  _id?: string;
   shopName?: string;
   shopLogo?: string | null;
   thumbnailUrl?: string | null;
@@ -76,11 +78,22 @@ export function StoriesRow() {
         </Text>
       </TouchableOpacity>
 
-      {stories.map((s) => (
+      {stories.map((s, index) => {
+        const id = s.id ?? s._id;
+        const routeId = encodeRouteParam(id);
+        const label = s.shopName ?? 'Дэлгүүр';
+
+        return (
         <TouchableOpacity
-          key={s.id}
-          onPress={() => router.push(`/feed/${s.id}` as never)}
-          style={{ alignItems: 'center', gap: 5, width: 64 }}
+          key={id || `${label}-${index}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${label} story нээх`}
+          accessibilityState={{ disabled: !routeId }}
+          disabled={!routeId}
+          onPress={() => {
+            if (routeId) router.push(`/feed/${routeId}` as never)
+          }}
+          style={{ alignItems: 'center', gap: 5, width: 64, opacity: routeId ? 1 : 0.55 }}
         >
           <View
             style={{
@@ -131,10 +144,10 @@ export function StoriesRow() {
               textAlign: 'center',
             }}
           >
-            {s.shopName ?? 'Дэлгүүр'}
+            {label}
           </Text>
         </TouchableOpacity>
-      ))}
+      )})}
     </ScrollView>
   );
 }

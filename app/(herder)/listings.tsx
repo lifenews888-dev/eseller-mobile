@@ -16,13 +16,14 @@ import { HerderAPI } from '../../src/features/herder/api';
 import * as HerderQueue from '../../src/features/herder/queue';
 import type { MyHerderProduct } from '../../src/features/herder/types';
 import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { shadowStyle } from '../../src/shared/shadow';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type Filter = 'active' | 'all';
 
 function normalizeListingFilter(value?: string | string[] | null): Filter {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = normalizeRouteParam(value);
   return raw === 'all' ? 'all' : 'active';
 }
 

@@ -23,9 +23,11 @@ import { C, R, UI } from '../../src/shared/design';
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
   getPublicProductQualityIssue,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 function fmt(n: number) { return n.toLocaleString() + '₮'; }
@@ -138,8 +140,11 @@ export default function HerderScreen() {
   };
 
   const openDetail = (product: HerderProduct) => {
+    const id = product.id ?? (product as any)._id;
+    const routeId = encodeRouteParam(id);
+    if (!routeId) return;
     Haptics.selectionAsync().catch(() => {});
-    router.push(`/herder-product/${product.id}` as never);
+    router.push(`/herder-product/${routeId}` as never);
   };
 
   return (
@@ -239,14 +244,21 @@ export default function HerderScreen() {
         ) : (
           <View style={s.productGrid}>
             {products.map((product) => {
+              const id = product.id ?? (product as any)._id;
+              const routeId = encodeRouteParam(id);
+              const name = getProductName(product) || product.name || 'Бараа';
               const image = firstProductImage(product, '');
               const price = getPublicProductPrice(product);
               const showOriginalPrice = Number(product.salePrice || 0) > 0 && price < product.price;
 
               return (
                 <TouchableOpacity
-                  key={product.id}
-                  style={s.productCard}
+                  key={id || name}
+                  style={[s.productCard, !routeId && { opacity: 0.55 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+                  accessibilityState={{ disabled: !routeId }}
+                  disabled={!routeId}
                   onPress={() => openDetail(product)}
                   activeOpacity={0.85}
                 >
@@ -266,7 +278,7 @@ export default function HerderScreen() {
                     )}
                   </View>
                   <View style={s.productInfo}>
-                    <Text style={s.productName} numberOfLines={2}>{product.name}</Text>
+                    <Text style={s.productName} numberOfLines={2}>{name}</Text>
                     {product.herder && (
                       <View style={s.herderRow}>
                         <Ionicons name="location-outline" size={12} color={C.textMuted} />

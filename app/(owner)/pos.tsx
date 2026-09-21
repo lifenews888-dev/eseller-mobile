@@ -18,6 +18,7 @@ import {
 // import { printReceipt } from '../../src/utils/posReceipt';
 import { LogoutButton } from '../../src/components/LogoutButton';
 import { C, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type PayMethod = 'cash' | 'qpay' | 'card';
@@ -28,11 +29,6 @@ type PosRoutePatch = {
 
 function unwrap<T = any>(res: any): T {
   return (res?.data ?? res) as T;
-}
-
-function normalizeQueryParam(value?: string | string[] | null) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw?.trim() ?? '';
 }
 
 function normalizePayMethod(value?: string | string[] | null): PayMethod {
@@ -48,7 +44,7 @@ export default function POSTerminal() {
   const productColumns = isCompact ? 2 : 3;
 
   // ── Search + products ──
-  const [search, setSearch] = useState(() => normalizeQueryParam(params.q));
+  const [search, setSearch] = useState(() => normalizeRouteParam(params.q));
   const [products, setProducts] = useState<POSProduct[]>([]);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,7 +72,7 @@ export default function POSTerminal() {
   );
 
   useEffect(() => {
-    const nextSearch = normalizeQueryParam(params.q);
+    const nextSearch = normalizeRouteParam(params.q);
     setSearch(nextSearch);
     scheduleProductSearch(nextSearch);
   }, [params.q]);

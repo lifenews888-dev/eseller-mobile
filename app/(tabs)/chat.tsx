@@ -6,7 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 export default function ChatScreen() {
   const { user } = useAuth();
@@ -34,25 +36,13 @@ function BuyerChatList({ user }: { user: any }) {
 
   if (!user) {
     return (
-      <AppScreen>
-        <AppTopBar eyebrow="Профайл" title="Чат" showBack={false} />
-        <AppHeader
-          title="Чат"
-          subtitle="Худалдагчтай холбогдохын тулд нэвтэрнэ үү."
-          icon="chatbubbles-outline"
-          accent={C.primary}
-        />
-        <AppCard style={styles.centerCard}>
-          <Ionicons name="lock-closed-outline" size={44} color={C.primary} />
-          <Text style={styles.emptyTitle}>Нэвтрэх шаардлагатай</Text>
-          <Text style={styles.mutedText}>Захиалга, бараа, хүргэлтийн талаар чат эхлүүлэх боломжтой.</Text>
-          <AppButton
-            label="Нэвтрэх"
-            icon="log-in-outline"
-            onPress={() => router.push({ pathname: '/login', params: { returnTo: '/chat' } } as any)}
-          />
-        </AppCard>
-      </AppScreen>
+      <RequireAuthScreen
+        title="Чат"
+        subtitle="Худалдагчтай холбогдох, яриагаа харахын тулд нэвтэрнэ үү."
+        icon="chatbubbles-outline"
+        accent={C.primary}
+        returnTo="/chat"
+      />
     );
   }
 
@@ -99,18 +89,19 @@ function BuyerChatList({ user }: { user: any }) {
 
 function ConversationRow({ item }: { item: any }) {
   const id = item.id ?? item._id;
+  const routeId = encodeRouteParam(id);
   const name = item.entity?.name ?? item.store?.name ?? item.shopName ?? 'Дэлгүүр';
   const unread = Number(item.buyerUnread ?? item.unread ?? 0);
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
-      disabled={!id}
+      disabled={!routeId}
       accessibilityRole="button"
       accessibilityLabel={`${name} чат нээх${unread > 0 ? `, ${unread} шинэ мессеж` : ''}`}
-      accessibilityState={{ disabled: !id }}
+      accessibilityState={{ disabled: !routeId }}
       onPress={() => {
-        if (id) router.push(`/chat/${id}` as any);
+        if (routeId) router.push(`/chat/${routeId}` as any);
       }}
     >
       <AppCard style={styles.rowCard}>

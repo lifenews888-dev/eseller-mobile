@@ -17,7 +17,9 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { del, get, post } from '../../src/services/api';
 import { uploadMultipleImages } from '../../src/lib/uploadImage';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam, normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type ProductForm = {
@@ -43,22 +45,17 @@ type ProductsRoutePatch = {
   create?: boolean;
 };
 
-function normalizeQueryParam(value?: string | string[] | null) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw?.trim() ?? '';
-}
-
 export default function OwnerProducts() {
   const qc = useQueryClient();
   const params = useLocalSearchParams<{ create?: string; q?: string }>();
-  const [search, setSearch] = useState(() => normalizeQueryParam(params.q));
+  const [search, setSearch] = useState(() => normalizeRouteParam(params.q));
   const [modal, setModal] = useState(params.create === '1');
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
   const layout = useAppLayoutMetrics();
 
   useEffect(() => {
-    setSearch(normalizeQueryParam(params.q));
+    setSearch(normalizeRouteParam(params.q));
     setModal(params.create === '1');
   }, [params.create, params.q]);
 
@@ -116,7 +113,7 @@ export default function OwnerProducts() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => del(`/seller/products/${id}`),
+    mutationFn: (id: string) => del(`/seller/products/${encodeApiPathSegment(id)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['owner-products'] }),
   });
 
@@ -236,13 +233,20 @@ export default function OwnerProducts() {
             </View>
           </>
         }
-        renderItem={({ item: product }) => (
-          <ProductRow
-            product={product}
-            onView={() => router.push(`/product/${product.id}` as any)}
-            onDelete={() => confirmDelete(product)}
-          />
-        )}
+        renderItem={({ item: product }) => {
+          const id = product.id ?? product._id;
+          const routeId = encodeRouteParam(id);
+          return (
+            <ProductRow
+              product={product}
+              canView={!!routeId}
+              onView={() => {
+                if (routeId) router.push(`/product/${routeId}` as any);
+              }}
+              onDelete={() => confirmDelete(product)}
+            />
+          );
+        }}
         ListEmptyComponent={
           <AppCard style={{ alignItems: 'center', gap: R.md, marginTop: R.lg }}>
             <Ionicons name="cube-outline" size={44} color={C.textMuted} />
@@ -362,10 +366,12 @@ export default function OwnerProducts() {
 
 function ProductRow({
   product,
+  canView,
   onView,
   onDelete,
 }: {
   product: any;
+  canView: boolean;
   onView: () => void;
   onDelete: () => void;
 }) {
@@ -426,7 +432,7 @@ function ProductRow({
         </View>
 
         <View style={{ gap: R.sm }}>
-          <IconButton icon="eye-outline" color={C.textSub} onPress={onView} />
+          <IconButton icon="eye-outline" color={C.textSub} disabled={!canView} onPress={onView} />
           <IconButton icon="trash-outline" color={C.error} onPress={onDelete} />
         </View>
       </View>
@@ -438,14 +444,19 @@ function IconButton({
   icon,
   color,
   onPress,
+  disabled = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <TouchableOpacity
       activeOpacity={0.84}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={{
         width: 34,
@@ -456,6 +467,7 @@ function IconButton({
         backgroundColor: C.bgSection,
         borderWidth: 1,
         borderColor: C.border,
+        opacity: disabled ? 0.55 : 1,
       }}
     >
       <Ionicons name={icon} size={18} color={color} />

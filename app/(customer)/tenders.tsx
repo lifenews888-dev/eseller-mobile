@@ -13,23 +13,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 function unwrap<T = any>(res: any): T {
   return (res?.data ?? res) as T;
 }
 
-function normalizeQueryParam(value?: string | string[] | null) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
 export default function Tenders() {
   const params = useLocalSearchParams<{ q?: string }>();
   const layout = useAppLayoutMetrics();
-  const [search, setSearch] = useState(() => normalizeQueryParam(params.q));
+  const [search, setSearch] = useState(() => normalizeRouteParam(params.q));
 
   useEffect(() => {
-    setSearch(normalizeQueryParam(params.q));
+    setSearch(normalizeRouteParam(params.q));
   }, [params.q]);
 
   const replaceTenderRoute = (nextSearch: string) => {
@@ -55,7 +52,7 @@ export default function Tenders() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
     queryKey: ['tenders', search],
     queryFn: async ({ pageParam = 1 }) =>
-      unwrap<any>(await get(`/tenders?page=${pageParam}&q=${encodeURIComponent(search)}`)),
+      unwrap<any>(await get('/tenders', { page: pageParam, q: search })),
     getNextPageParam: (last: any) => (last?.hasMore ? (last.page ?? 1) + 1 : undefined),
     initialPageParam: 1,
     retry: false,

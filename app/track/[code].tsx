@@ -5,6 +5,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const STEPS = [
@@ -19,6 +20,8 @@ export default function TrackScreen() {
   const { code } = useLocalSearchParams();
   const layout = useAppLayoutMetrics();
   const [isFocused, setIsFocused] = useState(true);
+  const trackingCode = safeDecodeRouteParam(normalizeRouteParam(code));
+  const trackingRouteCode = encodeRouteParam(trackingCode);
 
   useFocusEffect(
     useCallback(() => {
@@ -27,11 +30,12 @@ export default function TrackScreen() {
     }, []),
   );
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['track', code],
-    queryFn: () => get(`/tracking/${code}`),
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
+    queryKey: ['track', trackingRouteCode],
+    queryFn: () => get(`/tracking/${trackingRouteCode}`),
     refetchInterval: isFocused ? 30000 : false,
-    enabled: !!code,
+    enabled: !!trackingRouteCode,
+    retry: false,
   });
 
   const order = (data as any)?.data?.order || (data as any)?.order || data;
@@ -52,7 +56,31 @@ export default function TrackScreen() {
     );
   }
 
-  if (!code || !order) {
+  if (isError) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Хүргэлт" title="Хүргэлт шалгах" />
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+            <Ionicons name="cloud-offline-outline" size={48} color={C.textMuted} />
+            <Text style={{ ...F.h4, color: C.text, textAlign: 'center' }}>Хүргэлт ачаалж чадсангүй</Text>
+            <Text style={{ ...F.small, color: C.textSub, textAlign: 'center' }}>
+              {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+            </Text>
+            <AppButton
+              label={isRefetching ? 'Шалгаж байна' : 'Дахин оролдох'}
+              icon="refresh"
+              disabled={isRefetching}
+              style={{ backgroundColor: C.driver, borderColor: C.driver }}
+              onPress={() => refetch()}
+            />
+          </AppCard>
+        </View>
+      </AppScreen>
+    );
+  }
+
+  if (!trackingRouteCode || !order) {
     return (
       <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
         <AppTopBar eyebrow="Хүргэлт" title="Хүргэлт шалгах" />
@@ -212,7 +240,7 @@ export default function TrackScreen() {
             label="Захиалга"
             icon="receipt-outline"
             style={{ flex: 1.2, backgroundColor: C.driver, borderColor: C.driver }}
-            onPress={() => router.push(`/order/${orderKey}` as any)}
+            onPress={() => router.push(`/order/${encodeRouteParam(orderKey)}` as any)}
           />
         ) : null}
       </View>

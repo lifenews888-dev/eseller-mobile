@@ -6,6 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { get } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { getProductName } from '../../src/shared/productQuality';
+import { encodeRouteParam, normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 const fmt = (n: number) => `${Number(n || 0).toLocaleString()}₮`;
@@ -15,11 +17,6 @@ type CatalogRoutePatch = {
   search?: string;
   sort?: CatalogSort;
 };
-
-function normalizeQueryParam(value?: string | string[] | null) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw?.trim() ?? '';
-}
 
 function normalizeSortParam(value?: string | string[] | null): CatalogSort {
   return value === 'earnings' ? 'earnings' : 'clicks';
@@ -32,11 +29,11 @@ export default function CatalogScreen() {
     queryFn: () => get('/affiliate/links'),
   });
   const products = (data as any)?.links || (data as any)?.products || [];
-  const [search, setSearch] = useState(() => normalizeQueryParam(params.q));
+  const [search, setSearch] = useState(() => normalizeRouteParam(params.q));
   const [sort, setSort] = useState<CatalogSort>(() => normalizeSortParam(params.sort));
 
   useEffect(() => {
-    setSearch(normalizeQueryParam(params.q));
+    setSearch(normalizeRouteParam(params.q));
     setSort(normalizeSortParam(params.sort));
   }, [params.q, params.sort]);
 
@@ -150,7 +147,10 @@ export default function CatalogScreen() {
       ) : null}
 
       {filtered.map((product: any, index: number) => {
-        const shareUrl = product.shareUrl || `https://eseller.mn/product/${product.id}`;
+        const id = product.id ?? product._id ?? product.productId;
+        const routeId = encodeRouteParam(id);
+        const name = getProductName(product) || 'Бараа';
+        const shareUrl = product.shareUrl || (routeId ? `https://eseller.mn/product/${routeId}` : 'https://eseller.mn/store');
 
         return (
           <AppCard key={product.id ?? `${product.name}-${index}`} style={st.card}>
@@ -164,7 +164,7 @@ export default function CatalogScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={st.productName} numberOfLines={2}>
-                  {product.name}
+                  {name}
                 </Text>
                 <Text style={st.commissionText}>
                   {product.commissionRate || product.commission || 10}% комисс
@@ -201,7 +201,7 @@ export default function CatalogScreen() {
                 icon="share-social-outline"
                 variant="seller"
                 style={{ flex: 1 }}
-                onPress={() => Share.share({ message: `${product.name}\n${shareUrl}` })}
+                onPress={() => Share.share({ message: `${name}\n${shareUrl}` })}
               />
             </View>
           </AppCard>

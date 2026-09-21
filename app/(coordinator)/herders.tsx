@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { HerderAPI } from '../../src/features/herder/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 export default function CoordinatorHerders() {
@@ -38,8 +39,21 @@ export default function CoordinatorHerders() {
             />
           </>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity activeOpacity={0.86} onPress={() => router.push(`/herder-profile/${item.id}` as never)}>
+        renderItem={({ item }) => {
+          const id = item.id ?? (item as any)._id;
+          const routeId = encodeRouteParam(id);
+          return (
+          <TouchableOpacity
+            activeOpacity={0.86}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.herderName || 'Малчин'} профайл нээх`}
+            accessibilityState={{ disabled: !routeId }}
+            disabled={!routeId}
+            onPress={() => {
+              if (routeId) router.push(`/herder-profile/${routeId}` as never)
+            }}
+            style={!routeId ? { opacity: 0.55 } : undefined}
+          >
             <AppCard style={{ padding: R.md, marginBottom: R.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: R.sm }}>
                 <View style={{ flex: 1 }}>
@@ -94,7 +108,7 @@ export default function CoordinatorHerders() {
               ) : null}
             </AppCard>
           </TouchableOpacity>
-        )}
+        )}}
         ListEmptyComponent={
           isLoading ? (
             <View style={{ alignItems: 'center', padding: R.xxl }}>

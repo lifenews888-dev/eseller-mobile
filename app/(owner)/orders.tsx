@@ -14,7 +14,9 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { get, put } from '../../src/services/api';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type OrderStatusFilter = '' | 'confirmed' | 'preparing' | 'ready' | 'handed_to_driver' | 'delivered';
@@ -36,7 +38,7 @@ const NEXT_STATUS: Record<string, { label: string; next: string; icon: IconName 
 };
 
 function normalizeStatusParam(value?: string | string[] | null): OrderStatusFilter {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = normalizeRouteParam(value);
   return TABS.some((tab) => tab.key === raw) ? (raw as OrderStatusFilter) : '';
 }
 
@@ -73,13 +75,13 @@ export default function OwnerOrdersScreen() {
 
   const { data, isRefetching, refetch, isLoading } = useQuery<any>({
     queryKey: ['seller-orders', tab],
-    queryFn: () => get(`/orders${tab ? `?status=${tab}` : ''}`),
+    queryFn: () => get('/orders', tab ? { status: tab } : undefined),
     refetchInterval: isFocused ? 15000 : false,
   });
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      put(`/orders/${id}/status`, { status }),
+      put(`/orders/${encodeApiPathSegment(id)}/status`, { status }),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       qc.invalidateQueries({ queryKey: ['seller-orders'] });

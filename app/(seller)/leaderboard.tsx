@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 const PERIODS = [
@@ -16,7 +17,7 @@ const PERIODS = [
 type PeriodOffset = (typeof PERIODS)[number]['key'];
 
 function normalizeMonthParam(value?: string | string[] | null): PeriodOffset {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = normalizeRouteParam(value);
   const parsed = Number(raw);
   return parsed === 1 || parsed === 2 ? parsed : 0;
 }
@@ -31,7 +32,7 @@ export default function LeaderboardScreen() {
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['leaderboard', month],
-    queryFn: () => get(`/affiliate/leaderboard?offset=${month}`),
+    queryFn: () => get('/affiliate/leaderboard', { offset: month }),
   });
   const entries = (data as any)?.leaderboard || (data as any)?.sellers || [];
 

@@ -17,8 +17,11 @@ import { LIVE_HOME_CATEGORIES, LIVE_SEARCH_KEYWORDS } from '../../src/shared/liv
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
 } from '../../src/shared/productQuality'
+import { encodeRouteParam } from '../../src/shared/routeParams'
+import { getShopName } from '../../src/shared/shopIdentity'
 
 import { Skeleton } from '../../src/shared/ui/Skeleton'
 import { FlashSaleRow } from '../../src/components/home/FlashSaleRow'
@@ -29,8 +32,11 @@ const { width } = Dimensions.get('window')
 const CARD_W = 156
 
 type HomeProduct = {
-  id: string;
+  id?: string;
+  _id?: string;
   name?: string;
+  title?: string;
+  productName?: string;
   entityName?: string;
   price?: number;
   rating?: number;
@@ -911,15 +917,27 @@ function FeaturedStoresSection({ loadingStores, stores }: { loadingStores: boole
         <FlatList
           horizontal showsHorizontalScrollIndicator={false}
           data={stores}
-          keyExtractor={(s: any) => s.id || s._id}
+          keyExtractor={(s: any, index) => s.id || s._id || s.slug || s.storefrontSlug || String(index)}
           contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
-          renderItem={({ item: s }: any) => (
+          renderItem={({ item: s }: any) => {
+            const slug = s.storefrontSlug || s.slug || s.id || s._id;
+            const routeSlug = encodeRouteParam(slug);
+            const name = getShopName(s);
+
+            return (
             <TouchableOpacity
-              onPress={() => router.push(`/${s.storefrontSlug || s.slug || s.id}` as any)}
+              activeOpacity={0.86}
+              accessibilityRole="button"
+              accessibilityLabel={`${name} дэлгүүр нээх`}
+              accessibilityState={{ disabled: !routeSlug }}
+              disabled={!routeSlug}
+              onPress={() => {
+                if (routeSlug) router.push(`/storefront/${routeSlug}` as any)
+              }}
               style={{
                 width: 200, backgroundColor: C.bgCard, borderRadius: R.lg,
                 overflow: 'hidden', borderWidth: 1,
-                borderColor: C.gold + '30', ...S.card,
+                borderColor: C.gold + '30', opacity: routeSlug ? 1 : 0.55, ...S.card,
               }}
             >
               <View
@@ -951,7 +969,7 @@ function FeaturedStoresSection({ loadingStores, stores }: { loadingStores: boole
                       style={{ width: 44, height: 44, borderRadius: R.full }} />
                   ) : (
                     <Text style={{ color: C.bgCard, fontSize: 18, fontWeight: '700' }}>
-                      {s.name?.[0]}
+                      {name[0]}
                     </Text>
                   )}
                 </View>
@@ -959,7 +977,7 @@ function FeaturedStoresSection({ loadingStores, stores }: { loadingStores: boole
 
               <View style={{ padding: 10, alignItems: 'center' }}>
                 <Text style={{ color: C.text, fontWeight: '700', fontSize: 14 }} numberOfLines={1}>
-                  {s.name}
+                  {name}
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
@@ -976,7 +994,7 @@ function FeaturedStoresSection({ loadingStores, stores }: { loadingStores: boole
                 </View>
               </View>
             </TouchableOpacity>
-          )}
+          )}}
           ListEmptyComponent={
             <View style={{
               width: width - 24, alignItems: 'center', padding: 24,
@@ -1011,16 +1029,27 @@ function LatestListingsSection({ feedPosts }: { feedPosts: any[] }) {
         {visibleFeedPosts.slice(0, 5).map((p: any) => {
           const image = firstProductImage(p, '');
           const price = getPublicProductPrice(p);
+          const id = p.id ?? p._id;
+          const routeId = encodeRouteParam(id);
+          const name = getProductName(p) || 'Зар';
 
           return (
             <TouchableOpacity
-              key={p.id}
-              onPress={() => router.push(`/feed/${p.id}` as any)}
+              key={id || name}
+              activeOpacity={0.86}
+              accessibilityRole="button"
+              accessibilityLabel={`${name} зарын дэлгэрэнгүй`}
+              accessibilityState={{ disabled: !routeId }}
+              disabled={!routeId}
+              onPress={() => {
+                if (routeId) router.push(`/feed/${routeId}` as any)
+              }}
               style={{
                 flexDirection: 'row', backgroundColor: C.bgCard,
                 borderRadius: R.lg, marginBottom: 10, overflow: 'hidden',
                 borderWidth: 1,
                 borderColor: p.featured ? C.gold + '40' : C.border,
+                opacity: routeId ? 1 : 0.55,
               }}
             >
               <View style={{ position: 'relative' }}>
@@ -1043,7 +1072,7 @@ function LatestListingsSection({ feedPosts }: { feedPosts: any[] }) {
               </View>
               <View style={{ flex: 1, padding: 12, justifyContent: 'center' }}>
                 <Text style={{ color: C.text, fontWeight: '600', fontSize: 14 }} numberOfLines={2}>
-                  {p.title || p.name}
+                  {name}
                 </Text>
                 <Text style={{ color: C.brand, fontWeight: '800', fontSize: 15, marginTop: 5 }}>
                   {price.toLocaleString()}₮
@@ -1328,19 +1357,29 @@ function BuyerHome() {
             <FlatList
               horizontal showsHorizontalScrollIndicator={false}
               data={featuredProducts}
-              keyExtractor={(i) => i.id}
+              keyExtractor={(i, index) => i.id || i._id || String(index)}
               contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
               renderItem={({ item }) => {
                 const image = firstProductImage(item, '');
                 const price = getPublicProductPrice(item);
+                const id = item.id ?? item._id;
+                const routeId = encodeRouteParam(id);
+                const name = getProductName(item) || 'Бараа';
 
                 return (
                   <TouchableOpacity
-                    onPress={() => router.push(`/product/${item.id}`)}
+                    activeOpacity={0.86}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+                    accessibilityState={{ disabled: !routeId }}
+                    disabled={!routeId}
+                    onPress={() => {
+                      if (routeId) router.push(`/product/${routeId}` as any)
+                    }}
                     style={{
                       width: CARD_W, backgroundColor: C.bgCard, borderRadius: R.lg,
                       overflow: 'hidden', borderWidth: 1,
-                      borderColor: C.gold + '40', ...S.card,
+                      borderColor: C.gold + '40', opacity: routeId ? 1 : 0.55, ...S.card,
                     }}
                   >
                     <PromotedBadge />
@@ -1351,7 +1390,7 @@ function BuyerHome() {
                     />
                     <View style={{ padding: 10 }}>
                       <Text style={{ color: C.text, fontSize: 13, fontWeight: '500' }} numberOfLines={2}>
-                        {item.name}
+                        {name}
                       </Text>
                       {item.entityName && (
                         <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 3 }} numberOfLines={1}>
@@ -1401,18 +1440,28 @@ function BuyerHome() {
             <FlatList
               horizontal showsHorizontalScrollIndicator={false}
               data={newProducts}
-              keyExtractor={(i) => i.id}
+              keyExtractor={(i, index) => i.id || i._id || String(index)}
               contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
               renderItem={({ item }) => {
                 const image = firstProductImage(item, '');
                 const price = getPublicProductPrice(item);
+                const id = item.id ?? item._id;
+                const routeId = encodeRouteParam(id);
+                const name = getProductName(item) || 'Бараа';
 
                 return (
                   <TouchableOpacity
-                    onPress={() => router.push(`/product/${item.id}`)}
+                    activeOpacity={0.86}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+                    accessibilityState={{ disabled: !routeId }}
+                    disabled={!routeId}
+                    onPress={() => {
+                      if (routeId) router.push(`/product/${routeId}` as any)
+                    }}
                     style={{
                       width: CARD_W, backgroundColor: C.bgCard, borderRadius: R.lg,
-                      overflow: 'hidden', borderWidth: 1, borderColor: C.border, ...S.card,
+                      overflow: 'hidden', borderWidth: 1, borderColor: C.border, opacity: routeId ? 1 : 0.55, ...S.card,
                     }}
                   >
                     <Image
@@ -1422,7 +1471,7 @@ function BuyerHome() {
                     />
                     <View style={{ padding: 10 }}>
                       <Text style={{ color: C.text, fontSize: 13, fontWeight: '500' }} numberOfLines={2}>
-                        {item.name}
+                        {name}
                       </Text>
                       <Text style={{ color: C.brand, fontWeight: '800', fontSize: 14, marginTop: 6 }}>
                         {price.toLocaleString()}₮

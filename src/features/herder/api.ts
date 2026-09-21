@@ -9,6 +9,7 @@
  */
 
 import { get, post, put, del } from '../../services/api';
+import { encodeApiPathSegment } from '../../shared/apiPath';
 import { withCache } from './cache';
 import type {
   ApplicationAction,
@@ -43,6 +44,8 @@ function unwrap<T>(res: any): T {
   return res as T;
 }
 
+const pathSegment = encodeApiPathSegment;
+
 export const HerderAPI = {
   list: (params: HerderListParams = {}): Promise<HerderListResponse> =>
     withCache('/herder/products', params as Record<string, unknown>, async () => {
@@ -56,8 +59,8 @@ export const HerderAPI = {
     }),
 
   detail: (id: string): Promise<HerderProduct | null> =>
-    withCache(`/herder/products/${id}`, undefined, async () => {
-      const res = await get(`/herder/products/${id}`);
+    withCache(`/herder/products/${pathSegment(id)}`, undefined, async () => {
+      const res = await get(`/herder/products/${pathSegment(id)}`);
       const data = unwrap<HerderProduct | null>(res);
       return data ?? null;
     }),
@@ -68,8 +71,8 @@ export const HerderAPI = {
    *   → 200 HerderProfile | 404
    */
   profile: (herderId: string): Promise<HerderProfile | null> =>
-    withCache(`/herder/profile/${herderId}`, undefined, async () => {
-      const res = await get(`/herder/profile/${herderId}`);
+    withCache(`/herder/profile/${pathSegment(herderId)}`, undefined, async () => {
+      const res = await get(`/herder/profile/${pathSegment(herderId)}`);
       const data = unwrap<HerderProfile | null>(res);
       return data ?? null;
     }),
@@ -84,7 +87,7 @@ export const HerderAPI = {
     herderId: string,
     params: { page?: number; limit?: number } = {},
   ): Promise<HerderReviewsResponse> => {
-    const res = await get(`/herder/profile/${herderId}/reviews`, params);
+    const res = await get(`/herder/profile/${pathSegment(herderId)}/reviews`, params);
     const data = unwrap<Partial<HerderReviewsResponse>>(res);
     return {
       reviews: data.reviews ?? [],
@@ -146,12 +149,12 @@ export const HerderAPI = {
       },
 
       update: async (id: string, payload: Partial<ProductWritable> & { isActive?: boolean }): Promise<MyHerderProduct> => {
-        const res = await put(`/herder/my/products/${id}`, payload);
+        const res = await put(`/herder/my/products/${pathSegment(id)}`, payload);
         return unwrap<MyHerderProduct>(res);
       },
 
       remove: async (id: string): Promise<{ success: boolean }> => {
-        const res = await del(`/herder/my/products/${id}`);
+        const res = await del(`/herder/my/products/${pathSegment(id)}`);
         const data = unwrap<{ success?: boolean }>(res);
         return { success: data?.success ?? true };
       },
@@ -170,7 +173,7 @@ export const HerderAPI = {
       },
 
       updateStatus: async (id: string, status: HerderOrderStatus, note?: string): Promise<MyHerderOrder> => {
-        const res = await put(`/herder/my/orders/${id}/status`, { status, note });
+        const res = await put(`/herder/my/orders/${pathSegment(id)}/status`, { status, note });
         return unwrap<MyHerderOrder>(res);
       },
     },
@@ -207,7 +210,7 @@ export const HerderAPI = {
         action: ApplicationAction,
         reason?: string,
       ): Promise<ApplicationReviewResponse> => {
-        const res = await put(`/herder/coordinator/applications/${id}`, { action, reason });
+        const res = await put(`/herder/coordinator/applications/${pathSegment(id)}`, { action, reason });
         return unwrap<ApplicationReviewResponse>(res);
       },
     },

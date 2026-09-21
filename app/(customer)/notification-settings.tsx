@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { useAuth } from '../../src/store/auth';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 const SETTINGS = [
   { key: 'order_status', label: 'Захиалгын статус', sub: 'Хүргэлт, баталгаажуулалт', icon: 'receipt-outline' as const, color: C.primary },
@@ -19,6 +21,7 @@ const SETTINGS = [
 const STORAGE_KEY = '@eseller_notif_prefs';
 
 export default function NotificationSettingsScreen() {
+  const user = useAuth((s) => s.user);
   const [prefs, setPrefs] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -36,6 +39,18 @@ export default function NotificationSettingsScreen() {
       Alert.alert('Алдаа', 'Мэдэгдлийн тохиргоо хадгалж чадсангүй.');
     });
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Мэдэгдлийн тохиргоо"
+        subtitle="Захиалга, чат, купон болон сануулгын тохиргоогоо удирдахын тулд нэвтэрнэ үү."
+        icon="notifications-outline"
+        accent={C.seller}
+        returnTo="/notification-settings"
+      />
+    );
+  }
 
   return (
     <AppScreen>

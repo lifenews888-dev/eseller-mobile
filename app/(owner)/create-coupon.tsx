@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 type CouponType = 'percent' | 'fixed';
 
 function normalizeCouponType(value?: string | string[] | null): CouponType {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = normalizeRouteParam(value);
   return raw === 'fixed' ? 'fixed' : 'percent';
 }
 

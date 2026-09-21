@@ -3,6 +3,8 @@ import * as SecureStore from '../shared/secureStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { API_BASE_URL } from '../config/apiBase';
+import { isPublicBrowsingRequest, requestHadAuthorization } from '../shared/apiAuthPolicy';
+import { encodeApiPathSegment } from '../shared/apiPath';
 import { normalizePublicRouteParam } from '../shared/routing';
 
 /**
@@ -80,8 +82,10 @@ export const api = axios.create({
 // Request interceptor — token нэмэх
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('token');
-  if (token) {
+  if (token && !isPublicBrowsingRequest(config)) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else if (token) {
+    apiLog('Authorization SKIPPED (public browsing request)', { url: config.url });
   }
   return config;
 });
@@ -128,6 +132,10 @@ api.interceptors.response.use(
       // request errors (let the caller render its own alert).
       if (isCredentialEndpoint(url)) {
         apiLog('onUnauthorized SKIPPED (credential endpoint)', { url });
+      } else if (!requestHadAuthorization(err.config)) {
+        apiLog('onUnauthorized SKIPPED (unauthenticated request)', { url });
+      } else if (isPublicBrowsingRequest(err.config)) {
+        apiLog('onUnauthorized SKIPPED (public browsing request)', { url });
       } else {
         apiLog('onUnauthorized fired', { url });
         await SecureStore.deleteItemAsync('token');
@@ -197,6 +205,8 @@ export const put = (url: string, data?: any) =>
 export const del = (url: string) =>
   api.delete(url);
 
+const pathSegment = encodeApiPathSegment;
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Social Commerce API
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -205,13 +215,13 @@ export const SocialAPI = {
   feed: (params?: { page?: number; limit?: number }) =>
     get('/social/feed', params),
   like: (postId: string) =>
-    post(`/social/posts/${postId}/like`),
+    post(`/social/posts/${pathSegment(postId)}/like`),
   unlike: (postId: string) =>
-    del(`/social/posts/${postId}/like`),
+    del(`/social/posts/${pathSegment(postId)}/like`),
   comments: (postId: string) =>
-    get(`/social/posts/${postId}/comment`),
+    get(`/social/posts/${pathSegment(postId)}/comment`),
   comment: (postId: string, content: string) =>
-    post(`/social/posts/${postId}/comment`, { content }),
+    post(`/social/posts/${pathSegment(postId)}/comment`, { content }),
   create: (data: { content?: string; images?: string[]; productIds?: string[] }) =>
     post('/social/posts', data),
 };
@@ -360,7 +370,7 @@ export const POSAPI = {
 
   /** Poll payment status — GET /payment/qpay/check/:invoiceId; response `{paid, paidDate?}` */
   checkPayment: (invoiceId: string) =>
-    get(`/payment/qpay/check/${invoiceId}`),
+    get(`/payment/qpay/check/${pathSegment(invoiceId)}`),
 
   /** POST /api/orders/pos — create completed POS sale */
   createOrder: (data: POSOrderInput) => post('/orders/pos', data),
@@ -387,15 +397,15 @@ export const LiveAPI = {
   getScheduled: () => get('/live', { status: 'SCHEDULED' }),
 
   /** GET /api/live/[id] — stream detail + products + recent messages */
-  getById: (id: string) => get(`/live/${id}`),
+  getById: (id: string) => get(`/live/${pathSegment(id)}`),
 
   /** POST /api/live/[id]/messages — send chat message (type TEXT default) */
   sendMessage: (id: string, content: string, type: string = 'TEXT') =>
-    post(`/live/${id}/messages`, { content, type }),
+    post(`/live/${pathSegment(id)}/messages`, { content, type }),
 
   /** POST /api/live/[id]/purchase — buy a live product */
   purchase: (id: string, productId: string) =>
-    post(`/live/${id}/purchase`, { productId }),
+    post(`/live/${pathSegment(id)}/purchase`, { productId }),
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -408,17 +418,17 @@ export const OrderAPI = {
 
   // Buyer
   myOrders: () => get('/orders'),
-  detail: (id: string) => get(`/orders/${id}`),
+  detail: (id: string) => get(`/orders/${pathSegment(id)}`),
 
   // Seller
   sellerOrders: (status?: string) =>
     get('/orders', status ? { status } : undefined),
   updateStatus: (id: string, status: string) =>
-    put(`/orders/${id}/status`, { status }),
+    put(`/orders/${pathSegment(id)}/status`, { status }),
 
   // Driver
   availableOrders: () => get('/driver/orders', { type: 'available' }),
   myDeliveries: () => get('/driver/orders', { type: 'mine' }),
-  accept: (id: string) => post(`/driver/orders/${id}/accept`),
-  deliver: (id: string) => post(`/driver/orders/${id}/deliver`),
+  accept: (id: string) => post(`/driver/orders/${pathSegment(id)}/accept`),
+  deliver: (id: string) => post(`/driver/orders/${pathSegment(id)}/deliver`),
 };

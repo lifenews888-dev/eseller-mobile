@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 import {
   authenticateWithBiometric,
   disableBiometric,
@@ -80,6 +81,18 @@ export default function SecurityScreen() {
     setOldPw('');
     setNewPw('');
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Аюулгүй байдал"
+        subtitle="Нэвтрэлт, биометр болон нууц үгийн тохиргоогоо удирдахын тулд нэвтэрнэ үү."
+        icon="shield-checkmark-outline"
+        accent={C.primary}
+        returnTo="/security"
+      />
+    );
+  }
 
   return (
     <AppScreen keyboardShouldPersistTaps="handled">

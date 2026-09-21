@@ -16,13 +16,17 @@ import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
 import { del, get } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
 import { LIVE_STORE_CATEGORIES, resolveLiveCategoryKey } from '../../src/shared/liveCategories';
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { getShopName } from '../../src/shared/shopIdentity';
 import { ProductCardSkeleton } from '../../src/shared/ui/Skeleton';
 import { FilterSheet } from '../../src/shared/ui/FilterSheet';
 import { EmptyState } from '../../src/shared/ui/EmptyState';
@@ -69,11 +73,12 @@ function BuyerStoreScreen() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<any>({});
   const saleOnly = params.sale === 'true';
+  const appliedSearch = typeof params.q === 'string' ? params.q : '';
 
   useEffect(() => {
     setCategory(typeof params.category === 'string' ? resolveLiveCategoryKey(params.category) : '');
-    setSearch(typeof params.q === 'string' ? params.q : '');
-  }, [params.category, params.q]);
+    setSearch(appliedSearch);
+  }, [params.category, appliedSearch]);
 
   const activeCategory = LIVE_STORE_CATEGORIES.find((item) => item.key === category);
   const apiCategory = activeCategory?.apiCategory ?? category;
@@ -89,9 +94,9 @@ function BuyerStoreScreen() {
   }, [activeCategory, category]);
 
   const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
-    queryKey: ['store-products', search, category, filters, saleOnly],
+    queryKey: ['store-products', appliedSearch, category, filters, saleOnly],
     queryFn: () => get('/search', {
-      q: search,
+      q: appliedSearch,
       category: apiCategory,
       limit: 20,
       minPrice: filters.minPrice || '',
@@ -104,7 +109,8 @@ function BuyerStoreScreen() {
 
   const products = filterPublicProducts((data as any)?.products || []);
   const hasFilters = Object.values(filters).some(Boolean);
-  const hasActiveStoreQuery = Boolean(search.trim() || category || hasFilters || saleOnly);
+  const hasActiveStoreQuery = Boolean(search.trim() || appliedSearch || category || hasFilters || saleOnly);
+  const hasPendingSearch = search.trim() !== appliedSearch.trim();
 
   const replaceStoreRoute = (patch: StoreRoutePatch) => {
     const nextSearch = patch.search ?? search;
@@ -125,7 +131,10 @@ function BuyerStoreScreen() {
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    replaceStoreRoute({ search: value });
+  };
+
+  const submitSearch = () => {
+    replaceStoreRoute({ search });
   };
 
   const handleSearchClear = () => {
@@ -190,6 +199,8 @@ function BuyerStoreScreen() {
               onChangeText={handleSearchChange}
               placeholder="Бараа хайх..."
               placeholderTextColor={C.textMuted}
+              returnKeyType="search"
+              onSubmitEditing={submitSearch}
               style={{ flex: 1, color: C.text, padding: R.sm, fontSize: 14 }}
             />
             {search.length > 0 ? (
@@ -201,6 +212,18 @@ function BuyerStoreScreen() {
                 hitSlop={8}
               >
                 <Ionicons name="close-circle" size={18} color={C.textMuted} />
+              </TouchableOpacity>
+            ) : null}
+            {hasPendingSearch ? (
+              <TouchableOpacity
+                activeOpacity={0.82}
+                onPress={submitSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Бараа хайх"
+                hitSlop={8}
+                style={{ marginLeft: 4 }}
+              >
+                <Ionicons name="arrow-forward-circle" size={22} color={STORE_MARKET_ACCENT} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -463,7 +486,7 @@ function StoreOwnerProductsScreen() {
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['my-products', tab],
-    queryFn: () => get(`/products/my?status=${tab}`),
+    queryFn: () => get('/products/my', { status: tab }),
     enabled: !!user,
   });
 
@@ -484,7 +507,7 @@ function StoreOwnerProductsScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await del(`/products/${id}`);
+            await del(`/products/${encodeApiPathSegment(id)}`);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             refetch();
           } catch (error: any) {
@@ -600,36 +623,83 @@ function StoreOwnerProductsScreen() {
 
 function BuyerProductCard({ item }: { item: any }) {
   const id = item._id || item.id;
+  const routeId = encodeRouteParam(id);
   const image = firstProductImage(item);
   const price = getPublicProductPrice(item);
+  const name = getProductName(item) || 'Бараа';
+  const originalPrice = getOriginalProductPrice(item);
+  const discount = getDiscountPercent(originalPrice, price);
+  const shopName = getProductShopName(item);
+  const rating = Number(item.rating ?? item.avgRating ?? 0);
+  const stockLabel = getStockLabel(item);
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
       disabled={!id}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
       accessibilityState={{ disabled: !id }}
-      onPress={() => router.push(`/product/${id}` as any)}
+      onPress={() => {
+        if (routeId) router.push(`/product/${routeId}` as any);
+      }}
       style={{ flex: 1, margin: R.xs }}
     >
       <AppCard style={{ padding: 0, overflow: 'hidden' }}>
-        <Image
-          source={{ uri: image }}
-          style={{ width: '100%', aspectRatio: 1, backgroundColor: C.bgSection }}
-          resizeMode="cover"
-        />
-        <View style={{ padding: R.sm }}>
+        <View>
+          <Image
+            source={{ uri: image }}
+            style={{ width: '100%', aspectRatio: 1, backgroundColor: C.bgSection }}
+            resizeMode="cover"
+          />
+          {discount ? (
+            <View
+              style={{
+                position: 'absolute',
+                top: R.sm,
+                left: R.sm,
+                backgroundColor: C.brand,
+                borderRadius: R.full,
+                paddingHorizontal: R.sm,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ ...F.tiny, color: C.bgCard, fontWeight: '900' }}>-{discount}%</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={{ padding: R.sm, gap: R.xs }}>
+          {shopName ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="storefront-outline" size={11} color={C.textMuted} />
+              <Text style={{ ...F.tiny, color: C.textMuted, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                {shopName}
+              </Text>
+            </View>
+          ) : null}
           <Text style={{ ...F.small, color: C.text, fontWeight: '700' }} numberOfLines={2}>
-            {item.name}
+            {name}
           </Text>
           {price > 0 ? (
-            <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>
-              {formatMoney(price)}
-            </Text>
+            <View>
+              <Text style={{ ...F.small, color: C.brand, fontWeight: '900' }}>
+                {formatMoney(price)}
+              </Text>
+              {discount ? (
+                <Text style={{ ...F.tiny, color: C.textMuted, textDecorationLine: 'line-through', marginTop: 1 }}>
+                  {formatMoney(originalPrice)}
+                </Text>
+              ) : null}
+            </View>
           ) : (
-            <Text style={{ ...F.tiny, color: C.seller, fontWeight: '800', marginTop: R.xs }}>
+            <Text style={{ ...F.tiny, color: C.seller, fontWeight: '800' }}>
               Үнэ тохируулаагүй
             </Text>
           )}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2 }}>
+            {rating > 0 ? <StatusPill label={`★ ${rating.toFixed(1)}`} color={C.gold} /> : null}
+            {stockLabel ? <StatusPill label={stockLabel} color={stockLabel === 'Дууссан' ? C.error : C.secondary} /> : null}
+          </View>
         </View>
       </AppCard>
     </TouchableOpacity>
@@ -638,6 +708,7 @@ function BuyerProductCard({ item }: { item: any }) {
 
 function OwnerProductRow({ item, onDelete }: { item: any; onDelete: (id: string, name: string) => void }) {
   const id = item._id || item.id;
+  const routeId = encodeRouteParam(id);
   const stock = Number(item.stock || 0);
 
   return (
@@ -667,7 +738,14 @@ function OwnerProductRow({ item, onDelete }: { item: any; onDelete: (id: string,
         </Text>
       </View>
       <View style={{ justifyContent: 'center', paddingRight: R.sm, gap: R.sm }}>
-        <IconAction icon="eye-outline" color={C.primary} onPress={() => router.push(`/product/${id}` as any)} />
+        <IconAction
+          icon="eye-outline"
+          color={C.primary}
+          disabled={!routeId}
+          onPress={() => {
+            if (routeId) router.push(`/product/${routeId}` as any);
+          }}
+        />
         <IconAction icon="trash-outline" color={C.error} onPress={() => onDelete(id, item.name)} />
       </View>
     </AppCard>
@@ -678,14 +756,19 @@ function IconAction({
   icon,
   color,
   onPress,
+  disabled = false,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <TouchableOpacity
       activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={{
         width: 34,
@@ -694,6 +777,7 @@ function IconAction({
         backgroundColor: color + '15',
         alignItems: 'center',
         justifyContent: 'center',
+        opacity: disabled ? 0.55 : 1,
       }}
     >
       <Ionicons name={icon} size={16} color={color} />
@@ -721,6 +805,35 @@ function firstImage(item: any) {
     ? item.images[0]
     : item?.images?.[0]?.url ?? item?.media?.[0]?.url;
   return image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop';
+}
+
+function getOriginalProductPrice(item: any) {
+  const candidates = [
+    item?.originalPrice,
+    item?.compareAtPrice,
+    item?.regularPrice,
+    item?.price,
+  ];
+  const value = candidates.map(Number).find((price) => Number.isFinite(price) && price > 0);
+  return value || 0;
+}
+
+function getDiscountPercent(originalPrice: number, displayPrice: number) {
+  if (!originalPrice || !displayPrice || displayPrice >= originalPrice) return 0;
+  return Math.max(1, Math.round((1 - displayPrice / originalPrice) * 100));
+}
+
+function getProductShopName(item: any) {
+  if (item?.shop || item?.store || item?.entity) return getShopName(item.shop || item.store || item.entity);
+  return item?.entityName || item?.shopName || item?.storeName || '';
+}
+
+function getStockLabel(item: any) {
+  const stock = Number(item?.stock ?? item?.inventory ?? item?.quantity);
+  if (!Number.isFinite(stock)) return '';
+  if (stock <= 0) return 'Дууссан';
+  if (stock <= 5) return `Үлдсэн ${stock}`;
+  return 'Бэлэн';
 }
 
 function formatMoney(value?: number) {

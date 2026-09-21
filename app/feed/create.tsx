@@ -11,28 +11,18 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { post } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { LIVE_FEED_POST_CATEGORIES } from '../../src/shared/liveCategories';
-import { AppButton, AppCard, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { AppButton, AppCard, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
-const FEED_CATS = LIVE_FEED_POST_CATEGORIES;
-
-const DISTRICTS = [
-  'СБД',
-  'ХУД',
-  'БЗД',
-  'ЧД',
-  'БГД',
-  'СХД',
-  'НД',
-  'БНД',
-];
+const DISTRICTS = ['СБД', 'ХУД', 'БЗД', 'ЧД', 'БГД', 'СХД', 'НД', 'БНД'];
 
 export default function CreateFeedScreen() {
   const { user } = useAuth();
@@ -53,22 +43,20 @@ export default function CreateFeedScreen() {
       selectionLimit: 5,
       quality: 0.8,
     });
+
     if (!result.canceled) {
       setImages((current) => [...current, ...result.assets.map((asset) => asset.uri)].slice(0, 5));
     }
   };
 
-  const removeImage = (idx: number) => {
-    setImages((current) => current.filter((_, index) => index !== idx));
-  };
-
   const handleSubmit = async () => {
+    if (!user) return;
     if (!title.trim()) {
-      Alert.alert('Анхаар', 'Гарчиг оруулна уу');
+      Alert.alert('Анхаар', 'Гарчиг оруулна уу.');
       return;
     }
     if (!category) {
-      Alert.alert('Анхаар', 'Ангилал сонгоно уу');
+      Alert.alert('Анхаар', 'Ангилал сонгоно уу.');
       return;
     }
 
@@ -78,25 +66,19 @@ export default function CreateFeedScreen() {
       formData.append('title', title.trim());
       formData.append('description', desc.trim());
       formData.append('category', category);
-      if (price) formData.append('price', price);
-      if (phone) formData.append('phone', phone);
+      if (price.trim()) formData.append('price', price.trim());
+      if (phone.trim()) formData.append('phone', phone.trim());
       if (district) formData.append('district', district);
 
       images.forEach((uri, index) => {
-        formData.append('images', {
-          uri,
-          name: `photo_${index}.jpg`,
-          type: 'image/jpeg',
-        } as any);
+        formData.append('images', { uri, name: `photo_${index}.jpg`, type: 'image/jpeg' } as any);
       });
 
       await post('/feed', formData);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert('Амжилттай', 'Зар нийтлэгдлээ!', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      Alert.alert('Амжилттай', 'Зар нийтлэгдлээ.', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (error: any) {
-      Alert.alert('Алдаа', error?.message || 'Зар нийтлэхэд алдаа гарлаа');
+      Alert.alert('Алдаа', error?.message || 'Зар нийтлэхэд алдаа гарлаа.');
     } finally {
       setLoading(false);
     }
@@ -104,40 +86,40 @@ export default function CreateFeedScreen() {
 
   if (!user) {
     return (
-      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
-        <AppTopBar eyebrow="Зар" title="Зар нэмэх" />
-        <View style={styles.center}>
-          <Ionicons name="lock-closed-outline" size={58} color={C.border2} />
-          <Text style={styles.centerTitle}>Нэвтрэх шаардлагатай</Text>
-          <Text style={styles.centerText}>Зар нийтлэхийн тулд нэвтэрнэ үү.</Text>
-          <AppButton
-            label="Нэвтрэх"
-            icon="log-in-outline"
-            onPress={() => router.push({ pathname: '/login', params: { returnTo: '/feed/create' } } as any)}
-            style={{ marginTop: R.lg }}
-          />
-        </View>
-      </AppScreen>
+      <RequireAuthScreen
+        eyebrow="Зар"
+        title="Зар нэмэх"
+        subtitle="Зар нийтлэхийн тулд бүртгэлээрээ нэвтэрнэ үү."
+        icon="megaphone-outline"
+        accent={C.brand}
+        returnTo="/feed/create"
+      />
     );
   }
 
   return (
     <View style={styles.screen}>
       <View style={[styles.topBarWrap, { paddingTop: layout.screenTop }]}>
-        <AppTopBar
-          eyebrow="Зар"
-          title="Зар нэмэх"
-          style={{ marginBottom: 0 }}
-        />
+        <AppTopBar eyebrow="Зар" title="Зар нэмэх" style={{ marginBottom: 0 }} />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: layout.screenBottom + 96 }]}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: layout.screenBottom + 96 }]}
+      >
+        <AppCard elevated style={styles.introCard}>
+          <View style={styles.introIcon}>
+            <Ionicons name="megaphone-outline" size={22} color={C.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.introTitle}>Шинэ зар нийтлэх</Text>
+            <Text style={styles.introText}>Гарчиг, үнэ, зураг болон байршлаа тодорхой оруулбал хэрэглэгч хурдан шийдвэр гаргана.</Text>
+          </View>
+        </AppCard>
+
         <Text style={styles.sectionTitle}>Зурагнууд (5 хүртэл)</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.photoRow}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
           {images.map((uri, index) => (
             <View key={`${uri}-${index}`} style={styles.photoWrap}>
               <Image source={{ uri }} style={styles.photo} />
@@ -145,7 +127,7 @@ export default function CreateFeedScreen() {
                 activeOpacity={0.84}
                 accessibilityRole="button"
                 accessibilityLabel={`${index + 1}-р зургийг устгах`}
-                onPress={() => removeImage(index)}
+                onPress={() => setImages((current) => current.filter((_, currentIndex) => currentIndex !== index))}
                 style={styles.removePhoto}
               >
                 <Ionicons name="close" size={14} color={C.bgCard} />
@@ -153,72 +135,68 @@ export default function CreateFeedScreen() {
             </View>
           ))}
           {images.length < 5 ? (
-            <TouchableOpacity
-              activeOpacity={0.84}
-              accessibilityRole="button"
-              accessibilityLabel="Зураг нэмэх"
-              onPress={pickImage}
-              style={styles.addPhoto}
-            >
+            <TouchableOpacity activeOpacity={0.84} accessibilityRole="button" accessibilityLabel="Зураг нэмэх" onPress={pickImage} style={styles.addPhoto}>
               <Ionicons name="camera-outline" size={28} color={C.textMuted} />
               <Text style={styles.addPhotoText}>Зураг</Text>
             </TouchableOpacity>
           ) : null}
         </ScrollView>
 
-        <FormField label="Гарчиг *">
-          <TextInput
-            accessibilityLabel="Зарын гарчиг"
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Жнь: Toyota Prius 2018 он"
-            placeholderTextColor={C.textMuted}
-            style={styles.input}
-          />
-        </FormField>
-
-        <FormField label="Тайлбар">
-          <TextInput
-            accessibilityLabel="Зарын тайлбар"
-            value={desc}
-            onChangeText={setDesc}
-            placeholder="Дэлгэрэнгүй мэдээлэл..."
-            placeholderTextColor={C.textMuted}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            style={[styles.input, styles.textArea]}
-          />
-        </FormField>
-
-        <View style={styles.twoCol}>
-          <FormField label="Үнэ (₮)" style={{ flex: 1 }}>
+        <AppCard style={styles.formCard}>
+          <FormField label="Гарчиг *">
             <TextInput
-              accessibilityLabel="Зарын үнэ"
-              value={price}
-              onChangeText={setPrice}
-              placeholder="0"
+              accessibilityLabel="Зарын гарчиг"
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Жнь: Toyota Prius 2018 он"
               placeholderTextColor={C.textMuted}
-              keyboardType="number-pad"
               style={styles.input}
             />
           </FormField>
-          <FormField label="Утас" style={{ flex: 1 }}>
+
+          <FormField label="Тайлбар">
             <TextInput
-              accessibilityLabel="Холбогдох утас"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="99XXXXXX"
+              accessibilityLabel="Зарын тайлбар"
+              value={desc}
+              onChangeText={setDesc}
+              placeholder="Дэлгэрэнгүй мэдээлэл..."
               placeholderTextColor={C.textMuted}
-              keyboardType="phone-pad"
-              style={styles.input}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              style={[styles.input, styles.textArea]}
             />
           </FormField>
-        </View>
+
+          <View style={styles.twoCol}>
+            <FormField label="Үнэ (₮)" style={{ flex: 1 }}>
+              <TextInput
+                accessibilityLabel="Зарын үнэ"
+                value={price}
+                onChangeText={setPrice}
+                placeholder="0"
+                placeholderTextColor={C.textMuted}
+                keyboardType="number-pad"
+                style={styles.input}
+              />
+            </FormField>
+            <FormField label="Утас" style={{ flex: 1 }}>
+              <TextInput
+                accessibilityLabel="Холбогдох утас"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="99XXXXXX"
+                placeholderTextColor={C.textMuted}
+                keyboardType="phone-pad"
+                style={styles.input}
+              />
+            </FormField>
+          </View>
+        </AppCard>
 
         <Text style={styles.sectionTitle}>Ангилал *</Text>
         <View style={styles.chips}>
-          {FEED_CATS.map((item) => (
+          {LIVE_FEED_POST_CATEGORIES.map((item) => (
             <Chip
               key={item.slug}
               label={item.name}
@@ -248,7 +226,7 @@ export default function CreateFeedScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.featureTitle}>Зараа онцлох</Text>
-            <Text style={styles.featureText}>Нүүр хуудсанд гарч илүү олон хүнд хүрнэ.</Text>
+            <Text style={styles.featureText}>Нүүр болон зарын жагсаалтад илүү тод харагдах боломж.</Text>
           </View>
           <Text style={styles.featurePrice}>2,900₮</Text>
         </AppCard>
@@ -260,6 +238,7 @@ export default function CreateFeedScreen() {
           icon="send-outline"
           disabled={loading}
           onPress={handleSubmit}
+          style={{ minHeight: 50 }}
         />
       </View>
     </View>
@@ -301,17 +280,9 @@ function Chip({
       accessibilityLabel={`${label} сонгох`}
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: active ? activeColor : C.bgSection,
-          borderColor: active ? activeColor : C.border,
-        },
-      ]}
+      style={[styles.chip, { backgroundColor: active ? activeColor : C.bgSection, borderColor: active ? activeColor : C.border }]}
     >
-      <Text style={[styles.chipText, { color: active ? C.bgCard : C.textSub, fontWeight: active ? '800' : '600' }]}>
-        {label}
-      </Text>
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -325,7 +296,19 @@ const styles = StyleSheet.create({
     borderBottomColor: C.border,
     backgroundColor: C.bg,
   },
-  content: { padding: R.lg, paddingTop: R.md },
+  content: { padding: UI.screenPad, paddingTop: R.md },
+  introCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, marginBottom: R.lg },
+  introIcon: {
+    width: UI.iconBox,
+    height: UI.iconBox,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.brandDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  introTitle: { ...F.h4, color: C.text, fontWeight: '900' },
+  introText: { ...F.small, color: C.textSub, lineHeight: 19, marginTop: 2 },
+  formCard: { gap: R.md, marginBottom: R.lg },
   fixedActions: {
     position: 'absolute',
     left: 0,
@@ -336,19 +319,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.border,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  centerTitle: { ...F.h3, color: C.text, marginTop: R.lg, textAlign: 'center' },
-  centerText: { ...F.small, color: C.textMuted, marginTop: R.sm, textAlign: 'center', lineHeight: 20 },
   sectionTitle: { ...F.h4, color: C.text, marginBottom: R.sm },
-  photoRow: { gap: R.sm, marginBottom: R.xl },
+  photoRow: { gap: R.sm, marginBottom: R.lg },
   photoWrap: { position: 'relative' },
   photo: { width: 100, height: 100, borderRadius: UI.cardRadius, backgroundColor: C.bgSection },
   removePhoto: {
     position: 'absolute',
     top: -6,
     right: -6,
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     borderRadius: R.full,
     backgroundColor: C.error,
     alignItems: 'center',
@@ -366,7 +346,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addPhotoText: { ...F.tiny, color: C.textMuted, marginTop: R.xs },
-  field: { marginBottom: R.lg },
+  field: { marginBottom: R.md },
   label: { ...F.small, color: C.textSub, fontWeight: '800', marginBottom: R.xs },
   input: {
     minHeight: 48,
@@ -381,7 +361,7 @@ const styles = StyleSheet.create({
   },
   textArea: { minHeight: 104 },
   twoCol: { flexDirection: 'row', gap: R.md },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.xl },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, marginBottom: R.lg },
   chip: {
     minHeight: 38,
     borderRadius: R.full,
@@ -390,8 +370,9 @@ const styles = StyleSheet.create({
     paddingVertical: R.sm,
     justifyContent: 'center',
   },
-  chipText: { ...F.small },
-  featureCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, backgroundColor: `${C.gold}10` },
+  chipText: { ...F.small, color: C.textSub, fontWeight: '700' },
+  chipTextActive: { color: C.bgCard, fontWeight: '900' },
+  featureCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, backgroundColor: C.goldDim },
   featureIcon: {
     width: 40,
     height: 40,

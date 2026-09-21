@@ -15,7 +15,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { get, post } from '../../src/services/api';
 import { LogoutButton } from '../../src/components/LogoutButton';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
 import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type DeliveryTab = 'available' | 'mine';
@@ -26,7 +28,7 @@ const TABS: Array<{ key: DeliveryTab; label: string; icon: keyof typeof Ionicons
 ];
 
 function normalizeDeliveryTab(value?: string | string[] | null): DeliveryTab {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = normalizeRouteParam(value);
   return raw === 'mine' ? 'mine' : 'available';
 }
 
@@ -63,12 +65,12 @@ export default function DriverDeliveriesScreen() {
 
   const { data, isRefetching, refetch, isLoading } = useQuery<any>({
     queryKey: ['driver-orders', tab],
-    queryFn: () => get(`/driver/orders?type=${tab}`),
+    queryFn: () => get('/driver/orders', { type: tab }),
     refetchInterval: isFocused ? 10000 : false,
   });
 
   const accept = useMutation({
-    mutationFn: (id: string) => post(`/driver/orders/${id}/accept`),
+    mutationFn: (id: string) => post(`/driver/orders/${encodeApiPathSegment(id)}/accept`),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       qc.invalidateQueries({ queryKey: ['driver-orders'] });
@@ -78,7 +80,7 @@ export default function DriverDeliveriesScreen() {
   });
 
   const deliver = useMutation({
-    mutationFn: (id: string) => post(`/driver/orders/${id}/deliver`),
+    mutationFn: (id: string) => post(`/driver/orders/${encodeApiPathSegment(id)}/deliver`),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert('Амжилттай', 'Хүргэлт амжилттай дууслаа.');

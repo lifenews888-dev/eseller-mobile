@@ -2,10 +2,12 @@
  * Profile screen helpers shared across role profile screens.
  */
 import { C } from '../shared/design';
+import { encodeRouteParam } from '../shared/routeParams';
 
 export function getReferralLink(userId?: string | null): string {
   if (!userId) return 'https://eseller.mn/';
-  return `https://eseller.mn/ref/${userId.slice(-8)}`;
+  const referralRouteCode = encodeRouteParam(userId.slice(-8));
+  return `https://eseller.mn/ref/${referralRouteCode}`;
 }
 
 export function getReferralCode(userId?: string | null): string {

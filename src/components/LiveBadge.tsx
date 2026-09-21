@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { C, R } from '../shared/design';
+import { encodeRouteParam } from '../shared/routeParams';
 
 interface LiveBadgeProps {
   isLive?: boolean;
@@ -11,6 +12,7 @@ interface LiveBadgeProps {
 
 export function LiveBadge({ isLive, currentLiveId, size = 'sm' }: LiveBadgeProps) {
   if (!isLive) return null;
+  const routeId = encodeRouteParam(currentLiveId);
 
   const badge = (
     <View style={[styles.badge, size === 'md' && styles.badgeMd]}>
@@ -19,11 +21,13 @@ export function LiveBadge({ isLive, currentLiveId, size = 'sm' }: LiveBadgeProps
     </View>
   );
 
-  if (currentLiveId) {
+  if (routeId) {
     return (
       <TouchableOpacity
         style={styles.container}
-        onPress={() => router.push(`/live/${currentLiveId}`)}
+        accessibilityRole="button"
+        accessibilityLabel="Live нээх"
+        onPress={() => router.push(`/live/${routeId}`)}
         activeOpacity={0.8}
       >
         {badge}

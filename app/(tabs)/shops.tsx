@@ -13,7 +13,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { getShopName } from '../../src/shared/shopIdentity';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { EmptyState } from '../../src/shared/ui/EmptyState';
 
 type ShopFilter = 'all' | 'store' | 'service';
 type ShopSort = 'rating' | 'reviews' | 'newest';
@@ -35,6 +38,12 @@ const SORTS: Array<{ key: ShopSort; label: string }> = [
   { key: 'newest', label: 'Шинээр' },
 ];
 
+const SHOP_TRUST_BADGES = [
+  { icon: 'checkmark-circle' as const, label: 'Баталгаат', color: C.secondary },
+  { icon: 'star' as const, label: 'Үнэлгээтэй', color: C.gold },
+  { icon: 'chatbubble-ellipses-outline' as const, label: 'Сэтгэгдэлтэй', color: C.primary },
+];
+
 function isShopFilter(value: unknown): value is ShopFilter {
   return value === 'all' || value === 'store' || value === 'service';
 }
@@ -49,12 +58,13 @@ export default function ShopsScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ShopFilter>('all');
   const [sort, setSort] = useState<ShopSort>('rating');
+  const appliedSearch = typeof params.q === 'string' ? params.q : '';
 
   useEffect(() => {
-    setSearch(typeof params.q === 'string' ? params.q : '');
+    setSearch(appliedSearch);
     setFilter(isShopFilter(params.type) ? params.type : 'all');
     setSort(isShopSort(params.sort) ? params.sort : 'rating');
-  }, [params.q, params.type, params.sort]);
+  }, [appliedSearch, params.type, params.sort]);
 
   const replaceShopsRoute = (patch: ShopsRoutePatch) => {
     const nextSearch = patch.search ?? search;
@@ -96,6 +106,13 @@ export default function ShopsScreen() {
     replaceShopsRoute({ sort: nextSort });
   };
 
+  const clearShopsFilters = () => {
+    setSearch('');
+    setFilter('all');
+    setSort('rating');
+    router.replace('/shops' as any);
+  };
+
   const {
     data,
     fetchNextPage,
@@ -107,12 +124,12 @@ export default function ShopsScreen() {
     error,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['shops', search, filter, sort],
+    queryKey: ['shops', appliedSearch, filter, sort],
     queryFn: async ({ pageParam = 1 }) =>
       unwrap<any>(await get('/stores', {
         page: pageParam,
         limit: 20,
-        q: search,
+        q: appliedSearch,
         type: filter === 'all' ? '' : filter,
         sort,
       })),
@@ -150,19 +167,21 @@ export default function ShopsScreen() {
   }, [rawShops, filter, sort]);
 
   const visibleTotal = filter === 'all' ? totalFromApi : shops.length;
+  const hasActiveShopsQuery = Boolean(search.trim() || appliedSearch || filter !== 'all' || sort !== 'rating');
+  const hasPendingSearch = search.trim() !== appliedSearch.trim();
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <FlatList
         data={shops}
-        keyExtractor={(item: any, index) => item.id ?? item._id ?? item.slug ?? String(index)}
+        keyExtractor={(item: any, index) => item.id ?? item._id ?? item.slug ?? item.storefrontSlug ?? String(index)}
         contentContainerStyle={{
           padding: UI.screenPad,
           paddingTop: layout.screenTop,
           paddingBottom: layout.screenBottom,
         }}
         onEndReached={() => {
-          if (hasNextPage) fetchNextPage();
+          if (hasNextPage && !isFetchingNextPage && !isLoading && !isError) fetchNextPage();
         }}
         onEndReachedThreshold={0.3}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}
@@ -177,12 +196,52 @@ export default function ShopsScreen() {
               style={{ marginBottom: R.md }}
             />
 
-            <AppButton
-              label="Дэлгүүр нээх"
-              icon="add"
-              onPress={() => router.push('/open-shop' as any)}
-              style={{ marginBottom: R.md }}
-            />
+            <AppCard elevated style={{ gap: R.md, marginBottom: R.md, borderColor: C.brand + '24' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.md }}>
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: UI.controlRadius,
+                    backgroundColor: C.brandDim,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="storefront" size={23} color={C.brand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ ...F.h4, color: C.text }}>Бизнесээ eseller.mn дээр нээгээрэй</Text>
+                  <Text style={{ ...F.small, color: C.textSub, marginTop: 2 }}>
+                    Бараа, үйлчилгээ, захиалгаа нэг системээр удирдах боломжтой.
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm }}>
+                {SHOP_TRUST_BADGES.map((badge) => (
+                  <View
+                    key={badge.label}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: R.xs,
+                      backgroundColor: badge.color + '14',
+                      borderRadius: R.full,
+                      paddingHorizontal: R.sm,
+                      paddingVertical: 5,
+                    }}
+                  >
+                    <Ionicons name={badge.icon} size={13} color={badge.color} />
+                    <Text style={{ ...F.tiny, color: badge.color, fontWeight: '900' }}>{badge.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <AppButton
+                label="Дэлгүүр нээх"
+                icon="add"
+                onPress={() => router.push('/open-shop' as any)}
+              />
+            </AppCard>
 
             <AppCard style={{ padding: R.md, marginBottom: R.md }}>
               <View
@@ -219,6 +278,18 @@ export default function ShopsScreen() {
                     hitSlop={8}
                   >
                     <Ionicons name="close-circle" size={18} color={C.textMuted} />
+                  </TouchableOpacity>
+                ) : null}
+                {hasPendingSearch ? (
+                  <TouchableOpacity
+                    activeOpacity={0.82}
+                    onPress={submitSearch}
+                    accessibilityRole="button"
+                    accessibilityLabel="Дэлгүүр хайх"
+                    hitSlop={8}
+                    style={{ marginLeft: 4 }}
+                  >
+                    <Ionicons name="arrow-forward-circle" size={22} color={C.primary} />
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -286,42 +357,56 @@ export default function ShopsScreen() {
               })}
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: R.sm }}>
-              <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>{visibleTotal} дэлгүүр олдлоо</Text>
-              {isLoading ? <Text style={{ ...F.tiny, color: C.textMuted }}>Ачааллаж байна...</Text> : null}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: R.sm, gap: R.md }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...F.h4, color: C.text }}>{visibleTotal} дэлгүүр олдлоо</Text>
+                <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>
+                  {filter === 'all' ? 'Бүх баталгаат бизнес' : filter === 'store' ? 'Бараатай дэлгүүрүүд' : 'Үйлчилгээ үзүүлэгчид'}
+                </Text>
+              </View>
+              {hasActiveShopsQuery ? (
+                <TouchableOpacity
+                  activeOpacity={0.84}
+                  accessibilityRole="button"
+                  accessibilityLabel="Дэлгүүрийн шүүлтүүр цэвэрлэх"
+                  onPress={clearShopsFilters}
+                >
+                  <Text style={{ ...F.tiny, color: C.primary, fontWeight: '900' }}>Цэвэрлэх</Text>
+                </TouchableOpacity>
+              ) : isLoading ? <Text style={{ ...F.tiny, color: C.textMuted }}>Ачааллаж байна...</Text> : null}
             </View>
           </>
         }
         renderItem={({ item }) => <ShopCard item={item} />}
         ListEmptyComponent={
-          <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
-            {isError ? (
-              <>
-                <Ionicons name="cloud-offline-outline" size={44} color={C.textMuted} />
-                <Text style={{ ...F.body, color: C.text, fontWeight: '800', textAlign: 'center' }}>
-                  Дэлгүүрүүд ачаалж чадсангүй
-                </Text>
-                <Text style={{ ...F.small, color: C.textMuted, textAlign: 'center' }}>
-                  {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
-                </Text>
-                <AppButton
-                  label="Дахин оролдох"
-                  icon="refresh"
-                  variant="secondary"
-                  onPress={() => refetch()}
-                  style={{ minWidth: 160 }}
-                />
-              </>
-            ) : isLoading ? (
-              <>
+          <AppCard style={{ marginTop: R.lg }}>
+            {isLoading ? (
+              <View style={{ alignItems: 'center', paddingVertical: R.xl, gap: R.sm }}>
                 <ActivityIndicator color={C.brand} />
-                <Text style={{ ...F.small, color: C.textMuted }}>Дэлгүүрүүд ачааллаж байна...</Text>
-              </>
+                <Text style={{ ...F.small, color: C.textMuted }}>Дэлгүүрүүд ачаалж байна...</Text>
+              </View>
             ) : (
-              <>
-                <Ionicons name="storefront-outline" size={44} color={C.textMuted} />
-                <Text style={{ ...F.body, color: C.textSub }}>Дэлгүүр олдсонгүй</Text>
-              </>
+              <EmptyState
+                icon={isError ? 'cloud-offline-outline' : 'storefront-outline'}
+                title={isError ? 'Дэлгүүрүүд ачаалж чадсангүй' : 'Дэлгүүр олдсонгүй'}
+                subtitle={
+                  isError
+                    ? ((error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.')
+                    : 'Хайлтын үгээ өөрчилж эсвэл шүүлтүүрээ цэвэрлээд дахин үзнэ үү.'
+                }
+                cta={isError ? {
+                  label: 'Дахин оролдох',
+                  icon: 'refresh-outline',
+                  accent: C.brand,
+                  onPress: () => refetch(),
+                } : hasActiveShopsQuery ? {
+                  label: 'Шүүлтүүр цэвэрлэх',
+                  icon: 'refresh-outline',
+                  accent: C.brand,
+                  onPress: clearShopsFilters,
+                } : undefined}
+                compact
+              />
             )}
           </AppCard>
         }
@@ -337,8 +422,10 @@ function ShopCard({ item }: { item: any }) {
   const reviews = Number(item.reviewCount ?? item.reviewsCount ?? 0);
   const productCount = Number(item.productCount ?? item.productsCount ?? item.products?.length ?? 0);
   const slug = item.slug ?? item.storefrontSlug ?? item.id ?? item._id;
-  const name = item.name ?? item.title ?? 'Дэлгүүр';
+  const routeSlug = encodeRouteParam(slug);
+  const name = getShopName(item);
   const accent = service ? C.secondary : C.primary;
+  const description = item.description || item.tagline || item.address || (service ? 'Үйлчилгээ үзүүлэгч' : 'Онлайн дэлгүүр');
 
   return (
     <TouchableOpacity
@@ -348,14 +435,14 @@ function ShopCard({ item }: { item: any }) {
       accessibilityLabel={`${name} дэлгүүр нээх`}
       accessibilityState={{ disabled: !slug }}
       onPress={() => {
-        if (slug) router.push(`/storefront/${slug}` as any);
+        if (routeSlug) router.push(`/storefront/${routeSlug}` as any);
       }}
     >
       <AppCard style={{ flexDirection: 'row', alignItems: 'center', gap: R.md, padding: R.md, marginBottom: R.sm }}>
         <View
           style={{
-            width: 52,
-            height: 52,
+            width: 56,
+            height: 56,
             borderRadius: UI.controlRadius,
             backgroundColor: accent + '18',
             alignItems: 'center',
@@ -376,10 +463,13 @@ function ShopCard({ item }: { item: any }) {
           <Text numberOfLines={1} style={{ ...F.body, color: C.text, fontWeight: '900' }}>
             {name}
           </Text>
-          <Text numberOfLines={1} style={{ ...F.tiny, color: C.textMuted, marginTop: 3 }}>
-            ★ {rating ? rating.toFixed(1) : '-'} - {reviews} сэтгэгдэл - {productCount} бараа
+          <Text numberOfLines={1} style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
+            {description}
           </Text>
-          <Text numberOfLines={1} style={{ ...F.small, color: C.primary, fontWeight: '800', marginTop: R.xs }}>
+          <Text numberOfLines={1} style={{ ...F.tiny, color: C.textMuted, marginTop: 3 }}>
+            ★ {rating ? rating.toFixed(1) : '-'} · {reviews} сэтгэгдэл · {productCount} бараа
+          </Text>
+          <Text numberOfLines={1} style={{ ...F.small, color: accent, fontWeight: '800', marginTop: R.xs }}>
             Дэлгүүрээр зочлох
           </Text>
         </View>
@@ -400,6 +490,6 @@ function isServiceShop(item: any) {
 }
 
 function getLogoLabel(item: any) {
-  const name = String(item.name ?? item.title ?? 'Д');
+  const name = getShopName(item);
   return name.trim().slice(0, 2).toLocaleUpperCase('mn-MN');
 }

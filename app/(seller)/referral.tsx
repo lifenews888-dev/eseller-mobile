@@ -3,13 +3,15 @@ import { Text, View, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 export default function ReferralScreen() {
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const referralCode = 'SELL-MUUGII-2025';
-  const referralLink = `https://eseller.mn/ref/${referralCode}`;
+  const referralRouteCode = encodeRouteParam(referralCode);
+  const referralLink = `https://eseller.mn/ref/${referralRouteCode}`;
 
   useEffect(
     () => () => {

@@ -17,9 +17,12 @@ import { LIVE_SEARCH_KEYWORDS } from '../../src/shared/liveCategories';
 import {
   filterPublicProducts,
   firstProductImage,
+  getProductName,
   getPublicProductPrice,
 } from '../../src/shared/productQuality';
-import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { getShopName } from '../../src/shared/shopIdentity';
+import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type SearchScope = 'all' | 'products' | 'shops' | 'feed';
 type SearchRoutePatch = {
@@ -72,23 +75,26 @@ export default function SearchScreen() {
     queryKey: ['search-products', dq],
     queryFn: () => get('/search', { q: dq, limit: 12 }),
     enabled,
+    retry: false,
   });
 
   const shopsQ = useQuery({
     queryKey: ['search-shops', dq],
     queryFn: () => get('/stores', { q: dq, limit: 8 }),
     enabled,
+    retry: false,
   });
 
   const feedQ = useQuery({
     queryKey: ['search-feed', dq],
     queryFn: () => get('/feed', { q: dq, limit: 8 }),
     enabled,
+    retry: false,
   });
 
   const products = filterPublicProducts(asArray(productsQ.data, ['products', 'items']));
   const shops = asArray(shopsQ.data, ['stores', 'entities', 'items']);
-  const feed = asArray(feedQ.data, ['posts', 'items']);
+  const feed = filterPublicProducts(asArray(feedQ.data, ['posts', 'items']));
 
   const results = useMemo<SearchResult[]>(() => {
     const productResults = products.map((item: any) => ({ kind: 'product' as const, item }));
@@ -102,7 +108,16 @@ export default function SearchScreen() {
   }, [products, shops, feed, scope]);
 
   const isLoading = enabled && (productsQ.isLoading || shopsQ.isLoading || feedQ.isLoading);
+  const isError = enabled && (productsQ.isError || shopsQ.isError || feedQ.isError);
   const total = products.length + shops.length + feed.length;
+  const visibleTotal = results.length;
+  const hasScopedResultsElsewhere = enabled && scope !== 'all' && visibleTotal === 0 && total > 0;
+
+  const refetchSearch = () => {
+    productsQ.refetch();
+    shopsQ.refetch();
+    feedQ.refetch();
+  };
 
   const replaceSearchRoute = (patch: SearchRoutePatch) => {
     const nextQuery = patch.query ?? q;
@@ -134,6 +149,11 @@ export default function SearchScreen() {
     replaceSearchRoute({ scope: nextScope });
   };
 
+  const showAllResults = () => {
+    setScope('all');
+    replaceSearchRoute({ scope: 'all' });
+  };
+
   const runSearch = () => {
     setDq(q.trim());
     replaceSearchRoute({ query: q });
@@ -149,7 +169,7 @@ export default function SearchScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <FlatList
         data={results}
-        keyExtractor={(row, index) => `${row.kind}-${row.item.id ?? row.item._id ?? row.item.slug ?? index}`}
+        keyExtractor={(row, index) => `${row.kind}-${row.item.id ?? row.item._id ?? row.item.slug ?? row.item.storefrontSlug ?? index}`}
         contentContainerStyle={{
           padding: UI.screenPad,
           paddingTop: layout.screenTop,
@@ -296,7 +316,9 @@ export default function SearchScreen() {
 
             {enabled ? (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: R.sm, gap: R.md }}>
-                <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>{total} үр дүн</Text>
+                <Text style={{ ...F.small, color: C.text, fontWeight: '900' }}>
+                  {scope === 'all' ? total : visibleTotal} үр дүн
+                </Text>
                 <Text style={{ ...F.tiny, color: C.textMuted, textAlign: 'right', flex: 1 }}>
                   {products.length} бараа - {shops.length} дэлгүүр - {feed.length} зар
                 </Text>
@@ -307,7 +329,24 @@ export default function SearchScreen() {
         renderItem={({ item }) => <SearchResultCard result={item} />}
         ListEmptyComponent={
           <AppCard style={{ alignItems: 'center', gap: R.sm, marginTop: R.lg }}>
-            {isLoading ? (
+            {isError ? (
+              <>
+                <Ionicons name="cloud-offline-outline" size={44} color={C.textMuted} />
+                <Text style={{ ...F.body, color: C.text, fontWeight: '800', textAlign: 'center' }}>
+                  Хайлт ачаалж чадсангүй
+                </Text>
+                <Text style={{ ...F.small, color: C.textMuted, textAlign: 'center' }}>
+                  Сүлжээ эсвэл серверийн алдаа гарлаа.
+                </Text>
+                <AppButton
+                  label="Дахин оролдох"
+                  icon="refresh"
+                  variant="secondary"
+                  onPress={refetchSearch}
+                  style={{ minWidth: 160 }}
+                />
+              </>
+            ) : isLoading ? (
               <>
                 <ActivityIndicator color={C.brand} />
                 <Text style={{ ...F.small, color: C.textMuted }}>Хайж байна...</Text>
@@ -316,8 +355,21 @@ export default function SearchScreen() {
               <>
                 <Ionicons name={enabled ? 'sad-outline' : 'search-outline'} size={44} color={C.textMuted} />
                 <Text style={{ ...F.body, color: C.textSub, textAlign: 'center' }}>
-                  {enabled ? `"${dq}" олдсонгүй` : 'Хайх үгээ оруулна уу'}
+                  {enabled
+                    ? hasScopedResultsElsewhere
+                      ? `"${dq}" энэ төрөлд олдсонгүй`
+                      : `"${dq}" олдсонгүй`
+                    : 'Хайх үгээ оруулна уу'}
                 </Text>
+                {hasScopedResultsElsewhere ? (
+                  <AppButton
+                    label="Бүгдээс хайх"
+                    icon="grid-outline"
+                    variant="secondary"
+                    onPress={showAllResults}
+                    style={{ minWidth: 160 }}
+                  />
+                ) : null}
               </>
             )}
           </AppCard>
@@ -335,26 +387,28 @@ function SearchResultCard({ result }: { result: SearchResult }) {
 
 function ProductResult({ item }: { item: any }) {
   const id = item.id ?? item._id;
+  const routeId = encodeRouteParam(id);
   const image = firstProductImage(item, '');
   const price = getPublicProductPrice(item);
+  const name = getProductName(item) || 'Бараа';
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
       disabled={!id}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name ?? 'Бараа'} дэлгэрэнгүй нээх`}
+      accessibilityLabel={`${name} дэлгэрэнгүй нээх`}
       accessibilityState={{ disabled: !id }}
       onPress={() => {
-        if (id) router.push(`/product/${id}` as any);
+        if (routeId) router.push(`/product/${routeId}` as any);
       }}
     >
       <ResultCard>
-        <Thumb image={image} label={`${item.name ?? 'Бараа'} зураг`} fallbackIcon="bag-outline" />
+        <Thumb image={image} label={`${name} зураг`} fallbackIcon="bag-outline" />
         <View style={{ flex: 1 }}>
           <KindLabel color={C.brand}>Бараа</KindLabel>
           <Text numberOfLines={2} style={{ ...F.small, color: C.text, fontWeight: '900', marginTop: 2 }}>
-            {item.name}
+            {name}
           </Text>
           <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>
             {formatMoney(price)}
@@ -368,17 +422,19 @@ function ProductResult({ item }: { item: any }) {
 
 function ShopResult({ item }: { item: any }) {
   const slug = item.slug ?? item.storefrontSlug ?? item.id ?? item._id;
-  const label = initials(item.name);
+  const routeSlug = encodeRouteParam(slug);
+  const name = getShopName(item);
+  const label = initials(name);
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
       disabled={!slug}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name ?? 'Дэлгүүр'} дэлгүүр нээх`}
+      accessibilityLabel={`${name} дэлгүүр нээх`}
       accessibilityState={{ disabled: !slug }}
       onPress={() => {
-        if (slug) router.push(`/${slug}` as any);
+        if (routeSlug) router.push(`/storefront/${routeSlug}` as any);
       }}
     >
       <ResultCard>
@@ -386,7 +442,7 @@ function ShopResult({ item }: { item: any }) {
         <View style={{ flex: 1 }}>
           <KindLabel color={C.secondary}>Дэлгүүр</KindLabel>
           <Text numberOfLines={1} style={{ ...F.small, color: C.text, fontWeight: '900', marginTop: 2 }}>
-            {item.name}
+            {name}
           </Text>
           <Text numberOfLines={1} style={{ ...F.tiny, color: C.textMuted, marginTop: R.xs }}>
             ★ {item.rating ?? '-'} - {item.productCount ?? 0} бараа
@@ -400,28 +456,31 @@ function ShopResult({ item }: { item: any }) {
 
 function FeedResult({ item }: { item: any }) {
   const id = item.id ?? item._id;
-  const image = item.images?.[0] ?? item.media?.[0]?.url;
+  const routeId = encodeRouteParam(id);
+  const image = firstProductImage(item, '');
+  const name = getProductName(item) || 'Зар';
+  const price = getPublicProductPrice(item);
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
       disabled={!id}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title ?? item.name ?? 'Зар'} дэлгэрэнгүй нээх`}
+      accessibilityLabel={`${name} дэлгэрэнгүй нээх`}
       accessibilityState={{ disabled: !id }}
       onPress={() => {
-        if (id) router.push(`/feed/${id}` as any);
+        if (routeId) router.push(`/feed/${routeId}` as any);
       }}
     >
       <ResultCard>
-        <Thumb image={image} label={`${item.title ?? item.name ?? 'Зар'} зураг`} fallbackIcon="megaphone-outline" />
+        <Thumb image={image} label={`${name} зураг`} fallbackIcon="megaphone-outline" />
         <View style={{ flex: 1 }}>
           <KindLabel color={C.primary}>Зар</KindLabel>
           <Text numberOfLines={2} style={{ ...F.small, color: C.text, fontWeight: '900', marginTop: 2 }}>
-            {item.title ?? item.name}
+            {name}
           </Text>
           <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>
-            {item.price ? formatMoney(item.price) : 'Үнэ тохиролцоно'}
+            {price > 0 ? formatMoney(price) : 'Үнэ тохиролцоно'}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
@@ -493,12 +552,6 @@ function asArray(data: any, keys: string[]) {
     if (Array.isArray(data?.[key])) return data[key];
   }
   return [];
-}
-
-function firstImage(item: any) {
-  return typeof item.images?.[0] === 'string'
-    ? item.images?.[0]
-    : item.images?.[0]?.url ?? item.media?.[0]?.url;
 }
 
 function initials(name?: string) {

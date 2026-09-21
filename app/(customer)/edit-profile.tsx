@@ -8,6 +8,7 @@ import { put } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
 export default function EditProfileScreen() {
   const { user } = useAuth();
@@ -38,6 +39,18 @@ export default function EditProfileScreen() {
     }
     saveMut.mutate({ name: name.trim(), phone: phone.trim() });
   };
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Профайл засах"
+        subtitle="Профайлын мэдээллээ шинэчлэхийн тулд нэвтэрнэ үү."
+        icon="person-outline"
+        accent={C.primary}
+        returnTo="/edit-profile"
+      />
+    );
+  }
 
   return (
     <AppScreen keyboardShouldPersistTaps="handled">

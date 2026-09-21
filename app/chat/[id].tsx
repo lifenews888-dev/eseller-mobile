@@ -16,7 +16,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
-import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
+import { AppButton, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,6 +27,8 @@ export default function ChatRoomScreen() {
   const listRef = useRef<FlatList>(null);
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(true);
+  const conversationId = safeDecodeRouteParam(normalizeRouteParam(id));
+  const conversationRouteId = encodeRouteParam(conversationId);
 
   useFocusEffect(
     useCallback(() => {
@@ -34,18 +37,19 @@ export default function ChatRoomScreen() {
     }, []),
   );
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['chat', id],
-    queryFn: () => get(`/chat/conversations/${id}/messages`),
-    enabled: !!id,
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
+    queryKey: ['chat', conversationRouteId],
+    queryFn: () => get(`/chat/conversations/${conversationRouteId}/messages`),
+    enabled: !!conversationRouteId,
     refetchInterval: isFocused ? 3000 : false,
+    retry: false,
   });
 
   const sendMutation = useMutation({
-    mutationFn: (content: string) => post(`/chat/conversations/${id}/messages`, { content }),
+    mutationFn: (content: string) => post(`/chat/conversations/${conversationRouteId}/messages`, { content }),
     onSuccess: () => {
       setMessage('');
-      qc.invalidateQueries({ queryKey: ['chat', id] });
+      qc.invalidateQueries({ queryKey: ['chat', conversationRouteId] });
     },
   });
 
@@ -59,7 +63,7 @@ export default function ChatRoomScreen() {
 
   const send = () => {
     const value = message.trim();
-    if (!value) return;
+    if (!value || !conversationRouteId) return;
     sendMutation.mutate(value);
   };
 
@@ -79,6 +83,22 @@ export default function ChatRoomScreen() {
           <Text style={styles.mutedText}>Мессежүүд ачаалж байна...</Text>
         </View>
       ) : (
+        isError ? (
+          <View style={styles.empty}>
+            <Ionicons name="cloud-offline-outline" size={46} color={C.textMuted} />
+            <Text style={styles.emptyTitle}>Чат ачаалж чадсангүй</Text>
+            <Text style={styles.mutedText}>
+              {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+            </Text>
+            <AppButton
+              label={isRefetching ? 'Шалгаж байна' : 'Дахин оролдох'}
+              icon="refresh"
+              disabled={isRefetching}
+              onPress={() => refetch()}
+              style={{ marginTop: R.sm, minWidth: 160 }}
+            />
+          </View>
+        ) : (
         <FlatList
           ref={listRef}
           data={messages}
@@ -93,6 +113,7 @@ export default function ChatRoomScreen() {
             </View>
           }
         />
+        )
       )}
 
       <View style={[styles.inputRow, { paddingBottom: layout.insets.bottom + R.md }]}>
@@ -110,13 +131,13 @@ export default function ChatRoomScreen() {
         <TouchableOpacity
           activeOpacity={0.84}
           onPress={send}
-          disabled={!message.trim() || sendMutation.isPending}
+          disabled={!message.trim() || !conversationRouteId || sendMutation.isPending}
           accessibilityRole="button"
           accessibilityLabel="Мессеж илгээх"
-          accessibilityState={{ disabled: !message.trim() || sendMutation.isPending }}
-          style={[styles.sendButton, !message.trim() || sendMutation.isPending ? styles.sendButtonDisabled : null]}
+          accessibilityState={{ disabled: !message.trim() || !conversationRouteId || sendMutation.isPending }}
+          style={[styles.sendButton, !message.trim() || !conversationRouteId || sendMutation.isPending ? styles.sendButtonDisabled : null]}
         >
-          <Ionicons name="send" size={18} color={message.trim() && !sendMutation.isPending ? C.bgCard : C.textMuted} />
+          <Ionicons name="send" size={18} color={message.trim() && conversationRouteId && !sendMutation.isPending ? C.bgCard : C.textMuted} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

@@ -18,10 +18,15 @@ import { useAuth } from '../../src/store/auth';
 import { useCart } from '../../src/store/cart';
 import { C, F, R, UI } from '../../src/shared/design';
 import {
+  firstProductImage,
   filterPublicProducts,
+  getProductName,
+  getPublicProductPrice,
   getPublicProductQualityIssue,
   type ProductQualityIssue,
 } from '../../src/shared/productQuality';
+import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
+import { getShopName } from '../../src/shared/shopIdentity';
 import { AppButton, AppCard, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 import { Skeleton } from '../../src/shared/ui/Skeleton';
 
@@ -46,8 +51,11 @@ interface ReviewsResponse {
 }
 
 interface RelatedProduct {
-  id: string;
-  name: string;
+  id?: string;
+  _id?: string;
+  name?: string;
+  title?: string;
+  productName?: string;
   price: number;
   salePrice?: number | null;
   images?: string[] | null;
@@ -60,10 +68,20 @@ interface RelatedResponse {
   products: RelatedProduct[];
 }
 
+function isSameRouteId(left?: string, right?: string) {
+  if (!left || !right) return false;
+
+  const normalizedLeft = safeDecodeRouteParam(String(left));
+  const normalizedRight = safeDecodeRouteParam(String(right));
+  return normalizedLeft === normalizedRight || encodeRouteParam(normalizedLeft) === encodeRouteParam(normalizedRight);
+}
+
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams();
-  const productId = Array.isArray(id) ? id[0] : id;
-  const productReturnTo = `/product/${productId}`;
+  const productParam = normalizeRouteParam(id);
+  const productId = safeDecodeRouteParam(productParam);
+  const productRouteId = encodeRouteParam(productId);
+  const productReturnTo = productRouteId ? `/product/${productRouteId}` : '/store';
   const { add, items } = useCart();
   const { user } = useAuth();
   const layout = useAppLayoutMetrics();
@@ -71,22 +89,25 @@ export default function ProductDetailScreen() {
   const [qty, setQty] = useState(1);
   const [saved, setSaved] = useState(false);
 
-  const { data: product, isLoading } = useQuery({
-    queryKey: ['product', productId],
-    queryFn: () => get(`/products/${productId}`),
-    enabled: !!productId,
+  const { data: product, isLoading, isError, error, refetch, isRefetching } = useQuery({
+    queryKey: ['product', productRouteId],
+    queryFn: () => get(`/products/${productRouteId}`),
+    enabled: !!productRouteId,
+    retry: false,
   });
 
   const { data: reviewsData } = useQuery<ReviewsResponse>({
-    queryKey: ['product-reviews', productId],
-    queryFn: () => get(`/products/${productId}/reviews?limit=5`) as unknown as Promise<ReviewsResponse>,
-    enabled: !!productId,
+    queryKey: ['product-reviews', productRouteId],
+    queryFn: () => get(`/products/${productRouteId}/reviews`, { limit: 5 }) as unknown as Promise<ReviewsResponse>,
+    enabled: !!productRouteId,
+    retry: false,
   });
 
   const { data: relatedData } = useQuery<RelatedResponse>({
-    queryKey: ['product-related', productId],
-    queryFn: () => get(`/products/${productId}/related?limit=6`) as unknown as Promise<RelatedResponse>,
-    enabled: !!productId,
+    queryKey: ['product-related', productRouteId],
+    queryFn: () => get(`/products/${productRouteId}/related`, { limit: 6 }) as unknown as Promise<RelatedResponse>,
+    enabled: !!productRouteId,
+    retry: false,
   });
 
   const p = ((product as any)?.product ?? product) as any;
@@ -94,13 +115,14 @@ export default function ProductDetailScreen() {
   const stock = getStock(p);
   const price = Number(p?.price || 0);
   const salePrice = p?.salePrice != null ? Number(p.salePrice) : null;
-  const displayPrice = salePrice != null && salePrice < price ? salePrice : price;
+  const displayPrice = p ? getPublicProductPrice(p) : 0;
+  const productName = getProductName(p) || 'Бараа';
   const productKey = p?.id || p?._id || productId || '';
   const qualityIssue = p
     ? getPublicProductQualityIssue(p, { requireImage: true, requirePrice: true })
     : null;
   const relatedProducts = filterPublicProducts(relatedData?.products ?? [])
-    .filter((item) => item.id !== productKey);
+    .filter((item) => !isSameRouteId(item.id ?? item._id ?? '', productKey));
 
   const startChat = useMutation({
     mutationFn: async () => {
@@ -111,12 +133,13 @@ export default function ProductDetailScreen() {
         shopId,
         customerId: user.id,
         customerName: user.name || 'Хэрэглэгч',
-        productName: p.name,
+        productName,
         productPrice: displayPrice,
       }) as unknown as Promise<{ id: string }>;
     },
     onSuccess: (conv) => {
-      router.push({ pathname: '/chat/[id]', params: { id: conv.id } } as any);
+      const chatRouteId = encodeRouteParam(conv.id);
+      if (chatRouteId) router.push({ pathname: '/chat/[id]', params: { id: chatRouteId } } as any);
     },
     onError: (error: Error) => {
       if (error.message === 'AUTH_REQUIRED') {
@@ -136,7 +159,7 @@ export default function ProductDetailScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     add(buildCartItem(), qty);
-    Alert.alert('Сагсанд нэмлээ', `${p.name} x ${qty}`, [
+    Alert.alert('Сагсанд нэмлээ', `${productName} x ${qty}`, [
       { text: 'Үргэлжлүүлэх' },
       { text: 'Сагс харах', onPress: () => router.push('/cart' as any) },
     ]);
@@ -158,11 +181,11 @@ export default function ProductDetailScreen() {
 
   const buildCartItem = () => ({
     id: productKey,
-    name: p.name,
+    name: productName,
     price: displayPrice || price,
-    image: images[0]?.url || null,
+    image: firstProductImage(p),
     entityId: p.shop?.id || p.shop?._id || p.entityId || '',
-    entityName: p.shop?.name || p.entityName || '',
+    entityName: p.shop ? getShopName(p.shop) : p.entityName || '',
   });
 
   const validateCartQuantity = () => {
@@ -193,7 +216,7 @@ export default function ProductDetailScreen() {
   const handleShare = async () => {
     if (!p) return;
     await Share.share({
-      message: `${p.name} - ${formatMoney(displayPrice)}\nhttps://eseller.mn/product/${productKey}`,
+      message: `${productName} - ${formatMoney(displayPrice)}\nhttps://eseller.mn/product/${encodeRouteParam(productKey)}`,
     });
   };
 
@@ -223,6 +246,30 @@ export default function ProductDetailScreen() {
           <Skeleton width="100%" height={14} />
           <Skeleton width="86%" height={14} />
         </View>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, padding: UI.screenPad, justifyContent: 'center' }}>
+        <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+          <Ionicons name="cloud-offline-outline" size={44} color={C.textMuted} />
+          <Text style={{ ...F.h4, color: C.text, textAlign: 'center' }}>Бараа ачаалж чадсангүй</Text>
+          <Text style={{ ...F.small, color: C.textSub, textAlign: 'center' }}>
+            {(error as Error)?.message || 'Сүлжээ эсвэл серверийн алдаа гарлаа.'}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: R.sm }}>
+            <AppButton
+              label={isRefetching ? 'Шалгаж байна' : 'Дахин оролдох'}
+              icon="refresh"
+              disabled={isRefetching}
+              onPress={() => refetch()}
+              style={{ flex: 1 }}
+            />
+            <AppButton label="Дэлгүүр рүү" icon="storefront-outline" variant="secondary" onPress={() => router.push('/store' as any)} style={{ flex: 1 }} />
+          </View>
+        </AppCard>
       </View>
     );
   }
@@ -263,7 +310,7 @@ export default function ProductDetailScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, alignItems: 'flex-start' }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ ...F.h2, color: C.text }} numberOfLines={3}>
-                  {p.name}
+                  {productName}
                 </Text>
                 <Text style={{ ...F.tiny, color: C.textMuted, marginTop: R.xs }}>
                   {p.category || p.entityType || 'Marketplace'}
@@ -555,6 +602,8 @@ function ShopBlock({
 }) {
   const shop = p.shop;
   const slug = shop?.slug || shop?.storefrontSlug || shop?.id || shop?._id;
+  const routeSlug = encodeRouteParam(slug);
+  const shopName = getShopName(shop);
 
   return (
     <Section title="Дэлгүүр">
@@ -569,22 +618,22 @@ function ShopBlock({
             justifyContent: 'center',
           }}
         >
-          <Text style={{ ...F.h4, color: C.primary }}>{initials(shop?.name)}</Text>
+          <Text style={{ ...F.h4, color: C.primary }}>{initials(shopName)}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ ...F.small, color: C.text, fontWeight: '900' }} numberOfLines={1}>
-            {shop?.name || 'Дэлгүүр'}
+            {shopName}
           </Text>
           <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>Баталгаат худалдагч</Text>
         </View>
       </View>
       <View style={{ flexDirection: 'row', gap: R.sm, marginTop: R.md }}>
-        {slug ? (
+        {routeSlug ? (
           <AppButton
             label="Дэлгүүр үзэх"
             icon="storefront-outline"
             variant="ghost"
-            onPress={() => router.push(`/${slug}` as any)}
+            onPress={() => router.push(`/storefront/${routeSlug}` as any)}
             style={{ flex: 1 }}
           />
         ) : null}
@@ -687,9 +736,11 @@ function RelatedSection({ products, currentId }: { products: RelatedProduct[]; c
     <View style={{ marginBottom: R.md }}>
       <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm, paddingHorizontal: R.lg }}>Төстэй бараа</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: R.lg, gap: R.sm }}>
-        {products.map((product) => (
-          <RelatedCard key={product.id} product={product} currentId={currentId} />
-        ))}
+        {products.map((product, index) => {
+          const id = product.id ?? product._id ?? '';
+          const name = getProductName(product) || 'related';
+          return <RelatedCard key={id || `${name}-${index}`} product={product} currentId={currentId} />;
+        })}
       </ScrollView>
     </View>
   );
@@ -698,13 +749,24 @@ function RelatedSection({ products, currentId }: { products: RelatedProduct[]; c
 function RelatedCard({ product, currentId }: { product: RelatedProduct; currentId: string }) {
   const display = product.salePrice ?? product.price;
   const image = product.images?.[0];
+  const id = product.id ?? product._id ?? '';
+  const routeId = encodeRouteParam(id);
+  const name = getProductName(product) || 'Бараа';
   const handlePress = () => {
-    if (product.id === currentId) return;
-    router.replace({ pathname: '/product/[id]', params: { id: product.id } } as any);
+    if (!routeId || id === currentId) return;
+    router.replace({ pathname: '/product/[id]', params: { id: routeId } } as any);
   };
 
   return (
-    <TouchableOpacity activeOpacity={0.86} onPress={handlePress} style={{ width: 142 }}>
+    <TouchableOpacity
+      activeOpacity={0.86}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} барааны дэлгэрэнгүй`}
+      accessibilityState={{ disabled: !routeId || id === currentId }}
+      disabled={!routeId || id === currentId}
+      onPress={handlePress}
+      style={{ width: 142, opacity: !routeId ? 0.55 : 1 }}
+    >
       <AppCard style={{ padding: 0, overflow: 'hidden' }}>
         <View style={{ width: '100%', height: 142, backgroundColor: C.bgSection, alignItems: 'center', justifyContent: 'center' }}>
           {image ? (
@@ -716,7 +778,7 @@ function RelatedCard({ product, currentId }: { product: RelatedProduct; currentI
           )}
         </View>
         <View style={{ padding: R.sm }}>
-          <Text numberOfLines={2} style={{ ...F.tiny, color: C.text, fontWeight: '800', minHeight: 32 }}>{product.name}</Text>
+          <Text numberOfLines={2} style={{ ...F.tiny, color: C.text, fontWeight: '800', minHeight: 32 }}>{name}</Text>
           <Text style={{ ...F.small, color: C.brand, fontWeight: '900', marginTop: R.xs }}>{formatMoney(display)}</Text>
           {product.rating != null && product.rating > 0 ? (
             <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>

@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 type StatusToken = { label: string; color: string; bg: string };
@@ -159,18 +160,19 @@ function OrderCard({ order }: { order: any }) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const first = items[0] || {};
   const detailId = getOrderKey(order);
+  const routeId = encodeRouteParam(detailId);
   const orderId = shortId(order?.orderNumber ?? detailId, 'ORDER', 6);
   const image = firstImage(first);
 
   return (
     <TouchableOpacity
       activeOpacity={0.86}
-      disabled={!detailId}
+      disabled={!routeId}
       accessibilityRole="button"
       accessibilityLabel={`Захиалга #${orderId} дэлгэрэнгүй харах`}
-      accessibilityState={{ disabled: !detailId }}
+      accessibilityState={{ disabled: !routeId }}
       onPress={() => {
-        if (detailId) router.push(`/order/${detailId}` as any);
+        if (routeId) router.push(`/order/${routeId}` as any);
       }}
     >
       <AppCard style={styles.card}>
