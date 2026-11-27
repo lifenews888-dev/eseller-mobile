@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const GUEST_LINKS: MenuItem[] = [
+  { icon: 'chatbubbles-outline', label: 'Зарын чат', sub: 'Зарын эзэдтэй', route: '/messages', color: C.brand },
   { icon: 'bag-outline', label: 'Бараанууд', sub: 'Нэгдсэн дэлгүүр', route: '/store', color: C.brand },
   { icon: 'megaphone-outline', label: 'Зарын булан', sub: 'Шинэ зарууд', route: '/feed', color: C.primary },
   { icon: 'storefront-outline', label: 'Дэлгүүрүүд', sub: 'Баталгаат дэлгүүр', route: '/shops', color: C.secondary },
@@ -85,7 +86,8 @@ export default function ProfileScreen() {
         { icon: 'cube-outline', label: 'Захиалгын түүх', sub: 'Төлөв, хүргэлт, баримт', route: '/orders', color: C.primary },
         { icon: 'cart-outline', label: `Сагс (${cartCount})`, sub: 'Сонгосон бараа', route: '/cart', color: C.brand },
         { icon: 'heart-outline', label: 'Хадгалсан', sub: 'Дуртай бараа', route: '/wishlist', color: C.error },
-        { icon: 'refresh-outline', label: 'Буцаалт ба маргаан', sub: '48 цагийн буцаалт', route: '/returns', color: C.primary },
+        { icon: 'chatbubbles-outline', label: 'Зарын чат', sub: 'Зарын эзэдтэй харилцах', route: '/messages', color: C.brand },
+        { icon: 'refresh-outline', label: 'Буцаалт ба маргаан', sub: 'Буцаалтын хүсэлт', route: '/returns', color: C.primary },
         { icon: 'location-outline', label: 'Хүргэлтийн хаяг', sub: 'Хаяг хадгалах', route: '/addresses', color: C.driver },
       ],
     },

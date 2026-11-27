@@ -55,7 +55,7 @@ function BuyerChatList({ user }: { user: any }) {
         contentContainerStyle={[styles.list, { paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }]}
         ListHeaderComponent={
           <>
-            <AppTopBar eyebrow="Профайл" title="Чат" showBack={false} />
+            <AppTopBar eyebrow="Профайл" title="Чат" showBack={false} right={<AppButton label="Зарын чат" icon="megaphone-outline" variant="secondary" onPress={() => router.push('/messages' as never)} />} />
             <AppHeader
               title="Чат"
               subtitle="Дэлгүүр, борлуулагч, хүргэлтийн багтай хийсэн ярианууд."
