@@ -85,7 +85,7 @@ export default function SplashScreen({
           color:         C.text,
           fontSize:      52,
           fontWeight:    '900',
-          letterSpacing: -2,
+          letterSpacing: 0,
         }}>
           eseller
           <Text style={{ color: C.brand }}>

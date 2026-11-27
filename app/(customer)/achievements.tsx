@@ -1,10 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
+import { Stack } from 'expo-router';
+import { apiUrl } from '../../src/config/apiBase';
+import * as SecureStore from '../../src/shared/secureStore';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppCard, AppHeader, AppMetricCard, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+import { useAuth } from '../../src/store/auth';
+import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
-const GOLD = '#F59E0B';
-const API = process.env.EXPO_PUBLIC_API_URL || 'https://eseller.mn';
+type IconName = keyof typeof Ionicons.glyphMap;
 
 interface AchievementItem {
   id: string;
@@ -17,7 +22,7 @@ interface AchievementItem {
   earnedAt: string | null;
 }
 
-const ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
+const ICON_MAP: Record<string, IconName> = {
   ShoppingBag: 'bag-outline',
   Flame: 'flame-outline',
   Trophy: 'trophy-outline',
@@ -34,6 +39,8 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 export default function AchievementsScreen() {
+  const layout = useAppLayoutMetrics();
+  const user = useAuth((s) => s.user);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -41,117 +48,192 @@ export default function AchievementsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const headers = await authHeaders();
       const [achRes, streakRes] = await Promise.all([
-        fetch(`${API}/api/achievements`, { headers }),
-        fetch(`${API}/api/achievements/streak`, { method: 'POST', headers }),
+        fetch(apiUrl('/achievements'), { headers }),
+        fetch(apiUrl('/achievements/streak'), { method: 'POST', headers }),
       ]);
       const achData = await achRes.json();
       if (achData.success) {
-        setAchievements(achData.data.achievements);
-        setTotalPoints(achData.data.totalPoints);
+        setAchievements(achData.data.achievements ?? []);
+        setTotalPoints(achData.data.totalPoints ?? 0);
       }
       const streakData = await streakRes.json();
-      if (streakData.success) setCurrentStreak(streakData.data.currentStreak);
-    } catch {}
+      if (streakData.success) setCurrentStreak(streakData.data.currentStreak ?? 0);
+    } catch {
+      setAchievements([]);
+    }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const onRefresh = () => { setRefreshing(true); load(); };
-  const earnedCount = achievements.filter((a) => a.earned).length;
-
-  const renderItem = ({ item }: { item: AchievementItem }) => {
-    const ionIcon = ICON_MAP[item.icon] || 'trophy-outline';
-    return (
-      <View style={[s.card, item.earned ? s.cardEarned : s.cardLocked]}>
-        <View style={[s.iconCircle, { backgroundColor: item.earned ? GOLD : '#E5E7EB' }]}>
-          {item.earned ? (
-            <Ionicons name={ionIcon as any} size={24} color="#fff" />
-          ) : (
-            <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" />
-          )}
-        </View>
-        <Text style={[s.name, !item.earned && s.textMuted]} numberOfLines={1}>{item.name}</Text>
-        <Text style={[s.desc, !item.earned && s.textMuted]} numberOfLines={2}>{item.description}</Text>
-        <Text style={[s.points, item.earned ? { color: GOLD } : { color: '#9CA3AF' }]}>
-          +{item.points.toLocaleString()} оноо
-        </Text>
-        {item.earned && (
-          <View style={s.badge}>
-            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-          </View>
-        )}
-      </View>
-    );
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
   };
+  const earnedCount = achievements.filter((item) => item.earned).length;
+
+  if (!user) {
+    return (
+      <RequireAuthScreen
+        title="Амжилт"
+        subtitle="Амжилт, badge болон оноогоо харахын тулд нэвтэрнэ үү."
+        icon="trophy-outline"
+        accent={C.gold}
+        returnTo="/achievements"
+      />
+    );
+  }
 
   if (loading) {
     return (
-      <View style={s.center}>
-        <ActivityIndicator size="large" color={GOLD} />
+      <View style={st.screen}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[st.list, { paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }]}>
+          <AppTopBar eyebrow="Профайл" title="Амжилт" showBack={false} />
+          <AppCard style={st.centerCard}>
+            <ActivityIndicator size="large" color={C.gold} />
+          </AppCard>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={s.container}>
-      <View style={s.header}>
-        <View style={s.statBox}>
-          <Ionicons name="trophy" size={22} color={GOLD} />
-          <Text style={s.statValue}>{totalPoints.toLocaleString()}</Text>
-          <Text style={s.statLabel}>Нийт оноо</Text>
-        </View>
-        <View style={s.statBox}>
-          <Ionicons name="flame" size={22} color="#F97316" />
-          <Text style={s.statValue}>{currentStreak}</Text>
-          <Text style={s.statLabel}>Дараалал</Text>
-        </View>
-        <View style={s.statBox}>
-          <Ionicons name="flash" size={22} color="#10B981" />
-          <Text style={s.statValue}>{earnedCount}/{achievements.length}</Text>
-          <Text style={s.statLabel}>Нээгдсэн</Text>
-        </View>
-      </View>
-
+    <View style={st.screen}>
+      <Stack.Screen options={{ headerShown: false }} />
       <FlatList
         data={achievements}
         keyExtractor={(item) => item.id}
-        renderItem={renderItem}
+        renderItem={({ item }) => <AchievementCard item={item} />}
         numColumns={2}
-        columnWrapperStyle={s.row}
-        contentContainerStyle={s.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}
-        ListEmptyComponent={
-          <View style={s.center}>
-            <Ionicons name="trophy-outline" size={48} color="#D1D5DB" />
-            <Text style={{ color: '#9CA3AF', marginTop: 8 }}>Амжилтууд олдсонгүй</Text>
+        columnWrapperStyle={st.column}
+        contentContainerStyle={[
+          st.list,
+          { paddingTop: layout.screenTop, paddingBottom: layout.screenBottom },
+        ]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.gold} />}
+        ListHeaderComponent={
+          <View>
+            <AppTopBar eyebrow="Профайл" title="Амжилт" showBack={false} />
+            <AppHeader
+              title="Амжилтууд"
+              subtitle="Цуглуулсан оноо, дараалал болон нээгдсэн badge-уудаа харна."
+              icon="trophy-outline"
+              accent={C.gold}
+            />
+            <View style={st.metrics}>
+              <AppMetricCard label="Нийт оноо" value={totalPoints.toLocaleString('mn-MN')} icon="star-outline" accent={C.gold} />
+              <AppMetricCard label="Дараалал" value={currentStreak} icon="flame-outline" accent={C.seller} />
+            </View>
+            <AppCard style={st.progressCard}>
+              <View style={st.progressIcon}>
+                <Ionicons name="sparkles-outline" size={21} color={C.secondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.progressTitle}>Нээгдсэн амжилт</Text>
+                <Text style={st.progressText}>
+                  {earnedCount}/{achievements.length || 0} badge идэвхтэй байна.
+                </Text>
+              </View>
+            </AppCard>
           </View>
+        }
+        ListEmptyComponent={
+          <AppCard style={st.empty}>
+            <Ionicons name="trophy-outline" size={42} color={C.textMuted} />
+            <Text style={st.emptyTitle}>Амжилт хараахан нээгдээгүй</Text>
+            <Text style={st.emptyText}>
+              Захиалга хийх, оноо цуглуулах үед badge автоматаар нэмэгдэнэ.
+            </Text>
+          </AppCard>
         }
       />
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 16, paddingHorizontal: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  statBox: { alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '700', color: '#1F2937', marginTop: 2 },
-  statLabel: { fontSize: 11, color: '#6B7280', marginTop: 1 },
-  list: { padding: 8 },
-  row: { justifyContent: 'space-between' },
-  card: { flex: 1, margin: 6, borderRadius: 12, padding: 14, borderWidth: 2, position: 'relative' },
-  cardEarned: { backgroundColor: '#FFFBEB', borderColor: GOLD },
-  cardLocked: { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', opacity: 0.7 },
-  iconCircle: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  name: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
-  desc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  textMuted: { color: '#9CA3AF' },
-  points: { fontSize: 12, fontWeight: '600', marginTop: 6 },
-  badge: { position: 'absolute', top: 6, right: 6 },
+function AchievementCard({ item }: { item: AchievementItem }) {
+  const icon = ICON_MAP[item.icon] || 'trophy-outline';
+  const accent = item.earned ? C.gold : C.textMuted;
+
+  return (
+    <AppCard style={[st.card, !item.earned && st.cardLocked]}>
+      <View style={[st.iconCircle, { backgroundColor: item.earned ? C.goldDim : C.bgSection }]}>
+        <Ionicons name={item.earned ? icon : 'lock-closed-outline'} size={22} color={accent} />
+      </View>
+      <Text style={[st.name, !item.earned && st.muted]} numberOfLines={2}>
+        {item.name}
+      </Text>
+      <Text style={[st.desc, !item.earned && st.muted]} numberOfLines={3}>
+        {item.description}
+      </Text>
+      <Text style={[st.points, { color: accent }]}>+{item.points.toLocaleString('mn-MN')} оноо</Text>
+      {item.earned ? (
+        <View style={st.badge}>
+          <Ionicons name="checkmark-circle" size={16} color={C.secondary} />
+        </View>
+      ) : null}
+    </AppCard>
+  );
+}
+
+const st = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg },
+  centerCard: { minHeight: 180, alignItems: 'center', justifyContent: 'center' },
+  list: {
+    padding: UI.screenPad,
+  },
+  metrics: { flexDirection: 'row', gap: R.sm, marginBottom: R.sm },
+  progressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: R.md,
+    marginBottom: R.md,
+  },
+  progressIcon: {
+    width: UI.iconBox,
+    height: UI.iconBox,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.secondaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressTitle: { ...F.h4, color: C.text },
+  progressText: { ...F.small, color: C.textSub, marginTop: 3 },
+  column: { gap: R.sm },
+  card: {
+    flex: 1,
+    minHeight: 188,
+    marginBottom: R.sm,
+    position: 'relative',
+  },
+  cardLocked: { opacity: 0.72 },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: UI.controlRadius,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: R.sm,
+  },
+  name: { ...F.small, color: C.text, fontWeight: '800' },
+  desc: { ...F.tiny, color: C.textSub, lineHeight: 16, marginTop: 4 },
+  muted: { color: C.textMuted },
+  points: { ...F.tiny, fontWeight: '800', marginTop: 'auto', paddingTop: R.sm },
+  badge: { position: 'absolute', top: R.sm, right: R.sm },
+  empty: { alignItems: 'center', gap: R.sm },
+  emptyTitle: { ...F.h4, color: C.text, textAlign: 'center' },
+  emptyText: { ...F.small, color: C.textSub, textAlign: 'center', lineHeight: 18 },
 });

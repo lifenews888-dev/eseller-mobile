@@ -1,6 +1,6 @@
 import * as LocalAuth from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from './secureStore';
 
 const BIO_FLAG_KEY = 'bio_enabled';
 const BIO_PHONE_KEY = 'eseller_biometric_phone';

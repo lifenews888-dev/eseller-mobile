@@ -22,7 +22,7 @@ export function ErrorBoundary({
       justifyContent:  'center',
       padding:         32,
     }}>
-      <Text style={{ fontSize: 52 }}>⚠️</Text>
+      <Ionicons name="alert-circle-outline" size={56} color={C.error} />
       <Text style={{
         color:        C.text,
         fontSize:     20,
@@ -51,7 +51,7 @@ export function ErrorBoundary({
         }}
       >
         <Text style={{
-          color:      C.white,
+          color:      C.bgCard,
           fontWeight: '700',
         }}>
           Дахин оролдох
@@ -131,7 +131,7 @@ export function NetworkError({
         }}
       >
         <Text style={{
-          color:      C.white,
+          color:      C.bgCard,
           fontWeight: '700',
         }}>
           Дахин оролдох

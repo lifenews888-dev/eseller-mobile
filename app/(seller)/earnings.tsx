@@ -1,117 +1,148 @@
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator } from 'react-native'
-import { useQuery } from '@tanstack/react-query'
-import { get } from '../../src/services/api'
-import { C, R, F } from '../../src/shared/design'
-import { useSellerCommissionSummary } from '../../src/hooks/useSellerDashboard'
-import { describeSellerError } from '../../src/api/sellerDashboard'
-import { useSellerNetworkEnabled } from '../../src/config/remoteFlags'
-import { EmptyState } from '../../src/shared/ui/EmptyState'
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
+import { get } from '../../src/services/api';
+import { C, F, R } from '../../src/shared/design';
+import { describeSellerError } from '../../src/api/sellerDashboard';
+import { useSellerCommissionSummary } from '../../src/hooks/useSellerDashboard';
+import { useSellerNetworkEnabled } from '../../src/config/remoteFlags';
+import { AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 export default function SellerEarningsScreen() {
   const { data, refetch, isRefetching } = useQuery({
     queryKey: ['seller-earnings'],
     queryFn: () => get('/affiliate/commissions'),
-  })
+  });
 
-  const commissions = (data as any)?.commissions || (Array.isArray(data) ? data : [])
-  const stats = (data as any)?.stats || {}
+  const commissions = (data as any)?.commissions || (Array.isArray(data) ? data : []);
+  const stats = (data as any)?.stats || {};
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}>
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Орлого</Text>
+    <AppScreen
+      refreshControl={
+        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.seller} />
+      }
+    >
+      <AppTopBar eyebrow="Борлуулагч" title="Орлого" showBack={false} />
+      <AppHeader
+        title="Орлого"
+        subtitle="Комисс, төлөв, сарын гүйцэтгэлийн нэгтгэл."
+        icon="cash-outline"
+        accent={C.seller}
+      />
+
+      <AppCard elevated style={{ marginBottom: R.md }}>
+        <Text style={{ ...F.small, color: C.seller, fontWeight: '900' }}>Нийт орлого</Text>
+        <Text style={{ fontSize: 34, color: C.seller, fontWeight: '900', marginTop: R.xs }}>
+          {formatMoney(stats.totalEarned)}
+        </Text>
+      </AppCard>
+
+      <View style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.lg }}>
+        <AppMetricCard
+          label="Энэ сар"
+          value={formatMoney(stats.thisMonth)}
+          icon="calendar-outline"
+          accent={C.seller}
+        />
+        <AppMetricCard
+          label="Хүлээгдэж буй"
+          value={formatMoney(stats.pending)}
+          icon="time-outline"
+          accent={C.warning}
+        />
       </View>
 
-      {/* Balance card */}
-      <View style={{ margin: 12, borderRadius: R.xl, padding: 24, backgroundColor: C.seller + '12', borderWidth: 1, borderColor: C.seller + '30' }}>
-        <Text style={{ color: C.seller, fontSize: 13, fontWeight: '600' }}>НИЙТ ОРЛОГО</Text>
-        <Text style={{ color: C.seller, fontSize: 36, fontWeight: '900', marginTop: 8 }}>{(stats.totalEarned || 0).toLocaleString()}₮</Text>
-        <View style={{ flexDirection: 'row', gap: 20, marginTop: 16 }}>
-          <View>
-            <Text style={{ color: C.seller + '80', fontSize: 12 }}>Энэ сар</Text>
-            <Text style={{ color: C.seller, fontWeight: '700' }}>{(stats.thisMonth || 0).toLocaleString()}₮</Text>
-          </View>
-          <View>
-            <Text style={{ color: C.seller + '80', fontSize: 12 }}>Хүлээгдэж буй</Text>
-            <Text style={{ color: C.seller, fontWeight: '700' }}>{(stats.pending || 0).toLocaleString()}₮</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Seller-network commission (PR103) — read-only, dry-run only.
-          Sourced from Sarana BFF /api/seller/commission-summary, which
-          proxies Negd's S2S adapter. NOT payable. No cash-out action. */}
       <SellerNetworkCommissionSection />
 
-      {/* Commission list */}
-      <View style={{ margin: 12 }}>
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>Гүйлгээний түүх</Text>
-        {commissions.length === 0 ? (
-          <EmptyState icon="💸" title="Гүйлгээ байхгүй байна" />
-        ) : commissions.map((c: any, i: number) => (
-          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: C.border }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontWeight: '600' }}>{c.productName || 'Захиалга'}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('mn-MN') : ''}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-              <Text style={{ color: C.secondary, fontWeight: '800', fontSize: 16 }}>+{(c.amount || 0).toLocaleString()}₮</Text>
-              <View style={{ backgroundColor: (c.status === 'paid' ? C.secondary : C.warning) + '20', borderRadius: R.full, paddingHorizontal: 8, paddingVertical: 2 }}>
-                <Text style={{ color: c.status === 'paid' ? C.secondary : C.warning, fontSize: 11, fontWeight: '600' }}>
-                  {c.status === 'paid' ? 'Төлөгдсөн' : 'Хүлээгдэж буй'}
-                </Text>
+      <Text style={{ ...F.h3, color: C.text, marginBottom: R.sm }}>Гүйлгээний түүх</Text>
+      {commissions.length === 0 ? (
+        <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+          <Ionicons name="receipt-outline" size={34} color={C.textMuted} />
+          <Text style={{ ...F.small, color: C.textSub }}>Гүйлгээ байхгүй байна</Text>
+        </AppCard>
+      ) : (
+        <View style={{ gap: R.sm }}>
+          {commissions.map((commission: any, index: number) => (
+            <AppCard key={commission.id ?? index} style={{ padding: R.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ ...F.small, color: C.text, fontWeight: '800' }} numberOfLines={1}>
+                    {commission.productName || 'Захиалга'}
+                  </Text>
+                  <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>
+                    {commission.createdAt
+                      ? new Date(commission.createdAt).toLocaleDateString('mn-MN')
+                      : ''}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Text style={{ ...F.body, color: C.success, fontWeight: '900' }}>
+                    +{formatMoney(commission.amount)}
+                  </Text>
+                  <StatusBadge paid={commission.status === 'paid'} />
+                </View>
               </View>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
-  )
+            </AppCard>
+          ))}
+        </View>
+      )}
+    </AppScreen>
+  );
 }
 
-// ─── Seller-network commission summary (PR103) ─────────────────────────
-// Read-only. Dry-run amounts only. NOT payable. No cash-out action.
-
 function SellerNetworkCommissionSection() {
-  const enabled = useSellerNetworkEnabled()
-  const q = useSellerCommissionSummary({ enabled })
-  const fmt = (n: number) => n.toLocaleString() + '₮'
+  const enabled = useSellerNetworkEnabled();
+  const q = useSellerCommissionSummary({ enabled });
 
-  if (!enabled) return null
+  if (!enabled) return null;
 
   return (
-    <View style={{ margin: 12, marginBottom: 4 }}>
-      <Text style={{ ...F.h4, color: C.text, marginBottom: 8 }}>Худалдагчийн сүлжээ — шимтгэл (dry-run)</Text>
-      <Text style={{ color: C.textMuted, fontSize: 11, marginBottom: 10 }}>
-        Серверээс тооцоологдсон. Бүх мөр dry-run, төлөгдөх биш.
+    <View style={{ marginBottom: R.lg }}>
+      <Text style={{ ...F.h3, color: C.text, marginBottom: R.xs }}>
+        Худалдагчийн сүлжээний шимтгэл
       </Text>
-      <View style={{ backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14, borderWidth: 1, borderColor: C.border }}>
+      <Text style={{ ...F.tiny, color: C.textMuted, marginBottom: R.sm }}>
+        Серверээс тооцоологдсон dry-run дүн. Одоогоор олголт хийхгүй.
+      </Text>
+      <AppCard>
         {q.isLoading ? (
-          <View style={{ alignItems: 'center', padding: 12 }}>
+          <View style={{ alignItems: 'center', padding: R.md }}>
             <ActivityIndicator color={C.seller} />
-            <Text style={{ color: C.textSub, marginTop: 6, fontSize: 12 }}>Ачааллаж байна…</Text>
+            <Text style={{ ...F.small, color: C.textSub, marginTop: R.sm }}>
+              Ачаалж байна...
+            </Text>
           </View>
         ) : q.isError ? (
-          <Text style={{ color: C.error, fontSize: 12 }}>
+          <Text style={{ ...F.small, color: C.error }}>
             {describeSellerError(q.error).message}
           </Text>
         ) : q.data ? (
           <>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <KvBox label="Тооцоолсон" count={q.data.totals.dryRun} amount={fmt(q.data.proposedAmountsMnt.dryRun)} />
-              <KvBox label="Шалгаж буй" count={q.data.totals.needsReview} amount={fmt(q.data.proposedAmountsMnt.inReview)} />
+            <View style={{ flexDirection: 'row', gap: R.sm }}>
+              <KvBox
+                label="Тооцоолсон"
+                count={q.data.totals.dryRun}
+                amount={formatMoney(q.data.proposedAmountsMnt.dryRun)}
+              />
+              <KvBox
+                label="Шалгаж буй"
+                count={q.data.totals.needsReview}
+                amount={formatMoney(q.data.proposedAmountsMnt.inReview)}
+              />
             </View>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              <KvBox label="Зөвшөөрөгдсөн" count={q.data.totals.approvedForFuturePosting} amount={fmt(q.data.proposedAmountsMnt.approvedNotPayable)} />
-              <KvBox label="Хасагдсан" count={q.data.totals.excluded} amount={'—'} />
+            <View style={{ flexDirection: 'row', gap: R.sm, marginTop: R.sm }}>
+              <KvBox
+                label="Зөвшөөрөгдсөн"
+                count={q.data.totals.approvedForFuturePosting}
+                amount={formatMoney(q.data.proposedAmountsMnt.approvedNotPayable)}
+              />
+              <KvBox label="Хасагдсан" count={q.data.totals.excluded} amount="-" />
             </View>
             <View
               style={{
-                marginTop: 10,
-                padding: 10,
+                marginTop: R.md,
+                padding: R.md,
                 backgroundColor: C.bgSection,
                 borderRadius: R.md,
                 borderWidth: 1,
@@ -119,26 +150,53 @@ function SellerNetworkCommissionSection() {
                 borderColor: C.border,
               }}
             >
-              <Text style={{ color: C.textMuted, fontSize: 11, fontWeight: '700' }}>
-                Олгогдох (төлөх): {fmt(q.data.payableAmountMnt)}
-              </Text>
-              <Text style={{ color: C.textMuted, fontSize: 10, marginTop: 4 }}>
-                Одоогоор боломжгүй. effective=false invariant.
+              <Text style={{ ...F.small, color: C.textSub, fontWeight: '800' }}>
+                Олгогдох дүн: {formatMoney(q.data.payableAmountMnt)}
               </Text>
             </View>
           </>
         ) : null}
-      </View>
+      </AppCard>
     </View>
-  )
+  );
 }
 
 function KvBox({ label, count, amount }: { label: string; count: number; amount: string }) {
   return (
-    <View style={{ flex: 1, backgroundColor: C.bgSection, borderRadius: R.md, padding: 10, borderWidth: 1, borderColor: C.border }}>
-      <Text style={{ color: C.textMuted, fontSize: 10 }}>{label}</Text>
-      <Text style={{ color: C.text, fontSize: 16, fontWeight: '800', marginTop: 2 }}>{count}</Text>
-      <Text style={{ color: C.textSub, fontSize: 11, marginTop: 2 }}>{amount}</Text>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: C.bgSection,
+        borderRadius: R.md,
+        padding: R.sm,
+        borderWidth: 1,
+        borderColor: C.border,
+      }}
+    >
+      <Text style={{ ...F.tiny, color: C.textMuted }}>{label}</Text>
+      <Text style={{ ...F.h3, color: C.text, marginTop: 2 }}>{count}</Text>
+      <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>{amount}</Text>
     </View>
-  )
+  );
+}
+
+function StatusBadge({ paid }: { paid: boolean }) {
+  return (
+    <View
+      style={{
+        backgroundColor: paid ? C.success + '18' : C.warning + '18',
+        borderRadius: R.full,
+        paddingHorizontal: R.sm,
+        paddingVertical: 3,
+      }}
+    >
+      <Text style={{ ...F.tiny, color: paid ? C.success : C.warning, fontWeight: '800' }}>
+        {paid ? 'Төлөгдсөн' : 'Хүлээгдэж буй'}
+      </Text>
+    </View>
+  );
+}
+
+function formatMoney(value: number) {
+  return `${Number(value || 0).toLocaleString()}₮`;
 }

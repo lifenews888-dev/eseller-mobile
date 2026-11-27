@@ -1,3 +1,5 @@
+import { shadowStyle } from './shadow';
+
 export const C = {
   // Primary — Buyer accent (цэнхэр)
   primary:    '#1A73E8',
@@ -62,7 +64,7 @@ export const R = {
 };
 
 export const F = {
-  h1:    { fontSize: 28, fontWeight: '900' as const, letterSpacing: -0.5 },
+  h1:    { fontSize: 28, fontWeight: '900' as const, letterSpacing: 0 },
   h2:    { fontSize: 22, fontWeight: '800' as const },
   h3:    { fontSize: 18, fontWeight: '700' as const },
   h4:    { fontSize: 16, fontWeight: '700' as const },
@@ -72,21 +74,23 @@ export const F = {
 };
 
 export const S = {
-  card: {
-    shadowColor:   '#000',
-    shadowOffset:  { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius:  8,
-    elevation:     6,
-  },
-  elevated: {
-    shadowColor:   '#000',
-    shadowOffset:  { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius:  16,
-    elevation:     12,
-  },
+  card: shadowStyle({ y: 2, blur: 8, opacity: 0.4, elevation: 6 }),
+  elevated: shadowStyle({ y: 4, blur: 16, opacity: 0.5, elevation: 12 }),
 };
+
+export const UI = {
+  screenPad: R.lg,
+  screenTop: 52,
+  screenBottom: 100,
+  cardRadius: R.lg,
+  controlRadius: R.md,
+  iconBox: 44,
+  headerMinHeight: 104,
+  tabBarHeight: 68,
+  tabBarPaddingTop: 8,
+  tabBarPaddingBottom: 8,
+  tabBarLabelSize: 10,
+} as const;
 
 export function roleColor(role: string): string {
   return ({

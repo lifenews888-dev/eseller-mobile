@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, ActivityIndicator,
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { OrderAPI, post } from '../../src/services/api';
-import { C, R } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+
+const RATING_LABELS = ['', 'Муу', 'Дунд', 'Боломжийн', 'Сайн', 'Маш сайн'];
 
 export default function ReviewScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const layout = useAppLayoutMetrics();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
 
@@ -31,20 +32,20 @@ export default function ReviewScreen() {
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert('Амжилттай', 'Үнэлгээ илгээгдлээ', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'За', onPress: () => router.back() },
       ]);
     },
-    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Илгээж чадсангүй'),
+    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Илгээж чадсангүй'),
   });
 
-  function selectStar(i: number) {
+  function selectStar(value: number) {
     Haptics.selectionAsync().catch(() => {});
-    setRating(i);
+    setRating(value);
   }
 
   function handleSubmit() {
     if (rating === 0) {
-      Alert.alert('Анхаар', 'Одоор үнэлгээ өгнө үү');
+      Alert.alert('Анхаар', 'Одоор үнэлгээ өгнө үү.');
       return;
     }
     submitMut.mutate();
@@ -52,117 +53,71 @@ export default function ReviewScreen() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={C.brand} />
-      </View>
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Захиалга" title={`#${shortId(orderId, 6)}`} />
+        <View style={[styles.center, { flex: 1 }]}>
+          <ActivityIndicator size="large" color={C.brand} />
+          <Text style={styles.loadingText}>Үнэлгээний мэдээлэл ачаалж байна...</Text>
+        </View>
+      </AppScreen>
     );
   }
 
   const order: any = (orderData as any)?.data?.order || (orderData as any)?.order || orderData;
   const items: any[] = Array.isArray(order?.items) ? order.items : [];
   const firstItem = items[0];
+  const title = firstItem?.name ?? firstItem?.productName ?? firstItem?.product?.name ?? `Захиалга #${shortId(orderId, 6)}`;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingTop: 52,
-          padding: 16,
-          backgroundColor: C.bgCard,
-          borderBottomWidth: 0.5,
-          borderBottomColor: C.border,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={C.text} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: C.text, flex: 1 }}>
-          Үнэлгээ өгөх
-        </Text>
-      </View>
+    <View style={styles.screen}>
+      <AppScreen keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: layout.screenBottom + 96 }}>
+        <AppTopBar eyebrow="Захиалга" title={`#${shortId(orderId, 6)}`} />
 
-      <View style={{ padding: 16, gap: 16 }}>
-        {/* Order summary */}
-        <View
-          style={{
-            backgroundColor: C.bgCard,
-            borderRadius: R.lg,
-            padding: 14,
-            borderWidth: 0.5,
-            borderColor: C.border,
-            flexDirection: 'row',
-            gap: 12,
-            alignItems: 'center',
-          }}
-        >
-          <View
-            style={{
-              width: 48, height: 48, borderRadius: 10,
-              backgroundColor: C.bgSection,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 24 }}>📦</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
-              {firstItem?.name ?? `Захиалга #${String(orderId).slice(-6).toUpperCase()}`}
-            </Text>
-            {items.length > 1 && (
-              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>
-                + {items.length - 1} бусад
-              </Text>
-            )}
-          </View>
+        <AppHeader
+          title="Үнэлгээ өгөх"
+          subtitle="Бараа, хүргэлт, үйлчилгээний туршлагаа үнэлнэ үү."
+          icon="star-outline"
+          accent={C.gold}
+        />
+
+        <AppCard style={styles.summaryCard}>
+        <View style={styles.summaryIcon}>
+          <Ionicons name="cube-outline" size={22} color={C.primary} />
         </View>
-
-        {/* Star rating */}
-        <View
-          style={{
-            backgroundColor: C.bgCard,
-            borderRadius: R.lg,
-            padding: 20,
-            borderWidth: 0.5,
-            borderColor: C.border,
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <Text style={{ color: C.textSub, fontSize: 13, fontWeight: '600' }}>
-            Үйлчилгээг хэрхэн үнэлэх вэ?
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => selectStar(i)}
-                hitSlop={10}
-                style={{ padding: 4 }}
-              >
-                <Ionicons
-                  name={i <= rating ? 'star' : 'star-outline'}
-                  size={40}
-                  color={i <= rating ? '#F9A825' : C.textMuted}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-          {rating > 0 && (
-            <Text style={{ color: C.gold, fontSize: 14, fontWeight: '700' }}>
-              {['', 'Муу', 'Дунд', 'Боломжийн', 'Сайн', 'Маш сайн'][rating]}
-            </Text>
-          )}
+        <View style={styles.summaryText}>
+          <Text style={styles.orderTitle} numberOfLines={2}>{title}</Text>
+          {items.length > 1 ? <Text style={styles.mutedText}>+ {items.length - 1} бусад</Text> : null}
         </View>
+        </AppCard>
 
-        {/* Comment */}
-        <View>
-          <Text style={{ color: C.textSub, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
-            Сэтгэгдэл (сонголттой)
-          </Text>
+        <AppCard style={styles.ratingCard}>
+        <Text style={styles.question}>Үйлчилгээг хэрхэн үнэлэх вэ?</Text>
+        <View style={styles.stars}>
+          {[1, 2, 3, 4, 5].map((value) => (
+            <TouchableOpacity
+              key={value}
+              activeOpacity={0.78}
+              onPress={() => selectStar(value)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`${value} од`}
+              accessibilityHint={`${value} одоор үнэлэх`}
+              accessibilityState={{ selected: value === rating }}
+              style={styles.starButton}
+            >
+              <Ionicons
+                name={value <= rating ? 'star' : 'star-outline'}
+                size={38}
+                color={value <= rating ? C.gold : C.textMuted}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.ratingLabel}>{rating > 0 ? RATING_LABELS[rating] : 'Одоор үнэлнэ үү'}</Text>
+        </AppCard>
+
+        <View style={styles.commentBlock}>
+          <Text style={styles.commentTitle}>Сэтгэгдэл (сонголттой)</Text>
           <TextInput
             value={comment}
             onChangeText={setComment}
@@ -170,38 +125,71 @@ export default function ReviewScreen() {
             placeholderTextColor={C.textMuted}
             multiline
             numberOfLines={5}
-            style={{
-              backgroundColor: C.bgCard,
-              borderRadius: R.lg,
-              padding: 14,
-              color: C.text,
-              fontSize: 14,
-              minHeight: 120,
-              textAlignVertical: 'top',
-              borderWidth: 0.5,
-              borderColor: C.border,
-            }}
+            textAlignVertical="top"
+            accessibilityLabel="Сэтгэгдэл бичих"
+            style={styles.commentInput}
           />
         </View>
+      </AppScreen>
 
-        {/* Submit */}
-        <TouchableOpacity
-          onPress={handleSubmit}
+      <View style={[styles.fixedActions, { paddingBottom: layout.insets.bottom + R.lg }]}>
+        <AppButton
+          label={submitMut.isPending ? 'Илгээж байна' : 'Илгээх'}
+          icon="send-outline"
           disabled={submitMut.isPending || rating === 0}
-          style={{
-            backgroundColor: rating === 0 || submitMut.isPending ? C.textMuted : C.brand,
-            borderRadius: R.lg,
-            padding: 16,
-            alignItems: 'center',
-          }}
-        >
-          {submitMut.isPending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Илгээх</Text>
-          )}
-        </TouchableOpacity>
+          onPress={handleSubmit}
+        />
       </View>
-    </ScrollView>
+    </View>
   );
 }
+
+function shortId(value: any, size: number) {
+  const id = String(value ?? '').trim();
+  return id ? id.slice(-size).toLocaleUpperCase('en-US') : 'ORDER';
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  loadingText: { ...F.small, color: C.textSub, marginTop: R.md },
+  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, marginBottom: R.md },
+  summaryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: UI.controlRadius,
+    backgroundColor: C.primaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryText: { flex: 1 },
+  orderTitle: { ...F.small, color: C.text, fontWeight: '900' },
+  mutedText: { ...F.tiny, color: C.textMuted, marginTop: 3 },
+  ratingCard: { alignItems: 'center', gap: R.md, marginBottom: R.md },
+  question: { ...F.small, color: C.textSub, fontWeight: '800', textAlign: 'center' },
+  stars: { flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  starButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  ratingLabel: { ...F.body, color: C.gold, fontWeight: '900', minHeight: 22 },
+  commentBlock: { marginBottom: R.md },
+  commentTitle: { ...F.small, color: C.textSub, fontWeight: '900', marginBottom: R.sm },
+  commentInput: {
+    minHeight: 124,
+    backgroundColor: C.bgCard,
+    borderRadius: UI.cardRadius,
+    padding: R.md,
+    color: C.text,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  fixedActions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: C.bgCard,
+    padding: UI.screenPad,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+});

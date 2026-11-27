@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { uploadImageToCloudinary } from '../../src/lib/uploadImage';
 
-import { C, R, F } from '../../src/shared/design';
+import { C, R, F, UI } from '../../src/shared/design';
 import { useMalchnaasEnabled, usePilotAimags, isPilotAimag } from '../../src/config/remoteFlags';
 import {
   PROVINCES,
@@ -20,6 +20,10 @@ import {
   type LivestockCounts,
 } from '../../src/features/herder';
 import { useAuth } from '../../src/store/auth';
+import { AuthValueIntro } from '../../src/components/AuthValueIntro';
+import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
+
+const REGISTER_HERDER_RETURN_TO = '/register-herder';
 
 const BANKS = ['Хаан банк', 'Голомт банк', 'ХХБ', 'Төрийн банк', 'Богд банк', 'Капитрон банк'];
 const STEPS = 6;
@@ -27,16 +31,17 @@ const STEPS = 6;
 const REGISTER_NUMBER_RE = /^[А-ЯӨҮЁ]{2}\d{8}$/; // MN national ID pattern
 
 type LivestockKey = keyof LivestockCounts;
-const LIVESTOCK: { key: LivestockKey; label: string; emoji: string }[] = [
-  { key: 'horse', label: 'Адуу',  emoji: '🐎' },
-  { key: 'cow',   label: 'Үхэр',  emoji: '🐄' },
-  { key: 'sheep', label: 'Хонь',  emoji: '🐑' },
-  { key: 'goat',  label: 'Ямаа',  emoji: '🐐' },
-  { key: 'camel', label: 'Тэмээ', emoji: '🐪' },
+const LIVESTOCK: { key: LivestockKey; label: string; icon: string }[] = [
+  { key: 'horse', label: 'Адуу',  icon: 'paw-outline' },
+  { key: 'cow',   label: 'Үхэр',  icon: 'paw-outline' },
+  { key: 'sheep', label: 'Хонь',  icon: 'paw-outline' },
+  { key: 'goat',  label: 'Ямаа',  icon: 'paw-outline' },
+  { key: 'camel', label: 'Тэмээ', icon: 'paw-outline' },
 ];
 
 export default function RegisterHerderScreen() {
   const { user } = useAuth();
+  const layout = useAppLayoutMetrics();
   const malchnaasEnabled = useMalchnaasEnabled();
   const pilotAimags = usePilotAimags();
   const [step, setStep] = useState(1);
@@ -57,10 +62,55 @@ export default function RegisterHerderScreen() {
   const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null);
   const [gpsLoading, setGpsLoading]         = useState(false);
 
+  const selectedProvince = PROVINCES.find((p) => p.code === province);
+  const selectedProvinceDays = useProvinceDays(province);
+
+  const goToLogin = () => {
+    router.push({ pathname: '/login', params: { returnTo: REGISTER_HERDER_RETURN_TO } } as any);
+  };
+
+  const goToRegister = () => {
+    router.push({ pathname: '/register', params: { role: 'seller', returnTo: REGISTER_HERDER_RETURN_TO } } as any);
+  };
+
   useEffect(() => {
-    if (!malchnaasEnabled) router.replace('/(customer)/register-shop' as never);
+    if (!malchnaasEnabled) router.replace('/register-shop' as never);
   }, [malchnaasEnabled]);
+
+  useEffect(() => {
+    const userPhone = (user as any)?.phone;
+    if (!phone && userPhone) setPhone(userPhone);
+  }, [phone, user]);
+
   if (!malchnaasEnabled) return null;
+
+  if (!user) {
+    return (
+      <View style={st.screen}>
+        <ScrollView contentContainerStyle={{ padding: UI.screenPad, paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }}>
+          <AppTopBar eyebrow="Малчнаас" title="Малчин бүртгэл" />
+          <View style={st.authHero}>
+            <View style={st.authIcon}>
+              <Ionicons name="leaf-outline" size={30} color={HERDER_BRAND} />
+            </View>
+            <Text style={st.authTitle}>Малчнаас бүртгэлд нэвтэрч орно уу</Text>
+            <Text style={st.authCopy}>
+              Нэвтэрсний дараа энэ хуудсанд буцаж ирээд хүсэлтээ үргэлжлүүлэн илгээнэ.
+            </Text>
+          </View>
+
+          <AuthValueIntro />
+
+          <TouchableOpacity style={[st.authPrimary, { backgroundColor: HERDER_BRAND }]} onPress={goToLogin}>
+            <Text style={st.authPrimaryText}>Нэвтрэх</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.authSecondary} onPress={goToRegister}>
+            <Text style={st.authSecondaryText}>Бүртгүүлэх</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
 
   const setHead = (k: LivestockKey, v: string) => {
     const n = parseInt(v || '0', 10);
@@ -114,6 +164,10 @@ export default function RegisterHerderScreen() {
   };
 
   const submit = async () => {
+    if (!user) {
+      goToLogin();
+      return;
+    }
     if (!province) return;
     setSubmitting(true);
     try {
@@ -135,7 +189,7 @@ export default function RegisterHerderScreen() {
       const res = await HerderAPI.register(payload);
       if (res.success) {
         Alert.alert(
-          'Хүсэлт илгээлээ ✅',
+          'Хүсэлт илгээлээ',
           res.message ?? 'Админ 24-48 цагт баталгаажуулна. Дараа нь бүтээгдэхүүн нэмэх боломжтой болно.',
           [{ text: 'OK', onPress: () => router.back() }],
         );
@@ -152,22 +206,21 @@ export default function RegisterHerderScreen() {
     setSubmitting(false);
   };
 
-  const selectedProvince = PROVINCES.find((p) => p.code === province);
-  const selectedProvinceDays = useProvinceDays(province);
-
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: R.lg, paddingBottom: 80 }}>
+    <View style={st.screen}>
+    <ScrollView contentContainerStyle={{ padding: UI.screenPad, paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }}>
+      <AppTopBar eyebrow="Малчнаас" title="Малчин бүртгэл" />
       <View style={st.progress}>
         {Array.from({ length: STEPS }).map((_, i) => {
           const n = i + 1;
           return (
             <View key={n} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[st.dot, n <= step && { backgroundColor: HERDER_BRAND }, n < step && { backgroundColor: '#047857' }]}>
+              <View style={[st.dot, n <= step && { backgroundColor: HERDER_BRAND }, n < step && { backgroundColor: C.secondary }]}>
                 {n < step
-                  ? <Ionicons name="checkmark" size={12} color="#fff" />
-                  : <Text style={{ color: n <= step ? '#fff' : C.textMuted, fontSize: 11, fontWeight: '700' }}>{n}</Text>}
+                  ? <Ionicons name="checkmark" size={12} color={C.bgCard} />
+                  : <Text style={{ color: n <= step ? C.bgCard : C.textMuted, fontSize: 11, fontWeight: '700' }}>{n}</Text>}
               </View>
-              {n < STEPS && <View style={[st.line, n < step && { backgroundColor: '#047857' }]} />}
+              {n < STEPS && <View style={[st.line, n < step && { backgroundColor: C.secondary }]} />}
             </View>
           );
         })}
@@ -198,7 +251,7 @@ export default function RegisterHerderScreen() {
         {LIVESTOCK.map((ls) => (
           <View key={ls.key} style={st.livestockRow}>
             <View style={st.livestockLabel}>
-              <Text style={{ fontSize: 22 }}>{ls.emoji}</Text>
+              <Ionicons name={ls.icon as any} size={22} color={HERDER_BRAND} />
               <Text style={{ ...F.body, color: C.text, fontWeight: '600' }}>{ls.label}</Text>
             </View>
             <TextInput
@@ -227,7 +280,7 @@ export default function RegisterHerderScreen() {
               style={[st.provinceChip, province === p.code && st.provinceChipActive]}
               onPress={() => setProvince(p.code)}
             >
-              <Text style={[st.provinceText, province === p.code && { color: '#fff' }]}>{p.name}</Text>
+              <Text style={[st.provinceText, province === p.code && { color: C.bgCard }]}>{p.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -252,7 +305,7 @@ export default function RegisterHerderScreen() {
         <Text style={st.helper}>Зөвлөмж — мах, сүү зарахад шаардлагатай. Дараа ч upload хийж болно.</Text>
         <TouchableOpacity style={st.certPick} onPress={pickVetCert}>
           {vetCertUri ? (
-            <Image source={{ uri: vetCertUri }} style={{ width: '100%', height: '100%', borderRadius: 12 }} resizeMode="cover" />
+            <Image source={{ uri: vetCertUri }} style={{ width: '100%', height: '100%', borderRadius: R.md }} resizeMode="cover" />
           ) : (<>
             <Ionicons name="document-attach-outline" size={32} color={C.textMuted} />
             <Text style={{ color: C.textMuted, marginTop: 6, ...F.small }}>Зураг байршуулах</Text>
@@ -278,7 +331,7 @@ export default function RegisterHerderScreen() {
               style={[st.bankChip, bankName === b && { backgroundColor: HERDER_BRAND, borderColor: HERDER_BRAND }]}
               onPress={() => setBankName(b)}
             >
-              <Text style={{ ...F.small, color: bankName === b ? '#fff' : C.textMuted }}>{b}</Text>
+              <Text style={{ ...F.small, color: bankName === b ? C.bgCard : C.textMuted }}>{b}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -319,13 +372,14 @@ export default function RegisterHerderScreen() {
           disabled={!canNext() || submitting}
         >
           {submitting
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={{ ...F.body, color: '#fff', fontWeight: '800' }}>
-                {step === STEPS ? 'Хүсэлт илгээх 🌿' : 'Дараах'}
+            ? <ActivityIndicator color={C.bgCard} />
+            : <Text style={{ ...F.body, color: C.bgCard, fontWeight: '800' }}>
+                {step === STEPS ? 'Хүсэлт илгээх' : 'Дараах'}
               </Text>}
         </TouchableOpacity>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -339,8 +393,9 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
 }
 
 const st = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
   progress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: R.xl },
-  dot: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.bgInput, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 26, height: 26, borderRadius: R.full, backgroundColor: C.bgInput, alignItems: 'center', justifyContent: 'center' },
   line: { width: 20, height: 2, backgroundColor: C.bgInput, marginHorizontal: 3 },
 
   title: { ...F.h2, color: C.text, marginBottom: 4 },
@@ -355,7 +410,7 @@ const st = StyleSheet.create({
   totalLine: { ...F.body, color: HERDER_BRAND, fontWeight: '800', marginTop: R.sm, textAlign: 'right' },
 
   provinceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: R.md },
-  provinceChip: { backgroundColor: C.bgCard, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: C.border },
+  provinceChip: { backgroundColor: C.bgCard, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: C.border },
   provinceChipActive: { backgroundColor: HERDER_BRAND, borderColor: HERDER_BRAND },
   provinceText: { ...F.small, color: C.text, fontWeight: '600' },
 
@@ -363,7 +418,7 @@ const st = StyleSheet.create({
 
   certPick: { height: 160, backgroundColor: C.bgCard, borderRadius: R.md, borderWidth: 1, borderColor: C.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', marginBottom: R.md, overflow: 'hidden' },
 
-  bankChip: { backgroundColor: C.bgCard, borderRadius: 20, paddingHorizontal: R.lg, paddingVertical: 9, marginRight: R.sm, borderWidth: 0.5, borderColor: C.border },
+  bankChip: { backgroundColor: C.bgCard, borderRadius: R.full, paddingHorizontal: R.lg, paddingVertical: 9, marginRight: R.sm, borderWidth: 0.5, borderColor: C.border },
 
   reviewCard: { backgroundColor: C.bgCard, borderRadius: R.md, padding: R.md, gap: 8, borderWidth: 0.5, borderColor: C.border },
   reviewRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
@@ -371,5 +426,13 @@ const st = StyleSheet.create({
   disclaimer: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: R.md, padding: R.md, backgroundColor: C.bgSection, borderRadius: R.md },
 
   navRow: { flexDirection: 'row', gap: 10, marginTop: R.xxl },
-  navBtn: { borderRadius: 14, paddingVertical: R.lg, paddingHorizontal: R.xl, alignItems: 'center' },
+  navBtn: { borderRadius: R.md, paddingVertical: R.lg, paddingHorizontal: R.xl, alignItems: 'center' },
+  authHero: { backgroundColor: C.bgCard, borderRadius: R.lg, padding: R.xl, alignItems: 'center', borderWidth: 1, borderColor: C.border, marginBottom: R.lg },
+  authIcon: { width: 58, height: 58, borderRadius: R.lg, backgroundColor: C.secondaryDim, alignItems: 'center', justifyContent: 'center', marginBottom: R.md },
+  authTitle: { ...F.h2, color: C.text, textAlign: 'center', marginBottom: R.sm },
+  authCopy: { ...F.small, color: C.textSub, textAlign: 'center', lineHeight: 19 },
+  authPrimary: { borderRadius: R.lg, padding: 16, alignItems: 'center', marginTop: R.sm },
+  authPrimaryText: { color: C.bgCard, fontSize: 16, fontWeight: '800' },
+  authSecondary: { backgroundColor: C.bgSection, borderRadius: R.lg, padding: 16, alignItems: 'center', marginTop: R.sm, borderWidth: 1, borderColor: C.border },
+  authSecondaryText: { color: C.text, fontSize: 16, fontWeight: '700' },
 });

@@ -1,7 +1,11 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../shared/secureStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { API_BASE_URL } from '../config/apiBase';
+import { isPublicBrowsingRequest, requestHadAuthorization } from '../shared/apiAuthPolicy';
+import { encodeApiPathSegment } from '../shared/apiPath';
+import { normalizePublicRouteParam } from '../shared/routing';
 
 /**
  * One-shot flag set by the 401 interceptor when a *real* session expires
@@ -56,13 +60,19 @@ function isSellerEndpoint(url: string | undefined): boolean {
   return !!url && url.includes('/seller/');
 }
 
+function getCurrentReturnTo(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const { pathname, search, hash } = window.location;
+  if (!pathname || pathname === '/login' || pathname === '/register' || pathname.startsWith('/(auth)')) {
+    return undefined;
+  }
+  return normalizePublicRouteParam(`${pathname}${search || ''}${hash || ''}`) ?? undefined;
+}
+
 // DEV: override with EXPO_PUBLIC_API_BASE_URL for physical devices (LAN IP)
 // Default falls back to 10.0.2.2 (Android emulator → host loopback)
-const BASE = process.env.EXPO_PUBLIC_API_BASE_URL
-  ?? (__DEV__ ? 'http://10.0.2.2:3000/api' : 'https://eseller.mn/api');
-
 export const api = axios.create({
-  baseURL: BASE,
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -72,8 +82,10 @@ export const api = axios.create({
 // Request interceptor — token нэмэх
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('token');
-  if (token) {
+  if (token && !isPublicBrowsingRequest(config)) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else if (token) {
+    apiLog('Authorization SKIPPED (public browsing request)', { url: config.url });
   }
   return config;
 });
@@ -120,6 +132,10 @@ api.interceptors.response.use(
       // request errors (let the caller render its own alert).
       if (isCredentialEndpoint(url)) {
         apiLog('onUnauthorized SKIPPED (credential endpoint)', { url });
+      } else if (!requestHadAuthorization(err.config)) {
+        apiLog('onUnauthorized SKIPPED (unauthenticated request)', { url });
+      } else if (isPublicBrowsingRequest(err.config)) {
+        apiLog('onUnauthorized SKIPPED (public browsing request)', { url });
       } else {
         apiLog('onUnauthorized fired', { url });
         await SecureStore.deleteItemAsync('token');
@@ -133,7 +149,14 @@ api.interceptors.response.use(
           try {
             onUnauthorized?.();
             // Auth screen руу чиглүүлэх — router mount болсон үед л ажиллана
-            try { router.replace('/(auth)/login' as never); } catch {}
+            try {
+              const returnTo = getCurrentReturnTo();
+              if (returnTo) {
+                router.replace({ pathname: '/login', params: { returnTo } } as never);
+              } else {
+                router.replace('/login' as never);
+              }
+            } catch {}
           } finally {
             // Дараагийн 401-ийг хүлээж авахын тулд жаахан хугацааны дараа дахин тэнцүүлнэ
             setTimeout(() => { unauthorizedHandling = false; }, 1000);
@@ -182,6 +205,8 @@ export const put = (url: string, data?: any) =>
 export const del = (url: string) =>
   api.delete(url);
 
+const pathSegment = encodeApiPathSegment;
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Social Commerce API
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -190,13 +215,13 @@ export const SocialAPI = {
   feed: (params?: { page?: number; limit?: number }) =>
     get('/social/feed', params),
   like: (postId: string) =>
-    post(`/social/posts/${postId}/like`),
+    post(`/social/posts/${pathSegment(postId)}/like`),
   unlike: (postId: string) =>
-    del(`/social/posts/${postId}/like`),
+    del(`/social/posts/${pathSegment(postId)}/like`),
   comments: (postId: string) =>
-    get(`/social/posts/${postId}/comment`),
+    get(`/social/posts/${pathSegment(postId)}/comment`),
   comment: (postId: string, content: string) =>
-    post(`/social/posts/${postId}/comment`, { content }),
+    post(`/social/posts/${pathSegment(postId)}/comment`, { content }),
   create: (data: { content?: string; images?: string[]; productIds?: string[] }) =>
     post('/social/posts', data),
 };
@@ -345,7 +370,7 @@ export const POSAPI = {
 
   /** Poll payment status — GET /payment/qpay/check/:invoiceId; response `{paid, paidDate?}` */
   checkPayment: (invoiceId: string) =>
-    get(`/payment/qpay/check/${invoiceId}`),
+    get(`/payment/qpay/check/${pathSegment(invoiceId)}`),
 
   /** POST /api/orders/pos — create completed POS sale */
   createOrder: (data: POSOrderInput) => post('/orders/pos', data),
@@ -372,15 +397,15 @@ export const LiveAPI = {
   getScheduled: () => get('/live', { status: 'SCHEDULED' }),
 
   /** GET /api/live/[id] — stream detail + products + recent messages */
-  getById: (id: string) => get(`/live/${id}`),
+  getById: (id: string) => get(`/live/${pathSegment(id)}`),
 
   /** POST /api/live/[id]/messages — send chat message (type TEXT default) */
   sendMessage: (id: string, content: string, type: string = 'TEXT') =>
-    post(`/live/${id}/messages`, { content, type }),
+    post(`/live/${pathSegment(id)}/messages`, { content, type }),
 
   /** POST /api/live/[id]/purchase — buy a live product */
   purchase: (id: string, productId: string) =>
-    post(`/live/${id}/purchase`, { productId }),
+    post(`/live/${pathSegment(id)}/purchase`, { productId }),
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -393,17 +418,17 @@ export const OrderAPI = {
 
   // Buyer
   myOrders: () => get('/orders'),
-  detail: (id: string) => get(`/orders/${id}`),
+  detail: (id: string) => get(`/orders/${pathSegment(id)}`),
 
   // Seller
   sellerOrders: (status?: string) =>
     get('/orders', status ? { status } : undefined),
   updateStatus: (id: string, status: string) =>
-    put(`/orders/${id}/status`, { status }),
+    put(`/orders/${pathSegment(id)}/status`, { status }),
 
   // Driver
   availableOrders: () => get('/driver/orders', { type: 'available' }),
   myDeliveries: () => get('/driver/orders', { type: 'mine' }),
-  accept: (id: string) => post(`/driver/orders/${id}/accept`),
-  deliver: (id: string) => post(`/driver/orders/${id}/deliver`),
+  accept: (id: string) => post(`/driver/orders/${pathSegment(id)}/accept`),
+  deliver: (id: string) => post(`/driver/orders/${pathSegment(id)}/deliver`),
 };

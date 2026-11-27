@@ -1,12 +1,10 @@
-import React from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Share, Alert,
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { ActivityIndicator, Alert, Share, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { OrderAPI } from '../../src/services/api';
-import { C, R } from '../../src/shared/design';
+import { C, F, R, UI } from '../../src/shared/design';
+import { AppButton, AppCard, AppHeader, AppIconButton, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const METHOD_LABEL: Record<string, string> = {
   qpay: 'QPay',
@@ -18,6 +16,7 @@ const METHOD_LABEL: Record<string, string> = {
 
 export default function ReceiptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const layout = useAppLayoutMetrics();
   const { data, isLoading } = useQuery<any>({
     queryKey: ['order', id],
     queryFn: () => OrderAPI.detail(id!),
@@ -26,137 +25,111 @@ export default function ReceiptScreen() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={C.brand} />
-      </View>
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Захиалгын баримт" title={`#${shortId(id, 8)}`} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={C.brand} />
+          <Text style={{ ...F.small, color: C.textSub, marginTop: R.md }}>Баримт ачаалж байна...</Text>
+        </View>
+      </AppScreen>
     );
   }
 
   const order: any = (data as any)?.data?.order || (data as any)?.order || data;
   if (!order) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: C.textMuted }}>Захиалга олдсонгүй</Text>
-      </View>
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Захиалгын баримт" title={`#${shortId(id, 8)}`} />
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+            <Ionicons name="receipt-outline" size={44} color={C.textMuted} />
+            <Text style={{ ...F.h4, color: C.text }}>Захиалга олдсонгүй</Text>
+            <AppButton label="Буцах" icon="arrow-back" variant="ghost" onPress={() => router.back()} />
+          </AppCard>
+        </View>
+      </AppScreen>
     );
   }
 
   const items: any[] = Array.isArray(order.items) ? order.items : [];
-  const subtotal = items.reduce((s, it) => s + (it.price ?? 0) * (it.quantity ?? it.qty ?? 1), 0);
+  const subtotal = items.reduce((sum, item) => sum + itemTotal(item), 0);
   const total = order.total ?? subtotal;
   const orderId = String(order.id ?? order._id ?? id);
-  const shortId = orderId.slice(-8).toUpperCase();
+  const short = shortId(orderId, 8);
+  const deliveryAddress = formatAddress(order.deliveryAddress ?? order.shippingAddress ?? order.address);
 
   async function handleShare() {
     const lines = [
-      '═════════════════════════',
-      '      eSeller.mn',
-      '═════════════════════════',
-      `Баримт: #${shortId}`,
+      'eSeller.mn',
+      `Баримт: #${short}`,
       `Огноо: ${new Date(order.createdAt ?? Date.now()).toLocaleString('mn-MN')}`,
       '',
       ...items.map(
-        (i) =>
-          `${i.name ?? 'Бараа'}  ×${i.quantity ?? i.qty ?? 1}  ${((i.price ?? 0) * (i.quantity ?? i.qty ?? 1)).toLocaleString()}₮`,
+        (item) =>
+          `${itemName(item)} x${item.quantity ?? item.qty ?? 1} ${formatMoney(itemTotal(item))}`,
       ),
       '',
-      `Дүн:        ${subtotal.toLocaleString()}₮`,
-      `Нийт:       ${total.toLocaleString()}₮`,
-      `Төлбөр:     ${METHOD_LABEL[order.paymentMethod] ?? order.paymentMethod ?? '—'}`,
+      `Дүн: ${formatMoney(subtotal)}`,
+      `Нийт: ${formatMoney(total)}`,
+      `Төлбөр: ${METHOD_LABEL[order.paymentMethod] ?? order.paymentMethod ?? '-'}`,
       '',
       'Баярлалаа! eseller.mn',
     ];
+
     try {
-      await Share.share({ message: lines.join('\n'), title: `eSeller баримт #${shortId}` });
-    } catch (e: any) {
-      Alert.alert('Алдаа', e?.message || 'Хуваалцаж чадсангүй');
+      await Share.share({ message: lines.join('\n'), title: `eSeller баримт #${short}` });
+    } catch (error: any) {
+      Alert.alert('Алдаа', error?.message || 'Хуваалцаж чадсангүй.');
     }
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingTop: 52,
-          padding: 16,
-          backgroundColor: C.bgCard,
-          borderBottomWidth: 0.5,
-          borderBottomColor: C.border,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={C.text} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: C.text, flex: 1 }}>Баримт</Text>
-        <TouchableOpacity onPress={handleShare}>
-          <Ionicons name="share-outline" size={22} color={C.brand} />
-        </TouchableOpacity>
-      </View>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <AppScreen contentContainerStyle={{ paddingBottom: layout.screenBottom + 96 }}>
+        <AppTopBar
+          eyebrow="Захиалгын баримт"
+          title={`#${short}`}
+          right={<AppIconButton icon="share-outline" color={C.brand} onPress={handleShare} accessibilityLabel="Баримт хуваалцах" />}
+        />
 
-      {/* Receipt body */}
-      <View
-        style={{
-          margin: 16,
-          backgroundColor: C.bgCard,
-          borderRadius: R.lg,
-          padding: 20,
-          borderWidth: 0.5,
-          borderColor: C.border,
-        }}
-      >
-        <Text style={{ fontSize: 22, fontWeight: '900', color: C.text, textAlign: 'center' }}>
+        <AppHeader
+          title="Баримт"
+          subtitle="Захиалгын бараа, төлбөр болон хүргэлтийн мэдээлэл."
+          icon="receipt-outline"
+          accent={C.brand}
+        />
+
+        <AppCard style={{ padding: R.xl, marginBottom: R.md }}>
+        <Text style={{ ...F.h2, color: C.text, textAlign: 'center' }}>
           eseller<Text style={{ color: C.brand }}>.mn</Text>
         </Text>
-        <Text style={{ fontSize: 10, color: C.textMuted, textAlign: 'center', marginTop: 2 }}>
+        <Text style={{ ...F.tiny, color: C.textMuted, textAlign: 'center', marginTop: 2 }}>
           Монголын нэгдсэн цахим зах
         </Text>
 
         <Divider />
 
-        <Row label="Баримт №" value={`#${shortId}`} />
-        <Row
-          label="Огноо"
-          value={new Date(order.createdAt ?? Date.now()).toLocaleString('mn-MN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        />
-        <Row label="Төлбөр" value={METHOD_LABEL[order.paymentMethod] ?? order.paymentMethod ?? '—'} />
-        <Row label="Төлөв" value={order.status ?? '—'} />
+        <Row label="Баримт №" value={`#${short}`} />
+        <Row label="Огноо" value={formatDate(order.createdAt ?? Date.now())} />
+        <Row label="Төлбөр" value={METHOD_LABEL[order.paymentMethod] ?? order.paymentMethod ?? '-'} />
+        <Row label="Төлөв" value={formatStatus(order.status)} />
 
         <Divider />
 
-        <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700', marginBottom: 8 }}>
-          БАРАА
-        </Text>
+        <Text style={{ ...F.tiny, color: C.textMuted, fontWeight: '900', marginBottom: R.sm }}>Бараа</Text>
         {items.length === 0 ? (
-          <Text style={{ color: C.textMuted, fontSize: 12 }}>Бараа байхгүй</Text>
+          <Text style={{ ...F.small, color: C.textMuted }}>Бараа байхгүй</Text>
         ) : (
-          items.map((it, i) => (
-            <View
-              key={i}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                marginBottom: 8,
-                gap: 8,
-              }}
-            >
-              <Text style={{ color: C.text, fontSize: 12, flex: 1 }} numberOfLines={2}>
-                {it.name ?? 'Бараа'}
+          items.map((item, index) => (
+            <View key={`${item.id ?? item.name}:${index}`} style={{ flexDirection: 'row', gap: R.sm, marginBottom: R.sm }}>
+              <Text style={{ ...F.small, color: C.text, flex: 1 }} numberOfLines={2}>
+                {itemName(item)}
               </Text>
-              <Text style={{ color: C.textMuted, fontSize: 11, width: 40, textAlign: 'right' }}>
-                ×{it.quantity ?? it.qty ?? 1}
+              <Text style={{ ...F.tiny, color: C.textMuted, width: 42, textAlign: 'right' }}>
+                x{item.quantity ?? item.qty ?? 1}
               </Text>
-              <Text style={{ color: C.text, fontSize: 12, width: 90, textAlign: 'right', fontWeight: '600' }}>
-                {((it.price ?? 0) * (it.quantity ?? it.qty ?? 1)).toLocaleString()}₮
+              <Text style={{ ...F.small, color: C.text, width: 96, textAlign: 'right', fontWeight: '800' }}>
+                {formatMoney(itemTotal(item))}
               </Text>
             </View>
           ))
@@ -164,88 +137,112 @@ export default function ReceiptScreen() {
 
         <Divider />
 
-        <Row label="Дүн" value={`${subtotal.toLocaleString()}₮`} />
-        {order.deliveryFee > 0 && (
-          <Row label="Хүргэлт" value={`${order.deliveryFee.toLocaleString()}₮`} />
-        )}
-        {order.vatAmount > 0 && (
-          <Row label="НӨАТ" value={`${order.vatAmount.toLocaleString()}₮`} />
-        )}
+        <Row label="Дүн" value={formatMoney(subtotal)} />
+        {order.deliveryFee > 0 ? <Row label="Хүргэлт" value={formatMoney(order.deliveryFee)} /> : null}
+        {order.vatAmount > 0 ? <Row label="НӨАТ" value={formatMoney(order.vatAmount)} /> : null}
 
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            paddingTop: 10,
-            marginTop: 6,
-            borderTopWidth: 1,
-            borderTopColor: C.border,
-          }}
-        >
-          <Text style={{ color: C.text, fontSize: 15, fontWeight: '900' }}>НИЙТ</Text>
-          <Text style={{ color: C.brand, fontSize: 18, fontWeight: '900' }}>
-            {total.toLocaleString()}₮
-          </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, paddingTop: R.sm, marginTop: R.xs, borderTopWidth: 1, borderTopColor: C.border }}>
+          <Text style={{ ...F.h4, color: C.text }}>Нийт</Text>
+          <Text style={{ ...F.h4, color: C.brand }}>{formatMoney(total)}</Text>
         </View>
 
-        {order.deliveryAddress && (
+        {deliveryAddress ? (
           <>
             <Divider />
-            <Text style={{ fontSize: 11, color: C.textMuted, fontWeight: '700', marginBottom: 4 }}>
-              ХҮРГЭЛТИЙН ХАЯГ
+            <Text style={{ ...F.tiny, color: C.textMuted, fontWeight: '900', marginBottom: R.xs }}>
+              Хүргэлтийн хаяг
             </Text>
-            <Text style={{ color: C.text, fontSize: 12, lineHeight: 18 }}>
-              {order.deliveryAddress}
-            </Text>
+            <Text style={{ ...F.small, color: C.text, lineHeight: 20 }}>{deliveryAddress}</Text>
           </>
-        )}
+        ) : null}
 
         <Divider />
-        <Text style={{ color: C.textMuted, fontSize: 10, textAlign: 'center' }}>
-          Баярлалаа! eseller.mn
-        </Text>
-      </View>
+        <Text style={{ ...F.tiny, color: C.textMuted, textAlign: 'center' }}>Баярлалаа! eseller.mn</Text>
+        </AppCard>
+      </AppScreen>
 
-      {/* Share button */}
-      <TouchableOpacity
-        onPress={handleShare}
+      <View
         style={{
-          marginHorizontal: 16,
-          marginBottom: 30,
-          backgroundColor: C.brand,
-          borderRadius: R.lg,
-          padding: 16,
-          alignItems: 'center',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          gap: 8,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: C.bgCard,
+          padding: UI.screenPad,
+          paddingBottom: layout.insets.bottom + R.lg,
+          borderTopWidth: 1,
+          borderTopColor: C.border,
         }}
       >
-        <Ionicons name="share-social-outline" size={18} color="#fff" />
-        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>Баримт хуваалцах</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <AppButton label="Баримт хуваалцах" icon="share-social-outline" onPress={handleShare} />
+      </View>
+    </View>
   );
+}
+
+function shortId(value: any, size: number) {
+  const id = String(value ?? '').trim();
+  return id ? id.slice(-size).toLocaleUpperCase('en-US') : 'ORDER';
+}
+
+function itemName(item: any) {
+  return item?.name ?? item?.productName ?? item?.product?.name ?? 'Бараа';
+}
+
+function itemTotal(item: any) {
+  return Number(item?.total ?? item?.lineTotal ?? (item?.price ?? 0) * (item?.quantity ?? item?.qty ?? 1));
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-      <Text style={{ color: C.textSub, fontSize: 12 }}>{label}</Text>
-      <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{value}</Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, marginBottom: R.xs }}>
+      <Text style={{ ...F.small, color: C.textSub }}>{label}</Text>
+      <Text style={{ ...F.small, color: C.text, fontWeight: '800', flex: 1, textAlign: 'right' }}>{value}</Text>
     </View>
   );
 }
 
 function Divider() {
-  return (
-    <View
-      style={{
-        height: 1,
-        backgroundColor: C.border,
-        marginVertical: 10,
-        opacity: 0.6,
-      }}
-    />
-  );
+  return <View style={{ height: 1, backgroundColor: C.border, marginVertical: R.md }} />;
+}
+
+function formatMoney(value?: number) {
+  return `${Number(value || 0).toLocaleString()}₮`;
+}
+
+function formatDate(value: string | number | Date) {
+  return new Date(value).toLocaleString('mn-MN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatStatus(status?: string) {
+  const labels: Record<string, string> = {
+    pending: 'Хүлээгдэж',
+    paid: 'Төлсөн',
+    processing: 'Бэлтгэж',
+    shipped: 'Илгээсэн',
+    delivered: 'Хүргэгдсэн',
+    cancelled: 'Цуцалсан',
+  };
+
+  return status ? labels[String(status).toLowerCase()] ?? String(status) : '-';
+}
+
+function formatAddress(value: any) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  const parts = [
+    value.city,
+    value.district,
+    value.khoroo,
+    value.street,
+    value.address,
+    value.detail,
+  ].filter(Boolean);
+  return parts.join(', ');
 }

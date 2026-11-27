@@ -1,59 +1,94 @@
-import { View, Text, ScrollView, RefreshControl } from 'react-native'
-import { useQuery } from '@tanstack/react-query'
-import { get } from '../../src/services/api'
-import { C, R, F } from '../../src/shared/design'
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { get } from '../../src/services/api';
+import { C, F, R } from '../../src/shared/design';
+import { AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
+
+function money(value?: number | null) {
+  return `${(value ?? 0).toLocaleString('mn-MN')}₮`;
+}
 
 export default function DriverEarningsScreen() {
   const { data, refetch, isRefetching } = useQuery({
     queryKey: ['driver-earnings'],
     queryFn: () => get('/driver/revenue'),
-  })
+  });
 
-  const stats = (data as any)?.stats || (data as any) || {}
-  const history = (data as any)?.history || (data as any)?.orders || []
+  const stats = (data as any)?.stats || (data as any) || {};
+  const history: any[] = (data as any)?.history || (data as any)?.orders || [];
 
-  const CARDS = [
-    { label: 'Нийт орлого', value: (stats.totalEarned || stats.total || 0).toLocaleString() + '₮', color: '#E8242C' },
-    { label: 'Энэ сар', value: (stats.thisMonth || stats.month || 0).toLocaleString() + '₮', color: '#1A73E8' },
-    { label: 'Энэ долоо хоног', value: (stats.thisWeek || stats.week || 0).toLocaleString() + '₮', color: '#34A853' },
-    { label: 'Нийт хүргэлт', value: String(stats.totalDeliveries || stats.deliveryCount || 0), color: '#F9A825' },
-  ]
+  const cards = [
+    { icon: 'cash-outline' as const, label: 'Нийт орлого', value: money(stats.totalEarned || stats.total), color: C.driver },
+    { icon: 'calendar-outline' as const, label: 'Энэ сар', value: money(stats.thisMonth || stats.month), color: C.primary },
+    { icon: 'trending-up-outline' as const, label: 'Энэ 7 хоног', value: money(stats.thisWeek || stats.week), color: C.secondary },
+    { icon: 'cube-outline' as const, label: 'Нийт хүргэлт', value: String(stats.totalDeliveries || stats.deliveryCount || 0), color: C.gold },
+  ];
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}>
-      <View style={{ padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '900' }}>Орлого</Text>
-      </View>
+    <AppScreen
+      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.driver} />}
+      showsVerticalScrollIndicator={false}
+    >
+      <AppTopBar eyebrow="Жолооч" title="Орлого" showBack={false} />
+      <AppHeader
+        title="Орлого"
+        subtitle="Хүргэлтийн орлого, гүйлгээний түүхээ нэг дор хянана."
+        icon="cash-outline"
+        accent={C.driver}
+      />
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8, gap: 10 }}>
-        {CARDS.map((c, i) => (
-          <View key={i} style={{ width: '47%', backgroundColor: C.bgCard, borderRadius: R.lg, padding: 16, borderLeftWidth: 3, borderLeftColor: c.color, borderWidth: 1, borderColor: C.border }}>
-            <Text style={{ color: c.color, fontSize: 20, fontWeight: '900' }}>{c.value}</Text>
-            <Text style={{ color: C.textSub, fontSize: 12, marginTop: 4 }}>{c.label}</Text>
-          </View>
+      <View style={styles.metricGrid}>
+        {cards.map((card) => (
+          <AppMetricCard
+            key={card.label}
+            icon={card.icon}
+            label={card.label}
+            value={card.value}
+            accent={card.color}
+            style={styles.metricCard}
+          />
         ))}
       </View>
 
-      <View style={{ margin: 12 }}>
-        <Text style={{ ...F.h4, color: C.text, marginBottom: 12 }}>Гүйлгээний түүх</Text>
-        {history.length === 0 ? (
-          <View style={{ alignItems: 'center', padding: 40 }}>
-            <Text style={{ fontSize: 48 }}>💸</Text>
-            <Text style={{ color: C.textSub, marginTop: 12 }}>Гүйлгээ байхгүй байна</Text>
-          </View>
-        ) : history.map((h: any, i: number) => (
-          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: C.border }}>
-            <View>
-              <Text style={{ color: C.text, fontWeight: '600' }}>#{h.orderNumber || h.trackingCode || 'Хүргэлт'}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>{h.createdAt ? new Date(h.createdAt).toLocaleDateString('mn-MN') : ''}</Text>
-            </View>
-            <Text style={{ color: C.secondary, fontWeight: '800', fontSize: 16 }}>+{(h.deliveryFee || h.amount || 0).toLocaleString()}₮</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
-  )
+      <Text style={styles.sectionTitle}>Гүйлгээний түүх</Text>
+      {history.length === 0 ? (
+        <AppCard style={styles.emptyCard}>
+          <Ionicons name="wallet-outline" size={44} color={C.textMuted} />
+          <Text style={styles.emptyTitle}>Гүйлгээ байхгүй байна</Text>
+          <Text style={styles.emptySub}>Амжилттай хүргэлтийн орлого энд харагдана.</Text>
+        </AppCard>
+      ) : (
+        <View style={styles.historyList}>
+          {history.map((item, index) => (
+            <AppCard key={item.id || item.orderNumber || item.trackingCode || index} style={styles.historyCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyTitle}>
+                  #{item.orderNumber || item.trackingCode || 'Хүргэлт'}
+                </Text>
+                <Text style={styles.historyDate}>
+                  {item.createdAt ? new Date(item.createdAt).toLocaleDateString('mn-MN') : 'Огноо байхгүй'}
+                </Text>
+              </View>
+              <Text style={styles.historyAmount}>+{money(item.deliveryFee || item.amount)}</Text>
+            </AppCard>
+          ))}
+        </View>
+      )}
+    </AppScreen>
+  );
 }
+
+const styles = StyleSheet.create({
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm },
+  metricCard: { minWidth: '47%' },
+  sectionTitle: { ...F.small, color: C.textMuted, fontWeight: '900', marginTop: R.lg, marginBottom: R.sm },
+  emptyCard: { alignItems: 'center', paddingVertical: R.xxl },
+  emptyTitle: { ...F.body, color: C.text, fontWeight: '900', marginTop: R.sm },
+  emptySub: { ...F.small, color: C.textMuted, textAlign: 'center', marginTop: R.xs },
+  historyList: { gap: R.sm },
+  historyCard: { flexDirection: 'row', alignItems: 'center', gap: R.md, padding: R.md },
+  historyTitle: { ...F.small, color: C.text, fontWeight: '900' },
+  historyDate: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  historyAmount: { ...F.body, color: C.secondary, fontWeight: '900' },
+});

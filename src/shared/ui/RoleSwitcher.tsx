@@ -6,7 +6,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth, type AppRole } from '../../store/auth';
-import { C, R, roleColor } from '../design';
+import { C, R, UI, roleColor } from '../design';
+import { useAppLayoutMetrics } from './AppUI';
 
 // Test account phone numbers — role switcher is only visible for these
 const TEST_PHONES = ['99000001', '99000002', '99000003', '99000004'];
@@ -62,6 +63,7 @@ export function RoleBadge() {
 export function RoleSwitcher() {
   const { role, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const layout = useAppLayoutMetrics();
 
   if (!user) return null;
   if (!__DEV__ && !isTestUser(user.phone)) return null;
@@ -77,7 +79,7 @@ export function RoleSwitcher() {
           setOpen(true);
         }}
         style={{
-          position: 'absolute', bottom: 90, left: 16, zIndex: 100,
+          position: 'absolute', bottom: layout.floatingBottom, left: UI.screenPad, zIndex: 100,
           flexDirection: 'row', alignItems: 'center',
           backgroundColor: color + '18', borderRadius: R.full,
           paddingHorizontal: 12, paddingVertical: 7, gap: 6,
@@ -99,33 +101,35 @@ export function RoleSwitcher() {
 // Shared modal
 function RoleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { role, setRole } = useAuth();
+  const layout = useAppLayoutMetrics();
 
   const handleSelect = (key: AppRole) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setRole(key);
     onClose();
 
-    // Cross-group navigation: STORE owners live in /(owner),
-    // everyone else (BUYER/SELLER/DRIVER) renders inside /(tabs)
-    // where the role-based tab bar + lazy-loaded screens do the work.
     if (key === 'STORE') {
-      router.replace('/(owner)/dashboard' as never);
+      router.replace('/owner/dashboard' as never);
+    } else if (key === 'DRIVER') {
+      router.replace('/driver/deliveries' as never);
+    } else if (key === 'SELLER') {
+      router.replace('/seller/dashboard' as never);
     } else {
-      router.replace('/(tabs)' as never);
+      router.replace('/' as never);
     }
   };
 
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
+        style={{ flex: 1, backgroundColor: C.text + '99' }}
         onPress={onClose}
         activeOpacity={1}
       />
       <View style={{
         backgroundColor: C.bgCard,
         borderTopLeftRadius: R.xxl, borderTopRightRadius: R.xxl,
-        padding: 24, paddingBottom: 48,
+        padding: UI.screenPad, paddingBottom: layout.screenBottom,
         borderTopWidth: 1, borderTopColor: C.border,
       }}>
         <View style={{
@@ -151,7 +155,7 @@ function RoleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
                 }}
               >
                 <View style={{
-                  width: 48, height: 48, borderRadius: 24,
+                  width: 48, height: 48, borderRadius: R.full,
                   backgroundColor: r.color + '18',
                   alignItems: 'center', justifyContent: 'center',
                 }}>

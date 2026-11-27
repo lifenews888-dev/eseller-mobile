@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import {
-  ScrollView,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  KeyboardTypeOptions,
+  type KeyboardTypeOptions,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { post } from '../../src/services/api';
+import { C, F, R } from '../../src/shared/design';
+import { AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 export default function CorporateOrder() {
   const [company, setCompany] = useState('');
@@ -23,7 +24,7 @@ export default function CorporateOrder() {
 
   async function submit() {
     if (!company || !contact || !phone || !details) {
-      Alert.alert('Анхаарна уу', 'Бүх талбарыг бөглөнө үү.');
+      Alert.alert('Анхаарна уу', 'Шаардлагатай талбаруудыг бөглөнө үү.');
       return;
     }
     setLoading(true);
@@ -36,11 +37,9 @@ export default function CorporateOrder() {
         details,
         quantity: Number(qty) || undefined,
       });
-      Alert.alert(
-        'Амжилттай',
-        'Таны корпорат захиалгыг хүлээн авлаа.\nАжлын 1 хоногт холбогдоно.',
-        [{ text: 'За' }],
-      );
+      Alert.alert('Амжилттай', 'Таны корпоратив захиалгыг хүлээн авлаа.\nАжлын 1 хоногт холбогдоно.', [
+        { text: 'За' },
+      ]);
     } catch {
       Alert.alert('Алдаа', 'Илгээхэд алдаа гарлаа. Дахин оролдоно уу.');
     } finally {
@@ -48,17 +47,7 @@ export default function CorporateOrder() {
     }
   }
 
-  const INPUT = {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 14,
-    color: '#fff',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,.08)',
-  } as const;
-
-  const FIELDS: {
+  const fields: {
     label: string;
     value: string;
     setter: (v: string) => void;
@@ -69,97 +58,87 @@ export default function CorporateOrder() {
     { label: 'Холбоо барих хүн *', value: contact, setter: setContact, placeholder: 'Таны нэр' },
     { label: 'Утасны дугаар *', value: phone, setter: setPhone, placeholder: '99112233', keyboard: 'phone-pad' },
     { label: 'Имэйл', value: email, setter: setEmail, placeholder: 'company@mail.mn', keyboard: 'email-address' },
-    { label: 'Тоо хэмжээ (ойролцоо)', value: qty, setter: setQty, placeholder: '100+', keyboard: 'number-pad' },
+    { label: 'Тоо хэмжээ', value: qty, setter: setQty, placeholder: '100+', keyboard: 'number-pad' },
   ];
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Корпорат захиалга', headerBackTitle: '' }} />
-      <ScrollView
-        style={{ flex: 1, backgroundColor: '#121212' }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View
-          style={{
-            backgroundColor: '#1B1B3A',
-            borderRadius: 14,
-            padding: 14,
-            marginBottom: 20,
-            borderWidth: 0.5,
-            borderColor: '#3730A3',
-          }}
-        >
-          <Text style={{ fontSize: 13, color: '#A5B4FC', lineHeight: 21 }}>
-            💼 Байгууллагын хэмжээний захиалга — хямдрал, BNPL, тусгай нөхцөлтэйгөөр бэлтгэнэ.
-          </Text>
-        </View>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppScreen keyboardShouldPersistTaps="handled">
+        <AppTopBar eyebrow="Бизнес" title="Корпоратив захиалга" showBack={false} />
+        <AppHeader
+          title="Корпоратив захиалга"
+          subtitle="Байгууллагын хэмжээний захиалга, хямдрал, BNPL болон тусгай нөхцөл"
+          icon="briefcase-outline"
+          accent={C.primary}
+        />
 
-        <View style={{ gap: 10 }}>
-          {FIELDS.map((f) => (
-            <View key={f.label}>
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: 'rgba(255,255,255,.45)',
-                  fontWeight: '600',
-                  marginBottom: 5,
-                }}
-              >
-                {f.label}
-              </Text>
+        <AppCard style={{ marginBottom: R.lg }}>
+          <Text style={{ ...F.small, color: C.textSub, lineHeight: 21 }}>
+            Байгууллагын хэрэгцээнд тохирсон бараа, тоо хэмжээ, хугацаагаа үлдээгээрэй. Манай баг
+            ажлын 1 хоногт холбогдоно.
+          </Text>
+        </AppCard>
+
+        <View style={{ gap: R.sm }}>
+          {fields.map((field) => (
+            <View key={field.label}>
+              <Text style={st.label}>{field.label}</Text>
               <TextInput
-                value={f.value}
-                onChangeText={f.setter}
-                placeholder={f.placeholder}
-                placeholderTextColor="rgba(255,255,255,.2)"
-                keyboardType={f.keyboard ?? 'default'}
-                style={INPUT}
+                value={field.value}
+                onChangeText={field.setter}
+                placeholder={field.placeholder}
+                placeholderTextColor={C.textMuted}
+                keyboardType={field.keyboard ?? 'default'}
+                style={st.input}
               />
             </View>
           ))}
 
           <View>
-            <Text
-              style={{
-                fontSize: 11,
-                color: 'rgba(255,255,255,.45)',
-                fontWeight: '600',
-                marginBottom: 5,
-              }}
-            >
-              Захиалгын дэлгэрэнгүй *
-            </Text>
+            <Text style={st.label}>Захиалгын дэлгэрэнгүй *</Text>
             <TextInput
               value={details}
               onChangeText={setDetails}
               placeholder="Ямар бараа, хэдэн ширхэг, хэзээ хэрэгтэй..."
-              placeholderTextColor="rgba(255,255,255,.2)"
+              placeholderTextColor={C.textMuted}
               multiline
               numberOfLines={4}
-              style={{ ...INPUT, height: 110, textAlignVertical: 'top' }}
+              style={[st.input, { height: 112, textAlignVertical: 'top' }]}
             />
           </View>
         </View>
 
-        <TouchableOpacity
-          onPress={submit}
-          disabled={loading}
-          style={{
-            backgroundColor: '#4F46E5',
-            borderRadius: 12,
-            padding: 15,
-            alignItems: 'center',
-            marginTop: 20,
-          }}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>Илгээх</Text>
-          )}
+        <TouchableOpacity activeOpacity={0.86} onPress={submit} disabled={loading} style={st.submitButton}>
+            {loading ? <ActivityIndicator color={C.bgCard} /> : <Text style={st.submitText}>Илгээх</Text>}
         </TouchableOpacity>
-      </ScrollView>
+      </AppScreen>
     </>
   );
 }
+
+const st = {
+  label: {
+    ...F.tiny,
+    color: C.textSub,
+    fontWeight: '800' as const,
+    marginBottom: 5,
+  },
+  input: {
+    backgroundColor: C.bgCard,
+    borderRadius: R.md,
+    padding: R.md,
+    fontSize: 14,
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  submitButton: {
+    backgroundColor: C.primary,
+    borderRadius: R.md,
+    padding: 15,
+    alignItems: 'center' as const,
+    marginTop: R.lg,
+  },
+  submitText: { color: C.bgCard, fontSize: 14, fontWeight: '900' as const },
+};

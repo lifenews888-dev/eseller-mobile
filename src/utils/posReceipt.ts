@@ -40,9 +40,9 @@ function buildHtml(data: ReceiptData): string {
   body { font-family: monospace; font-size: 12px; max-width: 320px; margin: 0 auto; padding: 16px; }
   h2 { text-align: center; font-size: 16px; margin: 0 0 4px; }
   .center { text-align: center; }
-  .divider { border-top: 1px dashed #000; margin: 8px 0; }
+.divider { border-top: 1px dashed black; margin: 8px 0; }
   table { width: 100%; border-collapse: collapse; }
-  th { font-size: 10px; border-bottom: 1px solid #000; padding: 4px 0; }
+th { font-size: 10px; border-bottom: 1px solid black; padding: 4px 0; }
   .total { font-size: 14px; font-weight: bold; }
   .footer { text-align: center; margin-top: 16px; font-size: 10px; }
 </style>

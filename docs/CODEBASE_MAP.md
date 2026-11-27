@@ -31,15 +31,15 @@ eseller-mobile/
 │   ├── (seller)/             # seller dashboard (catalog, earnings, leaderboard)
 │   ├── (owner)/              # shop owner dashboard (POS, orders, analytics)
 │   ├── (driver)/             # driver: deliveries, earnings, profile
-│   ├── (tabs)/               # bottom tabs: home, store, search, orders, feed, chat, gold, profile
+│   ├── (tabs)/               # bottom tabs: home, store, feed, shops, profile
 │   ├── chat/[id].tsx         # chat detail
 │   ├── order/[id].tsx        # order detail
 │   ├── product/[id].tsx      # product detail
 │   ├── storefront/[slug].tsx # shop page
 │   ├── track/[code].tsx      # tracking
-│   ├── components/           # shared UI (home/, BarcodeScanner, LiveCarousel, …)
 │   └── _layout.tsx           # providers (QueryClient, Auth, theme)
 ├── src/
+│   ├── components/           # shared UI (home/, BarcodeScanner, LiveCarousel, …)
 │   ├── services/api.ts       # axios client + domain APIs (Social, Wallet, POS, Live, Order)
 │   ├── store/auth.ts         # zustand auth store (login, logout, role)
 │   ├── store/cart.ts         # zustand cart (persisted)
@@ -73,7 +73,10 @@ const TYPES = [
 ];
 ```
 
-Home-page picker (`app/(tabs)/index.tsx:71-79`, `ENTITY_TYPES`) mirrors the 7 types with icons + brand colors.
+Home-page picker (`app/(tabs)/index.tsx`, `ENTITY_TYPES`) mirrors the live-site category surface
+(`Хувцас`, `Электроник`, `Гоо сайхан`, `Гэр ахуй`, `Хоол`, `Авто`, `Спорт`,
+`Хүүхэд`, `Үл хөдлөх`, `Үйлчилгээ`, `Барилга`, `Дижитал`) and routes each item
+to the relevant store/feed tab with a category param.
 
 **"Become Seller" wizard** (4 steps): type → name/phone → about/logo → bank → `POST /shops`.
 
@@ -168,29 +171,31 @@ Traced via `src/services/api.ts:274-293` (`OrderAPI`) and payment screens.
 
 ---
 
-## 7. Malchнаас шууд — Already Partially Built ⚠
+## 7. Malchnaas Shuud — Mobile Surface Implemented
 
-This is the critical finding. A first-pass implementation exists. Scope of what's done / what's missing:
+The mobile-side buyer, herder-admin, coordinator, public-route, and defensive
+quality-guard surfaces are now in place. Remaining gaps are mostly backend/web
+source-of-truth work or phase-2 polish.
 
 | Area | Status | Path |
 |------|--------|------|
 | Customer discovery screen | ✅ Done (UI + API) | [app/(customer)/herder.tsx](app/(customer)/herder.tsx) |
 | Home page entry card | ✅ Done ("Малчны Шинэ бараа") | [app/(tabs)/index.tsx:55-61](app/(tabs)/index.tsx) |
-| Home horizontal carousel | ✅ Done | [app/components/home/HerderRow.tsx](app/components/home/HerderRow.tsx) |
+| Home horizontal carousel | ✅ Done | [src/components/home/HerderRow.tsx](../src/components/home/HerderRow.tsx) |
 | Backend `GET /herder/products` | ✅ Live (served at eseller.mn) | — |
-| Province filter (19 aimag) | ⚠ Incomplete: missing **Баян-Өлгий, Дорноговь** | `herder.tsx:13-33` |
-| Category filter (8 categories) | ✅ Done: мах, ноос, арьс, сүү, бяслаг, дэгэл, аарц, тараг | `herder.tsx:35` |
-| "Шууд захиалах" button | ❌ **No onPress handler — dead button** | `herder.tsx:215-221` |
-| Herder product detail page | ❌ Falls through to generic `/product/[id]` — no А-данс badge, no cold-chain warning, no cert viewer | — |
-| Herder becomes-seller flow | ❌ Missing (no 8th card in register-shop wizard) | — |
-| Herder dashboard (orders, payouts) | ❌ Missing | — |
-| А-данс (livestock registry) upload | ❌ Missing | — |
-| Vet certificate upload | ❌ Missing | — |
-| Cold-chain product flag in UI | ❌ Missing | — |
-| Coordinator role/dashboard | ❌ Missing | — |
-| Aimag delivery config | ⚠ Hardcoded in `herder.tsx` — should come from DB | — |
-| Feature flag (`MALCHNAAS_ENABLED`) | ❌ Missing | — |
-| Escrow hold display on order | ❌ Missing | — |
+| Province filter (21 aimag) | ✅ Done via shared constants + remote delivery override | [src/features/herder/constants.ts](../src/features/herder/constants.ts), [src/features/herder/delivery.ts](../src/features/herder/delivery.ts) |
+| Category filter | ✅ Done via shared constants | [src/features/herder/constants.ts](../src/features/herder/constants.ts) |
+| "Шууд захиалах" button | ✅ Wired to shared herder cart helper + `/cart` | [app/(customer)/herder.tsx](app/(customer)/herder.tsx), [src/features/herder/cart.ts](../src/features/herder/cart.ts) |
+| Herder product detail page | ✅ Done with herder profile card, verification, delivery/cert context, and guarded cart actions | [app/(customer)/herder-product/[id].tsx](app/(customer)/herder-product/[id].tsx) |
+| Public herder profile | ✅ Done | [app/(customer)/herder-profile/[id].tsx](app/(customer)/herder-profile/[id].tsx) |
+| Herder registration funnel | ✅ Done, auth-preserving and pilot-aimag gated | [app/(customer)/register-herder.tsx](app/(customer)/register-herder.tsx), [app/(customer)/register-shop.tsx](app/(customer)/register-shop.tsx) |
+| Herder admin dashboard/listings/orders/earnings | ✅ Done behind `/herder-admin/*` public aliases | [app/(herder)/dashboard.tsx](app/(herder)/dashboard.tsx), [app/herder-admin](app/herder-admin) |
+| Coordinator role/dashboard/review screens | ✅ Done behind `/coordinator/*` public aliases | [app/(coordinator)](app/(coordinator)), [app/coordinator](app/coordinator) |
+| Feature flags (`MALCHNAAS_ENABLED`, pilot aimags) | ✅ Done with env defaults + remote config cache | [src/config/flags.ts](../src/config/flags.ts), [src/config/remoteFlags.ts](../src/config/remoteFlags.ts) |
+| Product quality quarantine | ✅ Done for buyer-facing product/herder surfaces and cart/checkout | [src/shared/productQuality.ts](../src/shared/productQuality.ts), [docs/DROPSHIPPING_MOBILE_GUARDRAILS.md](DROPSHIPPING_MOBILE_GUARDRAILS.md) |
+| Role/public-route guardrails | ✅ Done and covered by smoke scripts | [src/shared/roleAccess.ts](../src/shared/roleAccess.ts), [src/shared/routeNormalization.ts](../src/shared/routeNormalization.ts), [docs/MOBILE_P0_SMOKE_CHECKLIST.md](MOBILE_P0_SMOKE_CHECKLIST.md) |
+| Offline-first listing create | ⏭ Deferred to phase 2; queue/cache helpers exist | [src/features/herder/queue.ts](../src/features/herder/queue.ts), [src/features/herder/cache.ts](../src/features/herder/cache.ts) |
+| Backend source-of-truth fixes | ⚠ Still required outside mobile | [docs/DROPSHIPPING_FIX_PROMPT.md](DROPSHIPPING_FIX_PROMPT.md), [docs/DROPSHIPPING_MOBILE_GUARDRAILS.md](DROPSHIPPING_MOBILE_GUARDRAILS.md) |
 
 ---
 
@@ -202,20 +207,25 @@ graph TD
   CartStore[src/store/cart.ts] --> API
   API --> BE[(eseller.mn backend)]
 
-  HomeTab[(app/(tabs)/index.tsx)] --> HerderRow[app/components/home/HerderRow.tsx]
+  HomeTab[(app/(tabs)/index.tsx)] --> HerderRow[src/components/home/HerderRow.tsx]
   HomeTab --> SERVICE_ITEMS
   SERVICE_ITEMS -->|route| HerderScreen[app/(customer)/herder.tsx]
   HerderRow --> HerderScreen
   HerderScreen -->|GET /herder/products| BE
-
-  HerderScreen -.missing.-> ProductDetail[app/product/[id].tsx]
-  ProductDetail --> Cart[app/cart.tsx]
+  HerderScreen --> HerderProduct[app/(customer)/herder-product/[id].tsx]
+  HerderProduct --> HerderProfile[app/(customer)/herder-profile/[id].tsx]
+  HerderScreen --> HerderCartHelper[src/features/herder/cart.ts]
+  HerderProduct --> HerderCartHelper
+  HerderCartHelper --> Cart[app/cart.tsx]
   Cart --> Checkout[app/checkout.tsx]
   Checkout --> OrderAPI[OrderAPI.myOrders]
   OrderAPI --> BE
 
-  RegisterShop[app/(customer)/register-shop.tsx] -.missing HERDER card.-> BE
+  RegisterShop[app/(customer)/register-shop.tsx] --> RegisterHerder[app/(customer)/register-herder.tsx]
+  RegisterHerder -->|POST /herder/register| BE
   BecomeSeller[app/(customer)/become-seller.tsx] --> SellerDashboard[app/(seller)/dashboard.tsx]
+  HerderAdmin[app/(herder)] -->|/herder/my/*| BE
+  Coordinator[app/(coordinator)] -->|/herder/coordinator/*| BE
 
   Driver[app/(driver)/deliveries.tsx] -->|OrderAPI.availableOrders| BE
 ```
@@ -258,7 +268,7 @@ The mobile repo is **one of three**. The other two are required to finish the fu
 | Home screen + SERVICE_ITEMS | [app/(tabs)/index.tsx](../app/(tabs)/index.tsx) |
 | Shop-type wizard | [app/(customer)/register-shop.tsx](../app/(customer)/register-shop.tsx) |
 | Herder discovery | [app/(customer)/herder.tsx](../app/(customer)/herder.tsx) |
-| Herder home carousel | [app/components/home/HerderRow.tsx](../app/components/home/HerderRow.tsx) |
+| Herder home carousel | [src/components/home/HerderRow.tsx](../src/components/home/HerderRow.tsx) |
 | Generic product detail | [app/product/[id].tsx](../app/product/[id].tsx) |
 | Order detail | [app/order/[id].tsx](../app/order/[id].tsx) |
 | Order list (role-aware) | [app/(tabs)/orders.tsx](../app/(tabs)/orders.tsx) |

@@ -1,32 +1,62 @@
-import { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, StyleSheet, Alert } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { get, put } from '../../src/services/api';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
+import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
+import { AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
-const TABS = [
+type OrderStatusFilter = '' | 'confirmed' | 'preparing' | 'ready' | 'handed_to_driver' | 'delivered';
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const TABS: Array<{ key: OrderStatusFilter; label: string }> = [
   { key: '', label: 'Бүгд' },
   { key: 'confirmed', label: 'Шинэ' },
   { key: 'preparing', label: 'Бэлтгэж' },
   { key: 'ready', label: 'Бэлэн' },
   { key: 'handed_to_driver', label: 'Явсан' },
-  { key: 'delivered', label: 'Хүргэгдсэн' },
+  { key: 'delivered', label: 'Хүргэсэн' },
 ];
 
-const NEXT_STATUS: Record<string, { label: string; next: string }> = {
-  confirmed: { label: '▶ Бэлтгэж эхлэх', next: 'preparing' },
-  preparing: { label: '✓ Бэлэн болсон', next: 'ready' },
-  ready: { label: '🚚 Жолоочид өгсөн', next: 'handed_to_driver' },
+const NEXT_STATUS: Record<string, { label: string; next: string; icon: IconName }> = {
+  confirmed: { label: 'Бэлтгэж эхлэх', next: 'preparing', icon: 'play' },
+  preparing: { label: 'Бэлэн болсон', next: 'ready', icon: 'checkmark' },
+  ready: { label: 'Жолоочид өгсөн', next: 'handed_to_driver', icon: 'car-outline' },
 };
 
+function normalizeStatusParam(value?: string | string[] | null): OrderStatusFilter {
+  const raw = normalizeRouteParam(value);
+  return TABS.some((tab) => tab.key === raw) ? (raw as OrderStatusFilter) : '';
+}
+
+function money(value?: number | null) {
+  return `${(value ?? 0).toLocaleString('mn-MN')}₮`;
+}
+
 export default function OwnerOrdersScreen() {
-  const [tab, setTab] = useState('');
+  const params = useLocalSearchParams<{ status?: string }>();
+  const [tab, setTab] = useState<OrderStatusFilter>(() => normalizeStatusParam(params.status));
   const [isFocused, setIsFocused] = useState(true);
+  const layout = useAppLayoutMetrics();
   const qc = useQueryClient();
 
-  // Screen blur үед 15с-ийн refetch loop-ыг зогсооно — background data burn
-  // хийхгүй, мөн navigate буцахад шинэ data автоматаар авна.
+  useEffect(() => {
+    setTab(normalizeStatusParam(params.status));
+  }, [params.status]);
+
   useFocusEffect(
     useCallback(() => {
       setIsFocused(true);
@@ -34,125 +64,225 @@ export default function OwnerOrdersScreen() {
     }, []),
   );
 
-  const { data, isRefetching, refetch } = useQuery<any>({
+  const selectTab = (nextTab: OrderStatusFilter) => {
+    setTab(nextTab);
+    router.replace(
+      nextTab
+        ? ({ pathname: '/owner/orders' as any, params: { status: nextTab } } as any)
+        : ('/owner/orders' as any),
+    );
+  };
+
+  const { data, isRefetching, refetch, isLoading } = useQuery<any>({
     queryKey: ['seller-orders', tab],
-    queryFn: () => get(`/orders${tab ? `?status=${tab}` : ''}`),
+    queryFn: () => get('/orders', tab ? { status: tab } : undefined),
     refetchInterval: isFocused ? 15000 : false,
   });
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      put(`/orders/${id}/status`, { status }),
+      put(`/orders/${encodeApiPathSegment(id)}/status`, { status }),
     onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       qc.invalidateQueries({ queryKey: ['seller-orders'] });
     },
-    onError: (e: any) => Alert.alert('Алдаа', e.message),
+    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Статус шинэчилж чадсангүй.'),
   });
 
   const orders: any[] = data?.data?.orders || data?.orders || [];
 
   return (
-    <View style={s.screen}>
-      <View style={s.header}>
-        <Text style={s.headerTitle}>Захиалгууд</Text>
+    <View style={styles.screen}>
+      <View style={[styles.headerShell, { paddingTop: layout.screenTop }]}>
+        <AppTopBar eyebrow="Дэлгүүр" title="Захиалга" showBack={false} />
+        <AppHeader
+          title="Захиалгууд"
+          subtitle="Дэлгүүрийн захиалгын төлөв, бэлтгэл, хүргэлтэд шилжүүлэлтийг удирдана."
+          icon="receipt-outline"
+          accent={C.store}
+          style={{ marginBottom: 0 }}
+        />
       </View>
 
       <FlatList
         horizontal
         data={TABS}
-        keyExtractor={(t) => t.key || 'all'}
+        keyExtractor={(item) => item.key || 'all'}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.tabRow}
-        renderItem={({ item: t }) => (
-          <TouchableOpacity
-            onPress={() => setTab(t.key)}
-            style={[s.tabBtn, tab === t.key && s.tabBtnActive]}
-          >
-            <Text style={[s.tabBtnText, tab === t.key && s.tabBtnTextActive]}>{t.label}</Text>
-          </TouchableOpacity>
-        )}
-      />
-
-      <FlatList
-        data={orders}
-        keyExtractor={(o: any) => o.id}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-        contentContainerStyle={
-          orders.length === 0
-            ? { flex: 1, alignItems: 'center', justifyContent: 'center' }
-            : { padding: 12, gap: 10 }
-        }
-        ListEmptyComponent={<Text style={{ color: '#888', fontSize: 14 }}>Захиалга байхгүй</Text>}
-        renderItem={({ item: o }: any) => {
-          const next = NEXT_STATUS[o.status];
-          const buyer = o.buyer;
-          const items: any[] = Array.isArray(o.items) ? o.items : [];
+        contentContainerStyle={styles.tabRow}
+        renderItem={({ item }) => {
+          const active = tab === item.key;
           return (
-            <View style={s.card}>
-              <View style={s.cardHeader}>
-                <Text style={s.orderId}>#{o.id.toString().slice(-6).toUpperCase()}</Text>
-                <Text style={s.orderTotal}>{(o.total || 0).toLocaleString()}₮</Text>
-              </View>
-
-              <Text style={s.buyerInfo}>
-                👤 {buyer?.name || 'Хэрэглэгч'}
-                {buyer?.phone ? `  📞 ${buyer.phone}` : ''}
-              </Text>
-
-              <View style={s.items}>
-                {items.slice(0, 2).map((item: any, i: number) => (
-                  <Text key={i} style={s.itemName} numberOfLines={1}>
-                    • {item.name || 'Бараа'} × {item.quantity || 1}
-                  </Text>
-                ))}
-                {items.length > 2 && (
-                  <Text style={{ fontSize: 11, color: '#aaa' }}>+{items.length - 2} бараа...</Text>
-                )}
-              </View>
-
-              {next && (
-                <TouchableOpacity
-                  onPress={() => {
-                    Alert.alert(
-                      'Статус өөрчлөх',
-                      `"${next.label}" болгох уу?`,
-                      [
-                        { text: 'Болих', style: 'cancel' },
-                        { text: 'Тийм', onPress: () => updateStatus.mutate({ id: o.id, status: next.next }) },
-                      ]
-                    );
-                  }}
-                  disabled={updateStatus.isPending}
-                  style={s.actionBtn}
-                >
-                  <Text style={s.actionBtnText}>{next.label}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              onPress={() => selectTab(item.key)}
+              style={[styles.tabBtn, active && styles.tabBtnActive]}
+            >
+              <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
           );
         }}
       />
+
+      {isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={C.store} />
+        </View>
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={(order: any, index) => String(order.id || order._id || index)}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.store} />}
+          contentContainerStyle={
+            orders.length === 0
+              ? [styles.emptyList, { paddingBottom: layout.screenBottom }]
+              : [styles.listContent, { paddingBottom: layout.screenBottom }]
+          }
+          ListEmptyComponent={
+            <AppCard style={styles.emptyCard}>
+              <Ionicons name="receipt-outline" size={46} color={C.textMuted} />
+              <Text style={styles.emptyTitle}>Захиалга байхгүй</Text>
+              <Text style={styles.emptyText}>Шинэ захиалга орж ирэхэд энд харагдана.</Text>
+            </AppCard>
+          }
+          renderItem={({ item }) => (
+            <OrderCard
+              order={item}
+              pending={updateStatus.isPending}
+              onNext={(id, next) => {
+                Alert.alert('Статус өөрчлөх', `"${next.label}" болгох уу?`, [
+                  { text: 'Болих', style: 'cancel' },
+                  { text: 'Тийм', onPress: () => updateStatus.mutate({ id, status: next.next }) },
+                ]);
+              }}
+            />
+          )}
+        />
+      )}
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F5F7FA' },
-  header: { backgroundColor: '#1B3A5C', padding: 16, paddingTop: 52 },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  tabRow: { padding: 10, gap: 6, flexDirection: 'row' },
-  tabBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 99, backgroundColor: '#fff', borderWidth: 0.5, borderColor: '#ddd' },
-  tabBtnActive: { backgroundColor: '#1B3A5C', borderColor: '#1B3A5C' },
-  tabBtnText: { fontSize: 12, color: '#666' },
-  tabBtnTextActive: { color: '#fff', fontWeight: '600' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 0.5, borderColor: '#e5e5e5' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  orderId: { fontSize: 13, fontWeight: '600', color: '#1B3A5C' },
-  orderTotal: { fontSize: 14, fontWeight: '700', color: '#1B3A5C' },
-  buyerInfo: { fontSize: 12, color: '#666', marginBottom: 8 },
-  items: { gap: 4, marginBottom: 10 },
-  itemName: { fontSize: 12, color: '#333' },
-  actionBtn: { backgroundColor: '#1B3A5C', borderRadius: 8, padding: 10, alignItems: 'center' },
-  actionBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+function OrderCard({
+  order,
+  pending,
+  onNext,
+}: {
+  order: any;
+  pending: boolean;
+  onNext: (id: string, next: { label: string; next: string; icon: IconName }) => void;
+}) {
+  const id = String(order.id || order._id || '');
+  const next = NEXT_STATUS[order.status];
+  const buyer = order.buyer;
+  const items: any[] = Array.isArray(order.items) ? order.items : [];
+
+  return (
+    <AppCard style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.orderId}>#{id.slice(-6).toUpperCase()}</Text>
+        <Text style={styles.orderTotal}>{money(order.total)}</Text>
+      </View>
+
+      <View style={styles.buyerRow}>
+        <Ionicons name="person-outline" size={14} color={C.textMuted} />
+        <Text style={styles.buyerInfo} numberOfLines={1}>
+          {buyer?.name || 'Хэрэглэгч'}
+        </Text>
+        {buyer?.phone ? (
+          <View style={styles.phonePill}>
+            <Ionicons name="call-outline" size={12} color={C.store} />
+            <Text style={styles.phoneText}>{buyer.phone}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.items}>
+        {items.slice(0, 2).map((item, index) => (
+          <View key={`${item.id || item.name || 'item'}-${index}`} style={styles.itemRow}>
+            <Ionicons name="cube-outline" size={12} color={C.textMuted} />
+            <Text style={styles.itemName} numberOfLines={1}>
+              {item.name || 'Бараа'} x {item.quantity || 1}
+            </Text>
+          </View>
+        ))}
+        {items.length > 2 ? (
+          <Text style={styles.moreItems}>+{items.length - 2} бараа...</Text>
+        ) : null}
+      </View>
+
+      {next ? (
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={() => onNext(id, next)}
+          disabled={pending}
+          style={[styles.actionBtn, pending && styles.actionBtnDisabled]}
+        >
+          {pending ? (
+            <ActivityIndicator size="small" color={C.bgCard} />
+          ) : (
+            <Ionicons name={next.icon} size={16} color={C.bgCard} />
+          )}
+          <Text style={styles.actionBtnText}>{pending ? 'Шинэчилж байна' : next.label}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </AppCard>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  headerShell: { padding: UI.screenPad, paddingBottom: R.sm },
+  tabRow: { paddingHorizontal: UI.screenPad, paddingBottom: R.sm, gap: R.xs, flexDirection: 'row' },
+  tabBtn: {
+    minHeight: 36,
+    paddingHorizontal: R.md,
+    paddingVertical: R.xs,
+    borderRadius: R.full,
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
+    borderColor: C.border,
+    justifyContent: 'center',
+  },
+  tabBtnActive: { backgroundColor: C.store, borderColor: C.store },
+  tabBtnText: { ...F.tiny, color: C.textSub, fontWeight: '800' },
+  tabBtnTextActive: { color: C.bgCard },
+  emptyList: { flexGrow: 1, padding: UI.screenPad, justifyContent: 'center' },
+  listContent: { padding: UI.screenPad, gap: R.sm },
+  emptyCard: { alignItems: 'center', paddingVertical: R.xxl },
+  emptyTitle: { ...F.body, color: C.text, fontWeight: '900', marginTop: R.sm },
+  emptyText: { ...F.small, color: C.textMuted, textAlign: 'center', marginTop: R.xs },
+  card: { gap: R.xs },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: R.md },
+  orderId: { ...F.small, fontWeight: '900', color: C.store },
+  orderTotal: { ...F.small, fontWeight: '900', color: C.store },
+  buyerRow: { flexDirection: 'row', alignItems: 'center', gap: R.xs },
+  buyerInfo: { flex: 1, ...F.tiny, color: C.textSub, fontWeight: '800' },
+  phonePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: C.bgSection,
+    borderRadius: R.full,
+    paddingHorizontal: R.sm,
+    paddingVertical: 3,
+  },
+  phoneText: { color: C.store, fontSize: 11, fontWeight: '900' },
+  items: { gap: 4, marginTop: R.xs },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: R.xs },
+  itemName: { ...F.tiny, color: C.text },
+  moreItems: { ...F.tiny, color: C.textMuted, fontWeight: '800' },
+  actionBtn: {
+    minHeight: 42,
+    backgroundColor: C.store,
+    borderRadius: UI.controlRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: R.xs,
+    marginTop: R.sm,
+  },
+  actionBtnDisabled: { opacity: 0.72 },
+  actionBtnText: { ...F.small, color: C.bgCard, fontWeight: '900' },
 });

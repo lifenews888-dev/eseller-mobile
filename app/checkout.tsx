@@ -1,244 +1,424 @@
-import { useState, useEffect, useRef } from 'react'
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator, Linking, Image } from 'react-native'
-import { router } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
-import { useCart } from '../src/store/cart'
-import { post } from '../src/services/api'
-import { C, R } from '../src/shared/design'
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { post } from '../src/services/api';
+import { useCart } from '../src/store/cart';
+import { C, F, R, UI } from '../src/shared/design';
+import { getCartItemQualityIssue, getInvalidCartItems } from '../src/shared/productQuality';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../src/shared/ui/AppUI';
 
 const PAYMENT_METHODS = [
-  { id: 'qpay', label: 'QPay', icon: 'qr-code' as const, color: '#E8242C' },
-  { id: 'socialpay', label: 'SocialPay', icon: 'phone-portrait' as const, color: '#1A73E8' },
-  { id: 'card', label: 'Visa / MC', icon: 'card' as const, color: '#6366F1' },
-]
+  { id: 'qpay', label: 'QPay', icon: 'qr-code-outline' as const, color: C.brand },
+  { id: 'socialpay', label: 'SocialPay', icon: 'phone-portrait-outline' as const, color: C.primary },
+  { id: 'card', label: 'Visa / MC', icon: 'card-outline' as const, color: C.seller },
+];
 
 const BANKS = [
-  { name: 'Хаан банк', url: 'khanbank://', color: '#006341' },
-  { name: 'Голомт', url: 'golomt://', color: '#E8242C' },
-  { name: 'TDB', url: 'tdb://', color: '#003087' },
-  { name: 'Мост Мани', url: 'mostmoney://', color: '#FF6B00' },
-  { name: 'SocialPay', url: 'socialpay://', color: '#1A73E8' },
-]
+  { name: 'Хаан банк', url: 'khanbank://', color: C.store },
+  { name: 'Голомт', url: 'golomt://', color: C.brand },
+  { name: 'TDB', url: 'tdb://', color: C.primary },
+  { name: 'Мост Мани', url: 'mostmoney://', color: C.seller },
+  { name: 'SocialPay', url: 'socialpay://', color: C.primary },
+];
 
 export default function CheckoutScreen() {
-  const { items, total, clear } = useCart()
-  const [address, setAddress] = useState('')
-  const [phone, setPhone] = useState('')
-  const [method, setMethod] = useState('qpay')
-  const [loading, setLoading] = useState(false)
-  const [qpayData, setQpayData] = useState<any>(null)
-  const [countdown, setCountdown] = useState(300)
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { items, total, clear } = useCart();
+  const layout = useAppLayoutMetrics();
+  const cartIssues = getInvalidCartItems(items);
+  const hasCartIssues = cartIssues.length > 0;
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [method, setMethod] = useState('qpay');
+  const [loading, setLoading] = useState(false);
+  const [qpayData, setQpayData] = useState<any>(null);
+  const [countdown, setCountdown] = useState(300);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Нэг л удаа setInterval зохицуулна — qpayData set болох бүрд reset
-  // хийгдээд шинэчлэгдэнэ. Unmount-д interval-г заавал цэвэрлэнэ.
   useEffect(() => {
-    if (!qpayData) return
-    setCountdown(300)
-    if (countdownRef.current) clearInterval(countdownRef.current)
+    if (!qpayData) return;
+
+    setCountdown(300);
+    if (countdownRef.current) clearInterval(countdownRef.current);
     countdownRef.current = setInterval(() => {
-      setCountdown((t) => {
-        if (t <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current)
-          countdownRef.current = null
-          return 0
+      setCountdown((time) => {
+        if (time <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          return 0;
         }
-        return t - 1
-      })
-    }, 1000)
+        return time - 1;
+      });
+    }, 1000);
+
     return () => {
       if (countdownRef.current) {
-        clearInterval(countdownRef.current)
-        countdownRef.current = null
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
       }
-    }
-  }, [qpayData])
+    };
+  }, [qpayData]);
 
   const createOrder = async () => {
-    if (!address || !phone) {
-      Alert.alert('Анхааруулга', 'Хаяг, утасны дугаар оруулна уу')
-      return
+    if (!items.length) {
+      Alert.alert('Сагс хоосон', 'Захиалах бараа байхгүй байна.');
+      router.replace('/store' as any);
+      return;
     }
-    setLoading(true)
+
+    if (cartIssues.length) {
+      const firstIssue = cartIssues[0];
+      Alert.alert(
+        'Сагсаа шалгана уу',
+        `${firstIssue.item.name || 'Бараа'}: ${firstIssue.issue.message}`,
+        [{ text: 'Сагс руу буцах', onPress: () => router.replace('/cart' as any) }],
+      );
+      return;
+    }
+
+    if (!address || !phone) {
+      Alert.alert('Анхааруулга', 'Хаяг, утасны дугаараа оруулна уу.');
+      return;
+    }
+
+    setLoading(true);
     try {
       const res: any = await post('/checkout/create-invoice', {
-        items: items.map(i => ({ productId: i.id, qty: i.qty, price: i.price })),
+        items: items.map((item) => ({ productId: item.id, qty: item.qty, price: item.price })),
         deliveryAddress: address,
         phone,
         totalAmount: total(),
         paymentMethod: method,
-      })
-      if (__DEV__) {
-        console.log('[checkout response]', JSON.stringify({
-          orderId: res?.orderId, invoiceId: res?.invoiceId,
-          isDemoMode: res?.isDemoMode,
-          hasQrDataUrl: !!res?.qrDataUrl, hasQrImage: !!res?.qrImage,
-        }))
-      }
+      });
 
-      // Demo mode — QPay credentials байхгүй, бодит төлбөр хийх шаардлагагүй
       if (res?.isDemoMode) {
-        clear()
+        clear();
         Alert.alert(
-          '✅ Захиалга үүслээ',
-          `Захиалга #${String(res.orderId).slice(-6).toUpperCase()}\n` +
-          `Нийт: ${Number(res.amount ?? 0).toLocaleString()}₮\n\n` +
-          `(Demo горим — QPay тохируулаагүй)`,
+          'Захиалга үүслээ',
+          `Захиалга #${shortId(res.orderId, 6)}\nНийт: ${formatMoney(Number(res.amount ?? 0))}\n\nDemo горим: QPay тохируулаагүй.`,
           [{ text: 'OK', onPress: () => router.replace('/orders' as any) }],
-        )
-        return
+        );
+        return;
       }
 
-      setQpayData(res)
-      clear()
-    } catch (e: any) {
-      if (__DEV__) console.error('[checkout error]', e)
-      Alert.alert('Алдаа', e.message || 'Захиалга үүсгэхэд алдаа гарлаа')
+      setQpayData(res);
+      clear();
+    } catch (error: any) {
+      Alert.alert('Алдаа', error.message || 'Захиалга үүсгэхэд алдаа гарлаа.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
+  };
+
+  const qrUri = qpayData?.qrDataUrl || (qpayData?.qrImage ? `data:image/png;base64,${qpayData.qrImage}` : null);
+
+  if (qpayData) {
+    return <QPayScreen qpayData={qpayData} qrUri={qrUri} countdown={countdown} />;
   }
 
-  // qrDataUrl нь аль хэдийн `data:image/png;base64,...` бүрэн URL,
-  // харин qrImage нь зөвхөн base64 string — хоёуланг handle хийнэ
-  const qrUri =
-    qpayData?.qrDataUrl ||
-    (qpayData?.qrImage ? `data:image/png;base64,${qpayData.qrImage}` : null)
-
-  // ═══ QPay QR Screen ═══
-  if (qpayData) return (
-    <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', padding: 24, paddingTop: 80 }}>
-      {/* Escrow notice */}
-      <View style={{ backgroundColor: '#34A85315', borderRadius: R.lg, padding: 14, marginBottom: 24, borderWidth: 1, borderColor: '#34A85340', flexDirection: 'row', gap: 10, alignItems: 'flex-start', width: '100%' }}>
-        <Ionicons name="shield-checkmark" size={20} color="#34A853" />
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: '#34A853', fontWeight: '700', fontSize: 13 }}>Дундын данс (Escrow)</Text>
-          <Text style={{ color: '#34A85390', fontSize: 12, marginTop: 2 }}>Таны төлбөр 3 хоног хамгаалагдаж, бараа хүргэгдсэний дараа л дэлгүүрт шилжинэ</Text>
+  if (!items.length) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Төлбөр" title="Захиалга" />
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <AppCard style={{ alignItems: 'center', gap: R.sm }}>
+            <Ionicons name="cart-outline" size={50} color={C.textMuted} />
+            <Text style={{ ...F.h4, color: C.text, textAlign: 'center' }}>Сагс хоосон байна</Text>
+            <Text style={{ ...F.small, color: C.textSub, textAlign: 'center' }}>
+              Захиалга үүсгэхийн өмнө дэлгүүрээс бараа сонгоно уу.
+            </Text>
+            <AppButton label="Дэлгүүр рүү буцах" icon="storefront-outline" onPress={() => router.replace('/store' as any)} />
+          </AppCard>
         </View>
+      </AppScreen>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <AppScreen contentContainerStyle={{ paddingBottom: layout.screenBottom + 96 }}>
+        <AppTopBar eyebrow="Төлбөр" title="Захиалга" />
+        <AppHeader
+          title="Захиалга баталгаажуулах"
+          subtitle="Хаяг, утас, төлбөрийн аргаа шалгаад захиалгаа үүсгэнэ."
+          icon="receipt-outline"
+          accent={C.brand}
+        />
+
+        <AppCard style={{ flexDirection: 'row', gap: R.sm, alignItems: 'flex-start', borderColor: C.success + '35', marginBottom: R.md }}>
+          <Ionicons name="shield-checkmark-outline" size={21} color={C.success} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>3 өдрийн дундын дансны хамгаалалт</Text>
+            <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
+              Бараа хүргэгдсэний дараа л төлбөр дэлгүүрт шилжинэ.
+            </Text>
+          </View>
+        </AppCard>
+
+        {hasCartIssues ? (
+          <AppCard style={{ flexDirection: 'row', gap: R.sm, alignItems: 'flex-start', borderColor: C.gold + '55', marginBottom: R.md }}>
+            <Ionicons name="shield-checkmark-outline" size={21} color={C.gold} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={{ ...F.small, color: C.gold, fontWeight: '900' }}>Сагс шалгалт шаардлагатай</Text>
+              <Text style={{ ...F.tiny, color: C.textSub }}>
+                Шалгалтад байгаа барааг сагснаас устгасны дараа төлбөр үргэлжилнэ.
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.84}
+                onPress={() => router.replace('/cart' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Сагс руу буцах"
+              >
+                <Text style={{ ...F.tiny, color: C.brand, fontWeight: '900', marginTop: 2 }}>Сагс руу буцах</Text>
+              </TouchableOpacity>
+            </View>
+          </AppCard>
+        ) : null}
+
+        <Section title="Захиалгын дэлгэрэнгүй">
+          {items.map((item) => {
+            const qualityIssue = getCartItemQualityIssue(item);
+
+            return (
+              <View key={item.id} style={{ marginBottom: R.sm }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md }}>
+                  <Text style={{ ...F.small, color: C.text, flex: 1 }} numberOfLines={1}>
+                    {item.name} × {item.qty}
+                  </Text>
+                  <Text style={{ ...F.small, color: qualityIssue?.code === 'invalid-price' ? C.gold : C.brand, fontWeight: '900' }}>
+                    {qualityIssue?.code === 'invalid-price' ? 'Шалгалт' : formatMoney(item.price * item.qty)}
+                  </Text>
+                </View>
+                {qualityIssue ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                    <Ionicons name="shield-checkmark-outline" size={13} color={C.gold} />
+                    <Text style={{ ...F.tiny, color: C.textSub, flex: 1 }}>{qualityIssue.message}</Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+          <View style={{ height: 1, backgroundColor: C.border, marginVertical: R.sm }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md }}>
+            <Text style={{ ...F.h4, color: C.text }}>Нийт</Text>
+            <Text style={{ ...F.h4, color: C.brand }}>{formatMoney(total())}</Text>
+          </View>
+        </Section>
+
+        <Section title="Төлбөрийн арга">
+          <View style={{ gap: R.sm }}>
+            {PAYMENT_METHODS.map((item) => {
+              const active = method === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.84}
+                  onPress={() => setMethod(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.label} төлбөрийн арга сонгох`}
+                  accessibilityState={{ selected: active }}
+                  style={{
+                    minHeight: 56,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: active ? item.color + '15' : C.bgSection,
+                    borderRadius: UI.controlRadius,
+                    padding: R.md,
+                    gap: R.sm,
+                    borderWidth: 1,
+                    borderColor: active ? item.color : C.border,
+                  }}
+                >
+                  <Ionicons name={item.icon} size={22} color={item.color} />
+                  <Text style={{ ...F.small, flex: 1, color: C.text, fontWeight: '800' }}>{item.label}</Text>
+                  {active ? <Ionicons name="checkmark-circle" size={20} color={item.color} /> : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Section>
+
+        <Section title="Хүргэх хаяг">
+          <TextInput
+            placeholder="Дүүрэг, хороо, байр, орц, тоот..."
+            placeholderTextColor={C.textMuted}
+            value={address}
+            onChangeText={setAddress}
+            multiline
+            accessibilityLabel="Хүргэх хаяг"
+            accessibilityHint="Захиалгыг хүргэх дэлгэрэнгүй хаягаа оруулна уу"
+            style={[inputStyle, { minHeight: 84, textAlignVertical: 'top' }]}
+          />
+        </Section>
+
+        <Section title="Утасны дугаар">
+          <TextInput
+            placeholder="8811-XXXX"
+            placeholderTextColor={C.textMuted}
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            accessibilityLabel="Утасны дугаар"
+            accessibilityHint="Захиалгын хүргэлтээр холбогдох утасны дугаараа оруулна уу"
+            style={inputStyle}
+          />
+        </Section>
+      </AppScreen>
+
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: C.bgCard,
+          padding: UI.screenPad,
+          paddingBottom: layout.insets.bottom + R.lg,
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+        }}
+      >
+        <AppButton
+          label={hasCartIssues ? 'Сагсаа шалгана уу' : loading ? 'Захиалга үүсгэж байна' : `${paymentLabel(method)} төлөх`}
+          icon="card-outline"
+          disabled={loading || hasCartIssues}
+          onPress={createOrder}
+        />
       </View>
+    </View>
+  );
+}
 
-      <Text style={{ color: C.text, fontSize: 22, fontWeight: '800', marginBottom: 8 }}>QPay төлбөр</Text>
-      <Text style={{ color: C.textSub, marginBottom: 24, textAlign: 'center' }}>QR кодыг банкны аппаар скан хийнэ үү</Text>
+function QPayScreen({ qrUri, countdown }: { qpayData: any; qrUri: string | null; countdown: number }) {
+  return (
+    <AppScreen contentContainerStyle={{ alignItems: 'center' }}>
+      <AppTopBar eyebrow="Төлбөр" title="QPay" style={{ alignSelf: 'stretch' }} />
+      <AppHeader
+        title="QPay төлбөр"
+        subtitle="QR кодыг банкны апп-аар уншуулж төлнө үү."
+        icon="qr-code-outline"
+        accent={C.brand}
+        style={{ alignSelf: 'stretch' }}
+      />
 
-      {qrUri && (
-        <View style={{ backgroundColor: '#fff', borderRadius: R.lg, padding: 12 }}>
-          <Image source={{ uri: qrUri }} style={{ width: 200, height: 200 }} />
+      <AppCard style={{ flexDirection: 'row', gap: R.sm, alignItems: 'flex-start', borderColor: C.success + '35', marginBottom: R.md }}>
+        <Ionicons name="shield-checkmark-outline" size={21} color={C.success} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>Дундын данс</Text>
+          <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
+            Таны төлбөр 3 хоног хамгаалагдаж, бараа хүргэгдсэний дараа дэлгүүрт шилжинэ.
+          </Text>
         </View>
+      </AppCard>
+
+      {qrUri ? (
+        <AppCard style={{ padding: R.md, marginBottom: R.md }}>
+          <Image
+            source={{ uri: qrUri }}
+            style={{ width: 210, height: 210 }}
+            accessibilityLabel="QPay QR код"
+          />
+        </AppCard>
+      ) : (
+        <AppCard style={{ alignItems: 'center', gap: R.sm, marginBottom: R.md }}>
+          <ActivityIndicator color={C.brand} />
+          <Text style={{ ...F.small, color: C.textSub }}>QR үүсгэж байна</Text>
+        </AppCard>
       )}
 
-      <Text style={{ color: C.brand, fontSize: 28, fontWeight: '900', marginTop: 16 }}>
+      <Text style={{ fontSize: 30, fontWeight: '900', color: C.brand }}>
         {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, '0')}
       </Text>
-      <Text style={{ color: C.textMuted, marginTop: 4, marginBottom: 24 }}>Хугацаа дуусахаас өмнө төлнө үү</Text>
+      <Text style={{ ...F.small, color: C.textMuted, marginTop: R.xs, marginBottom: R.md }}>
+        Хугацаа дуусахаас өмнө төлнө үү.
+      </Text>
 
-      {/* Bank deep links */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', width: '100%' }}>
-        {BANKS.map(b => (
-          <TouchableOpacity key={b.name}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: R.sm, justifyContent: 'center' }}>
+        {BANKS.map((bank) => (
+          <TouchableOpacity
+            key={bank.name}
+            activeOpacity={0.84}
             onPress={async () => {
-              // canOpenURL зарим Android-д `queries` manifest байхгүй үед false
-              // буцаах боловч openURL ч бас throw хийдэг — хамгийн найдвартай
-              // нь hasResolver-оос зарим нь үр дүн өгөхгүй бол шууд Alert.
               try {
-                const canOpen = await Linking.canOpenURL(b.url);
+                const canOpen = await Linking.canOpenURL(bank.url);
                 if (!canOpen) {
-                  Alert.alert('Апп олдсонгүй', `${b.name} апп суулгаагүй байна`);
+                  Alert.alert('Апп олдсонгүй', `${bank.name} апп суулгаагүй байна.`);
                   return;
                 }
-                await Linking.openURL(b.url);
+                await Linking.openURL(bank.url);
               } catch {
-                Alert.alert('Апп олдсонгүй', `${b.name} апп суулгаагүй байна`);
+                Alert.alert('Апп олдсонгүй', `${bank.name} апп суулгаагүй байна.`);
               }
             }}
-            style={{ backgroundColor: b.color + '15', borderRadius: R.md, padding: 12, minWidth: '44%', alignItems: 'center', borderWidth: 1, borderColor: b.color + '40' }}>
-            <Text style={{ color: b.color, fontSize: 13, fontWeight: '700' }}>{b.name}</Text>
+            accessibilityRole="button"
+            accessibilityLabel={`${bank.name} апп нээх`}
+            style={{
+              backgroundColor: bank.color + '15',
+              borderRadius: UI.controlRadius,
+              padding: R.md,
+              minHeight: 52,
+              minWidth: '44%',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: bank.color + '40',
+            }}
+          >
+            <Text style={{ ...F.small, color: bank.color, fontWeight: '800' }}>{bank.name}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <TouchableOpacity onPress={() => router.push('/(tabs)/' as any)} style={{ marginTop: 24, padding: 14 }}>
-        <Text style={{ color: C.textSub, fontWeight: '600' }}>Нүүр хуудас руу буцах</Text>
-      </TouchableOpacity>
-    </View>
-  )
-
-  // ═══ Checkout Form ═══
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ paddingBottom: 40 }}>
-      <View style={{ padding: 16, paddingTop: 60, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={C.text} />
-        </TouchableOpacity>
-        <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }}>Захиалга</Text>
-      </View>
-
-      {/* Escrow notice */}
-      <View style={{ margin: 12, backgroundColor: '#34A85315', borderRadius: R.lg, padding: 14, borderWidth: 1, borderColor: '#34A85340', flexDirection: 'row', gap: 10 }}>
-        <Ionicons name="shield-checkmark" size={20} color="#34A853" />
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: '#34A853', fontWeight: '700', fontSize: 13 }}>3 өдрийн дундын данс хамгаалалт</Text>
-          <Text style={{ color: '#34A85390', fontSize: 12, marginTop: 2 }}>Бараа хүргэгдсэний дараа л төлбөр шилжинэ</Text>
-        </View>
-      </View>
-
-      {/* Items */}
-      <View style={{ margin: 12, backgroundColor: C.bgCard, borderRadius: R.lg, padding: 16, borderWidth: 1, borderColor: C.border }}>
-        <Text style={{ color: C.textSub, fontWeight: '700', fontSize: 12, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Захиалгын дэлгэрэнгүй</Text>
-        {items.map((item, i) => (
-          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text style={{ color: C.text, flex: 1 }} numberOfLines={1}>{item.name} ×{item.qty}</Text>
-            <Text style={{ color: C.brand, fontWeight: '700' }}>{(item.price * item.qty).toLocaleString()}₮</Text>
-          </View>
-        ))}
-        <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 10, marginTop: 4, flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ color: C.text, fontWeight: '700' }}>Нийт</Text>
-          <Text style={{ color: C.brand, fontWeight: '900', fontSize: 18 }}>{total().toLocaleString()}₮</Text>
-        </View>
-      </View>
-
-      {/* Payment method selector */}
-      <View style={{ margin: 12 }}>
-        <Text style={{ color: C.textSub, fontWeight: '600', marginBottom: 8, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Төлбөрийн арга</Text>
-        <View style={{ gap: 8 }}>
-          {PAYMENT_METHODS.map(m => (
-            <TouchableOpacity key={m.id} onPress={() => setMethod(m.id)}
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: method === m.id ? m.color + '15' : C.bgCard, borderRadius: R.lg, padding: 14, gap: 12, borderWidth: 1, borderColor: method === m.id ? m.color : C.border }}>
-              <Ionicons name={m.icon} size={22} color={m.color} />
-              <Text style={{ flex: 1, color: C.text, fontWeight: '600' }}>{m.label}</Text>
-              {method === m.id && <Ionicons name="checkmark-circle" size={20} color={m.color} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Address */}
-      <View style={{ margin: 12 }}>
-        <Text style={{ color: C.textSub, fontWeight: '600', marginBottom: 8, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Хүргэх хаяг</Text>
-        <TextInput placeholder="Дүүрэг, хороо, байшин, орц, тоот..." placeholderTextColor={C.textMuted} value={address} onChangeText={setAddress}
-          multiline style={{ backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14, color: C.text, fontSize: 14, textAlignVertical: 'top', minHeight: 80, borderWidth: 1, borderColor: C.border }} />
-      </View>
-
-      {/* Phone */}
-      <View style={{ margin: 12 }}>
-        <Text style={{ color: C.textSub, fontWeight: '600', marginBottom: 8, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Утасны дугаар</Text>
-        <TextInput placeholder="8811-XXXX" placeholderTextColor={C.textMuted} value={phone} onChangeText={setPhone}
-          keyboardType="phone-pad" style={{ backgroundColor: C.bgCard, borderRadius: R.lg, padding: 14, color: C.text, fontSize: 16, borderWidth: 1, borderColor: C.border }} />
-      </View>
-
-      <TouchableOpacity
-        onPress={createOrder}
-        disabled={loading}
-        accessibilityRole="button"
-        accessibilityLabel={`${method === 'qpay' ? 'QPay-ээр' : method === 'socialpay' ? 'SocialPay-ээр' : 'Картаар'} төлөх`}
-        accessibilityState={{ disabled: loading, busy: loading }}
-        style={{ margin: 12, backgroundColor: loading ? C.textMuted : C.brand, borderRadius: R.lg, padding: 18, alignItems: 'center' }}>
-        {loading
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-              💳 {method === 'qpay' ? 'QPay-р' : method === 'socialpay' ? 'SocialPay-р' : 'Картаар'} төлөх
-            </Text>
-        }
-      </TouchableOpacity>
-    </ScrollView>
-  )
+      <AppButton
+        label="Нүүр хуудас руу буцах"
+        icon="home-outline"
+        variant="ghost"
+        onPress={() => router.push('/' as any)}
+        style={{ marginTop: R.xl, alignSelf: 'stretch' }}
+      />
+    </AppScreen>
+  );
 }
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <AppCard style={{ marginBottom: R.md }}>
+      <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm }}>{title}</Text>
+      {children}
+    </AppCard>
+  );
+}
+
+function paymentLabel(method: string) {
+  if (method === 'qpay') return 'QPay-ээр';
+  if (method === 'socialpay') return 'SocialPay-ээр';
+  return 'Картаар';
+}
+
+function shortId(value: unknown, length: number) {
+  return String(value ?? '').slice(-length).toLocaleUpperCase('en-US');
+}
+
+function formatMoney(value?: number) {
+  return `${Number(value || 0).toLocaleString()}₮`;
+}
+
+const inputStyle = {
+  backgroundColor: C.bgSection,
+  borderRadius: UI.controlRadius,
+  padding: R.md,
+  color: C.text,
+  fontSize: 15,
+  borderWidth: 1,
+  borderColor: C.border,
+};

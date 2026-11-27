@@ -24,7 +24,7 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { C, R, F } from '../../shared/design';
+import { C, R, F, UI } from '../../shared/design';
 import { useSellerDashboard } from '../../hooks/useSellerDashboard';
 import { useSellerNetworkEnabled } from '../../config/remoteFlags';
 import {
@@ -62,7 +62,7 @@ export function SellerNetworkSection() {
       </View>
 
       {q.isLoading ? (
-        <View style={{ padding: 24, alignItems: 'center', backgroundColor: C.bgCard, borderRadius: R.lg, borderWidth: 1, borderColor: C.border }}>
+        <View style={{ padding: UI.screenPad, alignItems: 'center', backgroundColor: C.bgCard, borderRadius: R.lg, borderWidth: 1, borderColor: C.border }}>
           <ActivityIndicator color={C.seller} />
           <Text style={{ color: C.textSub, marginTop: 8, fontSize: 13 }}>Ачааллаж байна…</Text>
         </View>

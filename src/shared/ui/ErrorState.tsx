@@ -44,7 +44,7 @@ export function ErrorState({ title, subtitle, onRetry, compact }: ErrorStateProp
             borderRadius: R.full,
           }}
         >
-          <Text style={{ ...F.small, color: C.white, fontWeight: '700' }}>Дахин оролдох</Text>
+          <Text style={{ ...F.small, color: C.bgCard, fontWeight: '700' }}>Дахин оролдох</Text>
         </TouchableOpacity>
       ) : null}
     </View>

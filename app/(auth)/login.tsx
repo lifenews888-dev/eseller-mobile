@@ -1,39 +1,58 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ScrollView,
-  ActivityIndicator, Alert, Linking,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/store/auth';
-import { routeByRole } from '../../src/shared/routing';
-import { C, R } from '../../src/shared/design';
+import { inferAuthRoleFromReturnTo, normalizeAuthRoleParam, routeAfterAuth } from '../../src/shared/routing';
+import { C, F, R, UI } from '../../src/shared/design';
+import * as SecureStore from '../../src/shared/secureStore';
 import {
+  authenticateWithBiometric,
+  disableBiometric,
+  enableBiometric,
+  getBiometricSession,
   isBiometricAvailable,
   isBiometricEnabled,
-  authenticateWithBiometric,
-  getBiometricSession,
-  enableBiometric,
-  disableBiometric,
 } from '../../src/shared/biometric';
 import { OTP_ENABLED_DEFAULT } from '../../src/config/flags';
 import { SESSION_INVALIDATED_KEY } from '../../src/services/api';
+import { API_ORIGIN } from '../../src/config/apiBase';
+import { AuthValueIntro } from '../../src/components/AuthValueIntro';
+import { AppButton, AppCard, AppHeader, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const TEST_USERS = [
-  { label: '🛍️ Худалдан авагч', phone: '99000001', color: '#1A73E8' },
-  { label: '🏪 Дэлгүүр эзэн',   phone: '99000002', color: '#0D652D' },
-  { label: '🚚 Жолооч',          phone: '99000003', color: '#C62828' },
-  { label: '📢 Борлуулагч',      phone: '99000004', color: '#E37400' },
+  { label: 'Худалдан авагч', phone: '99000001', color: C.buyer },
+  { label: 'Дэлгүүр эзэн', phone: '99000002', color: C.store },
+  { label: 'Жолооч', phone: '99000003', color: C.driver },
+  { label: 'Борлуулагч', phone: '99000004', color: C.seller },
 ];
+
 const TEST_PASSWORD = 'test1234';
 
 export default function LoginScreen() {
   const { login, loading } = useAuth();
+  const layout = useAppLayoutMetrics();
+  const params = useLocalSearchParams<{ role?: string; returnTo?: string; next?: string; redirect?: string }>();
+  const authReturnTo = params.returnTo || params.next || params.redirect;
+  const authRole = normalizeAuthRoleParam(params.role) || inferAuthRoleFromReturnTo(authReturnTo);
+  const authLinkParams = {
+    ...(authReturnTo ? { returnTo: authReturnTo } : {}),
+    ...(authRole ? { role: authRole } : {}),
+  };
+
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [bioAvailable, setBioAvailable] = useState(false);
@@ -41,74 +60,77 @@ export default function LoginScreen() {
   const [bioType, setBioType] = useState('');
 
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof window === 'undefined') return;
+    if (window.location.hash === '#register') {
+      router.replace({
+        pathname: '/register',
+        params: {
+          ...(authReturnTo ? { returnTo: authReturnTo } : {}),
+          role: authRole || 'affiliate',
+        },
+      } as any);
+    }
+  }, [authReturnTo, authRole]);
+
+  useEffect(() => {
     (async () => {
       const { available, type } = await isBiometricAvailable();
       const enabled = await isBiometricEnabled();
-      // Token presence gate — without this, a stale `bio_enabled=true`
-      // flag from an earlier build (or after a 401 wipe) would render
-      // the bio button on the login screen, where tapping it dropped
-      // straight into the "Сесс дуусжээ" alert because there's no token
-      // to restore. issue #46.
       const token = await SecureStore.getItemAsync('token');
+
       setBioAvailable(available);
       setBioEnabled(enabled && !!token);
       setBioType(type);
 
-      // One-shot "session expired" alert. The api.ts 401 interceptor sets
-      // SESSION_INVALIDATED_KEY before redirecting here — only fires for
-      // a real authenticated 401 (not credential-endpoint 401, not offline,
-      // not fresh install). Read once and clear so it never repeats.
       try {
         const flag = await AsyncStorage.getItem(SESSION_INVALIDATED_KEY);
         if (flag === '1') {
           await AsyncStorage.removeItem(SESSION_INVALIDATED_KEY);
           Alert.alert(
-            'Сесс хугацаа дууссан',
-            'Аюулгүй байдлын үүднээс дахин нэвтэрнэ үү',
+            'Сессийн хугацаа дууссан',
+            'Аюулгүй байдлын үүднээс дахин нэвтэрнэ үү.',
           );
         }
       } catch {}
-
-      // ⚠️ DO NOT auto-trigger biometric here. The cold-start gate
-      // (src/shared/sessionGate.ts) is the canonical entry point for
-      // biometric unlock and runs BEFORE we ever route to this screen.
-      // Reaching this screen with a token + bio enabled means the user
-      // explicitly cancelled the prompt or it failed — auto-prompting
-      // again would be a UX trap. The button below is the manual retry.
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function quickLogin(testPhone: string) {
-    // Dev-only helper — disabled in release builds
     if (!__DEV__) return;
     if (useAuth.getState().loading) return;
+
     try {
-      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       await login(testPhone, TEST_PASSWORD);
       const currentUser = useAuth.getState().user;
-      routeByRole(currentUser?.role || 'buyer');
+      routeAfterAuth(currentUser?.role || 'buyer', authReturnTo);
     } catch (e: any) {
-      Alert.alert('Алдаа', e?.message || 'Нэвтрэх үед алдаа гарлаа');
+      Alert.alert('Алдаа', e?.message || 'Нэвтрэх үед алдаа гарлаа.');
     }
   }
 
-  const finishLogin = (role: string) => routeByRole(role);
+  const finishLogin = (role: string) => {
+    routeAfterAuth(role, authReturnTo);
+  };
 
-  const offerBioSave = (phone: string, _password: string, role: string) => {
+  const offerBioSave = (phone: string, role: string) => {
     if (!bioAvailable || bioEnabled) {
       finishLogin(role);
       return;
     }
+
     Alert.alert(
       `${bioType || 'Биометр'} идэвхжүүлэх үү?`,
-      'Дараа нь хурдан нэвтрэх боломжтой болно',
+      'Дараагийн удаа илүү хурдан нэвтрэх боломжтой болно.',
       [
         { text: 'Болих', style: 'cancel', onPress: () => finishLogin(role) },
         {
           text: 'Идэвхжүүлэх',
           onPress: async () => {
-            try { await enableBiometric(phone); } catch {}
+            try {
+              await enableBiometric(phone);
+            } catch {}
             finishLogin(role);
           },
         },
@@ -118,274 +140,289 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (loading) return;
-    if (!email || !pass) {
-      Alert.alert('Анхаар', 'Бүх талбарыг бөглөнө үү');
+    if (!email.trim() || !pass) {
+      Alert.alert('Анхаар', 'Имэйл эсвэл утас болон нууц үгээ оруулна уу.');
       return;
     }
+
     try {
-      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       const phone = email.trim();
       await login(phone, pass);
       const currentUser = useAuth.getState().user;
-      offerBioSave(phone, pass, currentUser?.role || 'buyer');
+      offerBioSave(phone, currentUser?.role || 'buyer');
     } catch (e: any) {
-      Alert.alert('Алдаа', e?.message || 'Нэвтрэх үед алдаа гарлаа');
+      Alert.alert('Алдаа', e?.message || 'Нэвтрэх үед алдаа гарлаа.');
     }
   };
 
   const handleBio = async () => {
-    const result = await authenticateWithBiometric(
-      `${bioType || 'Биометр'}-ээр нэвтрэх`,
-    );
+    const result = await authenticateWithBiometric(`${bioType || 'Биометр'}-ээр нэвтрэх`);
     if (!result.success) {
-      // user_cancel / system_cancel → silent. Anything else → tell the user.
       if (result.error && result.error !== 'user_cancel' && result.error !== 'system_cancel') {
         Alert.alert('Биометр амжилтгүй', `Код: ${result.error}`);
       }
       return;
     }
+
     const session = await getBiometricSession();
     if (!session) {
-      // The mount-time token check should have already hidden the button,
-      // but if a race or a stale phone-hint slipped through, recover
-      // gracefully: turn biometric off so the next attempt won't dead-end
-      // here, and let the user log in with a password. We do NOT show
-      // "Сесс дуусжээ" — that alert is reserved for genuine session-expiry
-      // (api.ts SESSION_INVALIDATED_KEY) and would mislead the user when
-      // there was never an active session to expire.
-      try { await disableBiometric(); } catch {}
+      try {
+        await disableBiometric();
+      } catch {}
       setBioEnabled(false);
       Alert.alert(
         'Биометр дахин тохируулах',
-        'Биометр нэвтрэлт ашиглахын өмнө имэйл/нууц үгээр нэг удаа нэвтэрнэ үү',
+        'Биометр нэвтрэлт ашиглахын өмнө утас/имэйл болон нууц үгээр нэг удаа нэвтэрнэ үү.',
       );
       return;
     }
+
     try {
       await useAuth.getState().restoreSession(session.token);
       const currentUser = useAuth.getState().user;
-      routeByRole(currentUser?.role || 'buyer');
+      routeAfterAuth(currentUser?.role || 'buyer', authReturnTo);
     } catch (e: any) {
-      Alert.alert('Алдаа', e?.message || 'Биометр нэвтрэлт амжилтгүй');
+      Alert.alert('Алдаа', e?.message || 'Биометр нэвтрэлт амжилтгүй.');
+    }
+  };
+
+  const openAuthProvider = async (provider: 'google' | 'dan') => {
+    try {
+      const baseUrl = __DEV__
+        ? (process.env.EXPO_PUBLIC_DEV_API || API_ORIGIN)
+        : API_ORIGIN;
+      const providerParams = new URLSearchParams({ redirect: 'eseller://auth/callback' });
+      if (provider === 'google') providerParams.set('role', authRole || 'buyer');
+      await WebBrowser.openBrowserAsync(`${baseUrl}/api/auth/${provider}?${providerParams.toString()}`);
+    } catch (e) {
+      if (__DEV__) console.error(`[${provider}-oauth]`, e);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: C.bg }}
+      style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={{ padding: 24, paddingTop: 60, paddingBottom: 40 }}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: layout.screenTop, paddingBottom: layout.screenBottom },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Logo */}
-        <View style={{ alignItems: 'center', marginBottom: 32 }}>
-          <Text style={{
-            fontSize: 40, fontWeight: '900', color: C.text, letterSpacing: -1,
-          }}>
+        <View style={styles.brandWrap}>
+          <Text style={styles.brandText}>
             eseller<Text style={{ color: C.brand }}>.mn</Text>
           </Text>
-          <Text style={{ color: C.textMuted, fontSize: 14, marginTop: 8 }}>
-            Монголын нэгдсэн платформ
-          </Text>
+          <Text style={styles.brandSub}>Монголын нэгдсэн худалдааны платформ</Text>
         </View>
 
-        {/* Quick Login — dev-only helper with hardcoded test creds */}
-        {__DEV__ && (
-          <View style={{
-            backgroundColor: C.bgCard, borderRadius: R.lg,
-            padding: 14, marginBottom: 18,
-            borderWidth: 1, borderColor: C.border,
-          }}>
-            <Text style={{
-              color: C.textSub, fontSize: 12, fontWeight: '600',
-              marginBottom: 10, textAlign: 'center',
-            }}>
-              ⚡ Хурдан нэвтрэх (тест)
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <AppHeader
+          title="Нэвтрэх"
+          subtitle="Захиалга, дэлгүүр, борлуулалт, хүргэлтээ нэг апп дээр удирдана."
+          icon="log-in-outline"
+          accent={C.brand}
+        />
+
+        <AuthValueIntro />
+
+        {__DEV__ ? (
+          <AppCard style={styles.quickCard}>
+            <Text style={styles.quickTitle}>Хурдан нэвтрэх (тест)</Text>
+            <View style={styles.quickGrid}>
               {TEST_USERS.map((u) => (
                 <TouchableOpacity
                   key={u.phone}
+                  activeOpacity={0.86}
                   onPress={() => quickLogin(u.phone)}
                   disabled={loading}
-                  style={{
-                    flexBasis: '47%', backgroundColor: C.bgSection,
-                    borderRadius: R.md, padding: 10, alignItems: 'center',
-                    borderWidth: 1.5, borderColor: u.color,
-                  }}
+                  style={[styles.quickButton, { borderColor: u.color }]}
                 >
-                  <Text style={{ color: u.color, fontSize: 12, fontWeight: '600' }}>
+                  <Text style={[styles.quickLabel, { color: u.color }]} numberOfLines={1}>
                     {u.label}
                   </Text>
-                  <Text style={{ color: C.textMuted, fontSize: 10, marginTop: 2 }}>
-                    {u.phone}
-                  </Text>
+                  <Text style={styles.quickPhone}>{u.phone}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+          </AppCard>
+        ) : null}
+
+        <AppCard style={styles.formCard}>
+          <FieldLabel>Имэйл эсвэл утас</FieldLabel>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="example@gmail.com эсвэл 99XXXXXX"
+            placeholderTextColor={C.textMuted}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            style={styles.input}
+          />
+
+          <FieldLabel>Нууц үг</FieldLabel>
+          <TextInput
+            value={pass}
+            onChangeText={setPass}
+            placeholder="••••••••"
+            placeholderTextColor={C.textMuted}
+            secureTextEntry
+            style={styles.input}
+          />
+
+          <AppButton
+            label={loading ? 'Нэвтэрч байна' : 'Нэвтрэх'}
+            icon="log-in-outline"
+            onPress={handleLogin}
+            disabled={loading}
+            style={styles.primaryAction}
+          />
+
+          {bioAvailable && bioEnabled ? (
+            <AppButton
+              label={Platform.OS === 'ios' ? 'Face ID-ээр нэвтрэх' : 'Хурууны хээгээр нэвтрэх'}
+              icon={Platform.OS === 'ios' ? 'lock-closed-outline' : 'finger-print-outline'}
+              onPress={handleBio}
+              variant="secondary"
+              style={styles.secondaryAction}
+            />
+          ) : null}
+        </AppCard>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>эсвэл</Text>
+          <View style={styles.divider} />
+        </View>
+
+        <View style={styles.oauthStack}>
+          <AppButton
+            label="Google-ээр нэвтрэх"
+            icon="logo-google"
+            onPress={() => openAuthProvider('google')}
+            variant="secondary"
+          />
+          <AppButton
+            label="ДАН-аар нэвтрэх"
+            icon="id-card-outline"
+            onPress={() => openAuthProvider('dan')}
+            style={{ backgroundColor: C.primary, borderColor: C.primary }}
+          />
+          <Text style={styles.oauthHint}>E-Mongolia иргэний нэвтрэлт</Text>
+        </View>
+
+        {OTP_ENABLED_DEFAULT ? (
+          <View style={styles.otpStack}>
+            <AppButton
+              label="Утсаар нэвтрэх"
+              icon="phone-portrait-outline"
+              onPress={() => router.push('/otp')}
+              variant="ghost"
+            />
+            <TouchableOpacity
+              activeOpacity={0.86}
+              onPress={() => router.push('/forgot-password' as never)}
+              style={styles.centerLink}
+            >
+              <Text style={styles.centerLinkText}>Нууц үгээ мартсан уу?</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
-        {/* Email / Phone */}
-        <Text style={{ color: C.textSub, fontSize: 13, marginBottom: 6, fontWeight: '600' }}>
-          Имэйл эсвэл утас
-        </Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="example@gmail.com эсвэл 99XXXXXX"
-          placeholderTextColor={C.textMuted}
-          autoCapitalize="none"
-          style={{
-            backgroundColor: C.bgSection, borderRadius: R.lg,
-            padding: 16, color: C.text, fontSize: 15,
-            marginBottom: 16, borderWidth: 1, borderColor: C.border,
-          }}
-        />
-
-        {/* Password */}
-        <Text style={{ color: C.textSub, fontSize: 13, marginBottom: 6, fontWeight: '600' }}>
-          Нууц үг
-        </Text>
-        <TextInput
-          value={pass}
-          onChangeText={setPass}
-          placeholder="••••••••"
-          placeholderTextColor={C.textMuted}
-          secureTextEntry
-          style={{
-            backgroundColor: C.bgSection, borderRadius: R.lg,
-            padding: 16, color: C.text, fontSize: 15,
-            marginBottom: 24, borderWidth: 1, borderColor: C.border,
-          }}
-        />
-
-        {/* Login button */}
-        <TouchableOpacity
-          onPress={handleLogin}
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel="Нэвтрэх"
-          accessibilityState={{ disabled: loading, busy: loading }}
-          style={{
-            backgroundColor: loading ? C.bgSection : C.brand,
-            borderRadius: R.lg, padding: 17, alignItems: 'center', marginBottom: 12,
-          }}
-        >
-          {loading ? (
-            <ActivityIndicator color={C.text} />
-          ) : (
-            <Text style={{ color: C.white, fontSize: 16, fontWeight: '700' }}>
-              Нэвтрэх
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Biometric */}
-        {bioAvailable && bioEnabled && (
+        <View style={styles.inlineLinkRow}>
+          <Text style={styles.inlineText}>Бүртгэл байхгүй юу?</Text>
           <TouchableOpacity
-            onPress={handleBio}
-            style={{
-              backgroundColor: C.bgSection, borderRadius: R.lg,
-              padding: 17, alignItems: 'center', marginBottom: 24,
-              borderWidth: 1, borderColor: C.border,
-              flexDirection: 'row', justifyContent: 'center', gap: 8,
-            }}
+            activeOpacity={0.86}
+            onPress={() => router.push({ pathname: '/register', params: authLinkParams } as any)}
           >
-            <Text style={{ fontSize: 20 }}>
-              {Platform.OS === 'ios' ? '🔐' : '👆'}
-            </Text>
-            <Text style={{ color: C.text, fontSize: 15, fontWeight: '600' }}>
-              {Platform.OS === 'ios' ? 'Face ID-ээр нэвтрэх' : 'Хурууны хээгээр нэвтрэх'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Divider */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-          <View style={{ flex: 1, height: 0.5, backgroundColor: C.border }} />
-          <Text style={{ color: C.textMuted, fontSize: 12, marginHorizontal: 12 }}>эсвэл</Text>
-          <View style={{ flex: 1, height: 0.5, backgroundColor: C.border }} />
-        </View>
-
-        {/* Google */}
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              // Dev машин бүр LAN IP өөр тул EXPO_PUBLIC_DEV_API-ийг .env-д оруулна.
-              // Default prod URL-г __DEV__-гүй үед ашиглана.
-              const baseUrl = __DEV__
-                ? (process.env.EXPO_PUBLIC_DEV_API || process.env.EXPO_PUBLIC_API_URL || 'https://eseller.mn')
-                : 'https://eseller.mn';
-              await WebBrowser.openBrowserAsync(`${baseUrl}/api/auth/google?role=buyer&redirect=eseller://auth/callback`);
-            } catch (e) {
-              if (__DEV__) console.error('[google-oauth]', e);
-            }
-          }}
-          style={{
-            backgroundColor: C.white, borderRadius: R.lg,
-            padding: 15, alignItems: 'center', marginBottom: 12,
-            flexDirection: 'row', justifyContent: 'center', gap: 10,
-          }}
-        >
-          <Ionicons name="logo-google" size={20} color="#4285F4" />
-          <Text style={{ color: '#333', fontSize: 15, fontWeight: '600' }}>Google-ээр нэвтрэх</Text>
-        </TouchableOpacity>
-
-        {/* OTP phone login — same backend gap as forgot-password.
-            Calls /auth/otp-send + /auth/otp/verify which the Express API
-            doesn't ship. Gated behind the same flag. */}
-        {OTP_ENABLED_DEFAULT && (
-          <TouchableOpacity
-            onPress={() => router.push('/(auth)/otp')}
-            style={{
-              backgroundColor: C.bgSection, borderRadius: R.lg,
-              padding: 15, alignItems: 'center', marginBottom: 16,
-              flexDirection: 'row', justifyContent: 'center', gap: 10,
-              borderWidth: 1, borderColor: C.border,
-            }}
-          >
-            <Ionicons name="phone-portrait" size={18} color={C.text} />
-            <Text style={{ color: C.text, fontSize: 15, fontWeight: '600' }}>Утсаар нэвтрэх</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Forgot password — gated behind OTP_ENABLED because the backend
-            has no /auth/otp/send yet. Flip the flag once SMS is wired up. */}
-        {OTP_ENABLED_DEFAULT && (
-          <TouchableOpacity
-            onPress={() => router.push('/(auth)/forgot-password' as never)}
-            style={{ alignItems: 'center', marginBottom: 12 }}
-          >
-            <Text style={{ color: C.textSub, fontSize: 13 }}>Нууц үгээ мартсан уу?</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Register */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-          <Text style={{ color: C.textMuted, fontSize: 14 }}>
-            Бүртгэл байхгүй юу?
-          </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-            <Text style={{ color: C.brand, fontSize: 14, fontWeight: '600' }}>
-              Бүртгүүлэх
-            </Text>
+            <Text style={styles.inlineLink}>Бүртгүүлэх</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Guest */}
         <TouchableOpacity
-          onPress={() => router.replace('/(tabs)')}
-          style={{ alignItems: 'center', marginTop: 20 }}
+          activeOpacity={0.86}
+          onPress={() => router.replace('/' as any)}
+          style={styles.guestLink}
         >
-          <Text style={{ color: C.textMuted, fontSize: 13 }}>
-            Нэвтрэлгүй үргэлжлүүлэх →
-          </Text>
+          <Text style={styles.guestText}>Нэвтрэлгүй үргэлжлүүлэх</Text>
+          <Ionicons name="arrow-forward" size={15} color={C.textMuted} />
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+function FieldLabel({ children }: { children: string }) {
+  return <Text style={styles.label}>{children}</Text>;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  content: {
+    padding: UI.screenPad,
+  },
+  brandWrap: { alignItems: 'center', marginBottom: R.lg },
+  brandText: { fontSize: 40, fontWeight: '900', color: C.text, letterSpacing: 0 },
+  brandSub: { ...F.small, color: C.textMuted, marginTop: R.xs },
+  quickCard: { marginBottom: R.lg },
+  quickTitle: { ...F.small, color: C.textSub, fontWeight: '800', textAlign: 'center', marginBottom: R.md },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: R.sm },
+  quickButton: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minHeight: 56,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    padding: R.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  quickLabel: { ...F.tiny, fontWeight: '900' },
+  quickPhone: { ...F.tiny, color: C.textMuted, marginTop: 2 },
+  formCard: { gap: R.xs, marginBottom: R.lg },
+  label: { ...F.small, color: C.textSub, fontWeight: '800', marginBottom: R.xs },
+  input: {
+    minHeight: 48,
+    backgroundColor: C.bgSection,
+    borderRadius: UI.controlRadius,
+    paddingHorizontal: R.md,
+    paddingVertical: R.sm,
+    color: C.text,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: R.md,
+  },
+  primaryAction: { marginTop: R.xs },
+  secondaryAction: { marginTop: R.sm },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: R.md },
+  divider: { flex: 1, height: 1, backgroundColor: C.border },
+  dividerText: { ...F.tiny, color: C.textMuted, marginHorizontal: R.md, fontWeight: '800' },
+  oauthStack: { gap: R.sm },
+  oauthHint: { ...F.tiny, color: C.textMuted, textAlign: 'center' },
+  otpStack: { gap: R.sm, marginTop: R.md },
+  centerLink: { alignItems: 'center', paddingVertical: R.xs },
+  centerLinkText: { ...F.small, color: C.textSub, fontWeight: '700' },
+  inlineLinkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: R.xs,
+    marginTop: R.lg,
+  },
+  inlineText: { ...F.small, color: C.textMuted },
+  inlineLink: { ...F.small, color: C.primary, fontWeight: '900' },
+  guestLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: R.xs,
+    marginTop: R.md,
+  },
+  guestText: { ...F.small, color: C.textMuted, fontWeight: '700' },
+});

@@ -5,34 +5,35 @@ import {
   View, Text, TouchableOpacity,
   ScrollView, Dimensions,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { C, R } from '../design'
 
 const { width } = Dimensions.get('window')
 
 const SLIDES = [
   {
-    icon:  '🛍',
+    icon:  'storefront' as const,
     title: 'Монголын бараа бүтээгдэхүүн',
     desc:  '10,000+ бараа, 500+ дэлгүүр нэг дороос',
-    color: '#E8242C',
+    color: C.brand,
   },
   {
-    icon:  '💰',
+    icon:  'cash' as const,
     title: 'Борлуулагч болж орлого ол',
     desc:  'Share хийж commission авах — хамгийн хялбар арга',
-    color: '#2563EB',
+    color: C.primary,
   },
   {
-    icon:  '🔒',
+    icon:  'lock-closed' as const,
     title: 'Аюулгүй төлбөр',
     desc:  'Escrow систем — бараа авмагц л мөнгө шилжинэ',
-    color: '#16A34A',
+    color: C.success,
   },
   {
-    icon:  '🚗',
+    icon:  'car' as const,
     title: '2-4 цагт хүргэлт',
     desc:  'Өөрийн жолоочийн систем — хурдан найдвартай',
-    color: '#7C3AED',
+    color: C.driver,
   },
 ]
 
@@ -104,7 +105,7 @@ export default function OnboardingScreen({
             <View style={{
               width:           140,
               height:          140,
-              borderRadius:    70,
+              borderRadius:    R.full,
               backgroundColor: slide.color + '18',
               alignItems:      'center',
               justifyContent:  'center',
@@ -112,9 +113,7 @@ export default function OnboardingScreen({
               borderWidth:     2,
               borderColor:     slide.color + '30',
             }}>
-              <Text style={{ fontSize: 60 }}>
-                {slide.icon}
-              </Text>
+              <Ionicons name={slide.icon} size={58} color={slide.color} />
             </View>
 
             <Text style={{
@@ -171,7 +170,7 @@ export default function OnboardingScreen({
           }}
         >
           <Text style={{
-            color:      C.white,
+            color:      C.bgCard,
             fontWeight: '800',
             fontSize:   16,
           }}>

@@ -1,172 +1,280 @@
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, StyleSheet, Image } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../src/services/api';
+import { useAuth } from '../../src/store/auth';
+import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
-const STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  pending:          { label: 'Хүлээгдэж байна', color: '#854F0B', bg: '#FAEEDA' },
-  confirmed:        { label: 'Баталгаажсан',    color: '#185FA5', bg: '#E6F1FB' },
-  preparing:        { label: 'Бэлтгэж байна',   color: '#534AB7', bg: '#EEEDFE' },
-  ready:            { label: 'Бэлэн',           color: '#0F6E56', bg: '#E1F5EE' },
-  handed_to_driver: { label: 'Жолоочид өгсөн',  color: '#854F0B', bg: '#FAEEDA' },
-  delivering:       { label: 'Хүргэж байна',    color: '#185FA5', bg: '#E6F1FB' },
-  delivered:        { label: 'Хүргэгдсэн',      color: '#3B6D11', bg: '#EAF3DE' },
-  cancelled:        { label: 'Цуцлагдсан',      color: '#A32D2D', bg: '#FCEBEB' },
-  // Legacy — migrated from the old 5-state pipeline. Render as "Хүргэж байна".
-  shipped:          { label: 'Хүргэж байна',    color: '#185FA5', bg: '#E6F1FB' },
+type StatusToken = { label: string; color: string; bg: string };
+
+const STATUS: Record<string, StatusToken> = {
+  pending: { label: 'Хүлээгдэж байна', color: C.seller, bg: C.goldDim },
+  confirmed: { label: 'Баталгаажсан', color: C.primary, bg: C.primaryDim },
+  paid: { label: 'Төлсөн', color: C.primary, bg: C.primaryDim },
+  processing: { label: 'Бэлтгэж байна', color: C.primary, bg: C.primaryDim },
+  preparing: { label: 'Бэлтгэж байна', color: C.primary, bg: C.primaryDim },
+  ready: { label: 'Бэлэн', color: C.secondary, bg: C.secondaryDim },
+  handed_to_driver: { label: 'Жолоочид өгсөн', color: C.seller, bg: C.goldDim },
+  delivering: { label: 'Хүргэж байна', color: C.primary, bg: C.primaryDim },
+  shipped: { label: 'Хүргэж байна', color: C.primary, bg: C.primaryDim },
+  delivered: { label: 'Хүргэгдсэн', color: C.secondary, bg: C.secondaryDim },
+  cancelled: { label: 'Цуцлагдсан', color: C.error, bg: C.errorDim },
 };
 
 export default function OrdersScreen() {
+  const { user } = useAuth();
+  const layout = useAppLayoutMetrics();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery<any>({
     queryKey: ['buyer-orders'],
     queryFn: () => get('/orders'),
+    enabled: !!user,
   });
 
-  // Response shapes we accept:
-  //   { orders: [...] }  — eseller.mn backend (role-aware /orders route)
-  //   { success, data: [...] } — legacy wrapper
-  //   [...] — plain array (dev stubs)
-  const orders: any[] = Array.isArray(data?.orders)
-    ? data.orders
-    : Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data)
-        ? data
-        : [];
+  const orders = resolveOrders(data);
 
-  if (isLoading) {
+  if (!user) {
     return (
-      <View style={s.center}>
-        <ActivityIndicator size="large" color="#1B3A5C" />
-      </View>
+      <AppScreen>
+        <AppTopBar eyebrow="Профайл" title="Захиалга" showBack={false} />
+        <AppHeader
+          title="Миний захиалгууд"
+          subtitle="Захиалгын түүхээ харахын тулд нэвтэрнэ үү."
+          icon="cube-outline"
+          accent={C.primary}
+        />
+        <AppCard style={styles.emptyCard}>
+          <Ionicons name="lock-closed-outline" size={42} color={C.primary} />
+          <Text style={styles.emptyTitle}>Нэвтрэх шаардлагатай</Text>
+          <Text style={styles.emptySubtitle}>
+            Захиалгын төлөв, хүргэлт, буцаалтын мэдээллээ нэг дор хянах боломжтой.
+          </Text>
+          <View style={styles.authActions}>
+            <AppButton
+              label="Нэвтрэх"
+              icon="log-in-outline"
+              style={styles.authButton}
+              onPress={() => router.push({ pathname: '/login', params: { returnTo: '/orders' } } as never)}
+            />
+            <AppButton
+              label="Бүртгүүлэх"
+              icon="person-add-outline"
+              variant="secondary"
+              style={styles.authButton}
+              onPress={() => router.push({ pathname: '/register', params: { returnTo: '/orders' } } as never)}
+            />
+          </View>
+        </AppCard>
+      </AppScreen>
     );
   }
 
-  // Сүлжээ / 500 алдаа. Хоосон жагсаалттай адил харуулахгүй —
-  // retry товч заавал өгнө.
+  if (isLoading) {
+    return (
+      <AppScreen contentContainerStyle={{ flexGrow: 1 }}>
+        <AppTopBar eyebrow="Профайл" title="Захиалга" showBack={false} />
+        <AppHeader
+          title="Миний захиалгууд"
+          subtitle="Захиалгын мэдээлэл ачаалж байна."
+          icon="receipt-outline"
+          accent={C.primary}
+        />
+        <View style={[styles.center, { flex: 1 }]}>
+          <ActivityIndicator size="large" color={C.brand} />
+          <Text style={styles.loadingText}>Захиалгууд ачаалж байна...</Text>
+        </View>
+      </AppScreen>
+    );
+  }
+
   if (isError) {
     return (
-      <View style={s.screen}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={{ fontSize: 22, color: '#fff' }}>←</Text>
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>Миний захиалгууд</Text>
-          <View style={{ width: 22 }} />
-        </View>
-        <View style={[s.center, { padding: 24 }]}>
-          <Text style={{ fontSize: 48, marginBottom: 12 }}>⚠️</Text>
-          <Text style={s.emptyTitle}>Захиалга татахад алдаа гарлаа</Text>
-          <Text style={{ color: '#888', fontSize: 13, textAlign: 'center', marginBottom: 20 }}>
-            Сүлжээгээ шалгаад дахин оролдоно уу
+      <AppScreen>
+        <AppTopBar eyebrow="Профайл" title="Захиалга" showBack={false} />
+        <AppHeader
+          title="Миний захиалгууд"
+          subtitle="Захиалга татахад алдаа гарлаа."
+          icon="warning-outline"
+          accent={C.error}
+        />
+        <AppCard style={styles.emptyCard}>
+          <Ionicons name="cloud-offline-outline" size={42} color={C.error} />
+          <Text style={styles.emptyTitle}>Дахин оролдоно уу</Text>
+          <Text style={styles.emptySubtitle}>
+            Сүлжээгээ шалгаад захиалгын мэдээллээ дахин татна уу.
           </Text>
-          <TouchableOpacity onPress={() => refetch()} style={s.shopBtn}>
-            <Text style={s.shopBtnText}>Дахин оролдох</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+          <AppButton label="Дахин оролдох" icon="refresh-outline" onPress={() => refetch()} />
+        </AppCard>
+      </AppScreen>
     );
   }
 
   return (
-    <View style={s.screen}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ fontSize: 22, color: '#fff' }}>←</Text>
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>Миний захиалгууд</Text>
-        <View style={{ width: 22 }} />
-      </View>
-
+    <View style={styles.screen}>
       <FlatList
         data={orders}
-        // Мongol захиалга obj зарим response-д `_id` (mongo), зарим ын-д
-        // `id` (sql) өгнө. Хоёулан нь undefined бол index-д fallback хийнэ,
-        // гэхдээ warning log-лоход туслахаар __DEV__-д мэдээлнэ.
-        keyExtractor={(o, i) => {
-          const key = o?._id || o?.id;
-          if (!key) {
-            if (__DEV__) console.warn('[orders] item missing id/_id, falling back to index', o);
-            return `fallback-${i}`;
-          }
-          return String(key);
-        }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-        contentContainerStyle={
-          orders.length === 0
-            ? { flex: 1, alignItems: 'center', justifyContent: 'center' }
-            : { padding: 12, gap: 10 }
+        keyExtractor={(order, index) => getOrderKey(order) || `fallback-${index}`}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}
+        contentContainerStyle={[styles.list, { paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }]}
+        ListHeaderComponent={
+          <>
+            <AppTopBar eyebrow="Профайл" title="Захиалга" showBack={false} />
+            <AppHeader
+              title="Миний захиалгууд"
+              subtitle={orders.length > 0 ? `${orders.length} захиалга` : 'Захиалгын түүх хоосон байна.'}
+              icon="receipt-outline"
+              accent={C.primary}
+            />
+          </>
         }
         ListEmptyComponent={
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>📦</Text>
-            <Text style={s.emptyTitle}>Захиалга байхгүй</Text>
-            <TouchableOpacity onPress={() => router.push('/' as any)} style={s.shopBtn}>
-              <Text style={s.shopBtnText}>Дэлгүүр харах</Text>
-            </TouchableOpacity>
-          </View>
+          <AppCard style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={42} color={C.textMuted} />
+            <Text style={styles.emptyTitle}>Захиалга байхгүй</Text>
+            <Text style={styles.emptySubtitle}>
+              Та бараа сонгоод анхны захиалгаа үүсгээрэй.
+            </Text>
+            <AppButton label="Дэлгүүр харах" icon="bag-outline" onPress={() => router.push('/store' as any)} />
+          </AppCard>
         }
-        renderItem={({ item: o }) => {
-          const st = STATUS[o.status] || { label: o.status, color: '#888', bg: '#f0f0f0' };
-          const items: any[] = Array.isArray(o.items) ? o.items : [];
-          const first = items[0] || {};
-          return (
-            <TouchableOpacity
-              onPress={() => router.push(`/order/${o._id || o.id}` as any)}
-              style={s.card}
-            >
-              <View style={s.cardHeader}>
-                <Text style={s.orderId}>#{(o._id || o.id).toString().slice(-6).toUpperCase()}</Text>
-                <View style={[s.badge, { backgroundColor: st.bg }]}>
-                  <Text style={[s.badgeText, { color: st.color }]}>{st.label}</Text>
-                </View>
-              </View>
-              <View style={s.cardBody}>
-                {first.image ? (
-                  <Image source={{ uri: first.image }} style={s.thumb} />
-                ) : (
-                  <View style={[s.thumb, { alignItems: 'center', justifyContent: 'center' }]}>
-                    <Text style={{ fontSize: 24 }}>📦</Text>
-                  </View>
-                )}
-                <View style={s.cardInfo}>
-                  <Text style={s.productName} numberOfLines={1}>
-                    {first.name || 'Бараа'}
-                    {items.length > 1 ? ` +${items.length - 1}` : ''}
-                  </Text>
-                  <Text style={s.total}>{(o.total || 0).toLocaleString()}₮</Text>
-                  <Text style={s.date}>{new Date(o.createdAt).toLocaleDateString('mn-MN')}</Text>
-                </View>
-                <Text style={{ color: '#aaa' }}>›</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item }) => <OrderCard order={item} />}
       />
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F5F7FA' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
-    backgroundColor: '#1B3A5C', flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', padding: 16, paddingTop: 52,
+function OrderCard({ order }: { order: any }) {
+  const rawStatus = String(order?.status ?? '').toLowerCase();
+  const status = STATUS[rawStatus] || { label: order?.status || 'Төлөвгүй', color: C.textSub, bg: C.bgSection };
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const first = items[0] || {};
+  const detailId = getOrderKey(order);
+  const routeId = encodeRouteParam(detailId);
+  const orderId = shortId(order?.orderNumber ?? detailId, 'ORDER', 6);
+  const image = firstImage(first);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.86}
+      disabled={!routeId}
+      accessibilityRole="button"
+      accessibilityLabel={`Захиалга #${orderId} дэлгэрэнгүй харах`}
+      accessibilityState={{ disabled: !routeId }}
+      onPress={() => {
+        if (routeId) router.push(`/order/${routeId}` as any);
+      }}
+    >
+      <AppCard style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.orderId}>#{orderId}</Text>
+          <View style={[styles.badge, { backgroundColor: status.bg }]}>
+            <Text style={[styles.badgeText, { color: status.color }]}>{status.label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.cardBody}>
+          {image ? (
+            <Image source={{ uri: image }} style={styles.thumb} accessibilityLabel={`${itemName(first)} зураг`} />
+          ) : (
+            <View style={styles.thumbEmpty}>
+              <Ionicons name="cube-outline" size={22} color={C.textMuted} />
+            </View>
+          )}
+          <View style={styles.cardInfo}>
+            <Text style={styles.productName} numberOfLines={1}>
+              {itemName(first)}
+              {items.length > 1 ? ` +${items.length - 1}` : ''}
+            </Text>
+            <Text style={styles.total}>{formatMoney(order?.total ?? order?.grandTotal ?? order?.amount)}</Text>
+            <Text style={styles.date}>{formatDate(order?.createdAt)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+        </View>
+      </AppCard>
+    </TouchableOpacity>
+  );
+}
+
+function resolveOrders(data: any): any[] {
+  if (Array.isArray(data?.orders)) return data.orders;
+  if (Array.isArray(data?.data?.orders)) return data.data.orders;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data)) return data;
+  return [];
+}
+
+function getOrderKey(order: any) {
+  const key = order?._id ?? order?.id ?? order?.orderId;
+  return key ? String(key) : '';
+}
+
+function shortId(value: any, fallback: string, size: number) {
+  const id = String(value ?? '').trim();
+  return id ? id.slice(-size).toLocaleUpperCase('en-US') : fallback;
+}
+
+function firstImage(item: any) {
+  const image = item?.image ?? item?.product?.image ?? item?.product?.images?.[0] ?? item?.images?.[0];
+  return typeof image === 'string' ? image : image?.url;
+}
+
+function itemName(item: any) {
+  return item?.name ?? item?.productName ?? item?.product?.name ?? 'Бараа';
+}
+
+function formatMoney(value: any) {
+  return `${Number(value || 0).toLocaleString('mn-MN')}₮`;
+}
+
+function formatDate(value?: string | number | Date) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('mn-MN');
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  list: { padding: R.lg, gap: R.sm },
+  loadingText: { ...F.small, color: C.textSub, marginTop: R.md },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: R.sm,
+    paddingVertical: R.xxxl,
   },
-  headerTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 16 },
-  shopBtn: { backgroundColor: '#1B3A5C', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
-  shopBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 0.5, borderColor: '#e5e5e5' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  orderId: { fontSize: 13, fontWeight: '600', color: '#1B3A5C' },
-  badge: { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 },
-  badgeText: { fontSize: 11, fontWeight: '500' },
-  cardBody: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  thumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: '#f0f0f0' },
+  emptyTitle: { ...F.h3, color: C.text, textAlign: 'center' },
+  emptySubtitle: { ...F.small, color: C.textSub, textAlign: 'center', lineHeight: 20 },
+  authActions: { flexDirection: 'row', gap: R.sm, marginTop: R.sm, width: '100%' },
+  authButton: { flex: 1 },
+  card: { marginBottom: R.sm },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: R.md, marginBottom: R.md },
+  orderId: { ...F.small, fontWeight: '900', color: C.primary },
+  badge: { borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { ...F.tiny, fontWeight: '800' },
+  cardBody: { flexDirection: 'row', alignItems: 'center', gap: R.sm },
+  thumb: { width: 54, height: 54, borderRadius: R.md, backgroundColor: C.bgSection },
+  thumbEmpty: {
+    width: 54,
+    height: 54,
+    borderRadius: R.md,
+    backgroundColor: C.bgSection,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardInfo: { flex: 1 },
-  productName: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
-  total: { fontSize: 14, fontWeight: '700', color: '#1B3A5C', marginTop: 2 },
-  date: { fontSize: 11, color: '#aaa', marginTop: 2 },
+  productName: { ...F.small, fontWeight: '800', color: C.text },
+  total: { ...F.body, fontWeight: '900', color: C.brand, marginTop: 2 },
+  date: { ...F.tiny, color: C.textMuted, marginTop: 2 },
 });

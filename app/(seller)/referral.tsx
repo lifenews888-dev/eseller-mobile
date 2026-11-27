@@ -1,108 +1,110 @@
-import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Share, ScrollView } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import * as Clipboard from 'expo-clipboard'
-import { C, R, F } from '../../src/shared/design'
+import React, { useEffect, useRef, useState } from 'react';
+import { Text, View, Share } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import { C, F, R, UI } from '../../src/shared/design';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { AppButton, AppCard, AppHeader, AppMetricCard, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
 export default function ReferralScreen() {
-  const [copied, setCopied] = useState(false)
-  const referralCode = 'SELL-MUUGII-2025'
-  const referralLink = `https://eseller.mn/ref/${referralCode}`
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const referralCode = 'SELL-MUUGII-2025';
+  const referralRouteCode = encodeRouteParam(referralCode);
+  const referralLink = `https://eseller.mn/ref/${referralRouteCode}`;
+
+  useEffect(
+    () => () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    },
+    [],
+  );
 
   const copyLink = async () => {
-    await Clipboard.setStringAsync(referralLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  // Hidden behind the (seller) tabs href:null; only reachable via push from
-  // SellerProfile. Static placeholder data here is unchanged in this PR —
-  // hooking it to /api/seller/referral-summary is deferred (no API/business
-  // logic changes in the shell-UI normalization).
+    await Clipboard.setStringAsync(referralLink);
+    setCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+  };
 
   const shareLink = async () => {
     await Share.share({
-      message: `Eseller.mn дээр захиалга өгч хямдрал авааарай! ${referralLink}`,
+      message: `Eseller.mn дээр захиалга өгч хямдрал аваарай! ${referralLink}`,
       url: referralLink,
-    })
-  }
+    });
+  };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.hero}>
-        <Ionicons name="gift-outline" size={48} color="#fff" />
-        <Text style={styles.heroTitle}>Миний урилгын код</Text>
-        <Text style={styles.heroSub}>Найздаа хуваалц — комисс ол</Text>
-      </View>
+    <AppScreen>
+      <AppTopBar eyebrow="Борлуулагч" title="Урилгын код" showBack={false} />
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Таны код</Text>
-        <Text style={styles.code}>{referralCode}</Text>
-        <Text style={styles.linkText}>{referralLink}</Text>
-        <View style={styles.btnRow}>
-          <TouchableOpacity style={[styles.btn, copied && styles.btnSuccess]} onPress={copyLink}>
-            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color="#fff" />
-            <Text style={styles.btnText}>{copied ? 'Хуулагдлаа!' : 'Хуулах'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: '#3498db' }]} onPress={shareLink}>
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={styles.btnText}>Хуваалцах</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader
+        title="Миний урилгын код"
+        subtitle="Найздаа хуваалцаад комисс болон урамшуулал аваарай"
+        icon="gift-outline"
+        accent={C.seller}
+      />
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNum}>0</Text>
-          <Text style={styles.statLabel}>Урьсан</Text>
+      <AppCard elevated style={{ marginBottom: R.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.md, marginBottom: R.lg }}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: UI.controlRadius,
+              backgroundColor: C.seller + '18',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="link-outline" size={24} color={C.seller} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...F.small, color: C.textMuted, fontWeight: '700' }}>Таны код</Text>
+            <Text style={{ ...F.h2, color: C.seller, marginTop: 2 }} numberOfLines={1}>
+              {referralCode}
+            </Text>
+          </View>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNum}>₮0</Text>
-          <Text style={styles.statLabel}>Нийт орлого</Text>
+
+        <View
+          style={{
+            backgroundColor: C.bgSection,
+            borderRadius: UI.controlRadius,
+            padding: R.md,
+            marginBottom: R.lg,
+            borderWidth: 1,
+            borderColor: C.border,
+          }}
+        >
+          <Text style={{ ...F.tiny, color: C.textMuted, marginBottom: 4 }}>Referral link</Text>
+          <Text style={{ ...F.small, color: C.text, fontWeight: '700' }} numberOfLines={2}>
+            {referralLink}
+          </Text>
         </View>
+
+        <View style={{ flexDirection: 'row', gap: R.sm }}>
+          <AppButton
+            label={copied ? 'Хууллаа' : 'Хуулах'}
+            icon={copied ? 'checkmark' : 'copy-outline'}
+            variant={copied ? 'success' : 'seller'}
+            style={{ flex: 1 }}
+            onPress={copyLink}
+          />
+          <AppButton
+            label="Хуваалцах"
+            icon="share-social-outline"
+            variant="secondary"
+            style={{ flex: 1 }}
+            onPress={shareLink}
+          />
+        </View>
+      </AppCard>
+
+      <View style={{ flexDirection: 'row', gap: R.sm }}>
+        <AppMetricCard label="Урьсан хүн" value="0" icon="people-outline" accent={C.seller} />
+        <AppMetricCard label="Нийт орлого" value="₮0" icon="cash-outline" accent={C.seller} />
       </View>
-    </ScrollView>
-  )
+    </AppScreen>
+  );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  hero: { backgroundColor: C.brand, padding: R.xxxl, alignItems: 'center', gap: R.sm },
-  heroTitle: { ...F.h2, color: C.white },
-  heroSub: { ...F.small, color: 'rgba(255,255,255,0.8)' },
-  card: {
-    backgroundColor: C.bgCard,
-    margin: R.lg,
-    padding: R.xl,
-    borderRadius: R.lg,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  label: { ...F.small, color: C.textMuted, marginBottom: R.sm },
-  code: { fontSize: 28, fontWeight: '900', color: C.brand, letterSpacing: 2 },
-  linkText: { ...F.tiny, color: C.textSub, marginTop: R.xs, marginBottom: R.lg },
-  btnRow: { flexDirection: 'row', gap: R.sm },
-  btn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: R.xs,
-    backgroundColor: C.brand,
-    padding: R.md,
-    borderRadius: R.md,
-  },
-  btnSuccess: { backgroundColor: C.success },
-  btnText: { color: C.white, fontWeight: '700' },
-  statsRow: { flexDirection: 'row', gap: R.md, marginHorizontal: R.lg },
-  statCard: {
-    flex: 1,
-    backgroundColor: C.bgCard,
-    padding: R.lg,
-    borderRadius: R.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  statNum: { ...F.h2, color: C.text },
-  statLabel: { ...F.tiny, color: C.textMuted, marginTop: R.xs },
-})

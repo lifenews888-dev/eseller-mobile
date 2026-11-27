@@ -1,72 +1,187 @@
-import React, { useState } from 'react'
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native'
-import { router } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
+import React, { useEffect, useState } from 'react';
+import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { C, F, R, UI } from '../../src/shared/design';
+import { normalizeRouteParam } from '../../src/shared/routeParams';
+import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 
-export default function CreateCouponScreen() {
-  const [code, setCode] = useState('')
-  const [discount, setDiscount] = useState('')
-  const [type, setType] = useState<'percent' | 'fixed'>('percent')
-  const [minOrder, setMinOrder] = useState('')
-  const [expiry, setExpiry] = useState('')
+type CouponType = 'percent' | 'fixed';
 
-  const handleCreate = () => {
-    if (!code || !discount) return Alert.alert('Анхаар', 'Код болон хямдрал оруулна уу')
-    Alert.alert('Амжилт', `"${code}" купон үүслээ!`, [{ text: 'За', onPress: () => router.back() }])
-  }
-
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Купон үүсгэх</Text>
-      </View>
-
-      <View style={styles.form}>
-        <Text style={styles.label}>Купоны код</Text>
-        <TextInput style={styles.input} placeholder="SUMMER2025" value={code} onChangeText={t => setCode(t.toUpperCase())} autoCapitalize="characters" />
-
-        <Text style={styles.label}>Хямдралын төрөл</Text>
-        <View style={styles.typeRow}>
-          <TouchableOpacity style={[styles.typeBtn, type === 'percent' && styles.typeBtnActive]} onPress={() => setType('percent')}>
-            <Text style={[styles.typeBtnText, type === 'percent' && styles.typeBtnTextActive]}>% Хувиар</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.typeBtn, type === 'fixed' && styles.typeBtnActive]} onPress={() => setType('fixed')}>
-            <Text style={[styles.typeBtnText, type === 'fixed' && styles.typeBtnTextActive]}>₮ Төгрөгөөр</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.label}>Хямдралын хэмжээ {type === 'percent' ? '(%)' : '(₮)'}</Text>
-        <TextInput style={styles.input} placeholder={type === 'percent' ? '10' : '5000'} value={discount} onChangeText={setDiscount} keyboardType="numeric" />
-
-        <Text style={styles.label}>Хамгийн бага захиалгын дүн (₮)</Text>
-        <TextInput style={styles.input} placeholder="20000" value={minOrder} onChangeText={setMinOrder} keyboardType="numeric" />
-
-        <Text style={styles.label}>Дуусах огноо</Text>
-        <TextInput style={styles.input} placeholder="2025-12-31" value={expiry} onChangeText={setExpiry} />
-
-        <TouchableOpacity style={styles.createBtn} onPress={handleCreate}>
-          <Text style={styles.createBtnText}>Купон үүсгэх</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  )
+function normalizeCouponType(value?: string | string[] | null): CouponType {
+  const raw = normalizeRouteParam(value);
+  return raw === 'fixed' ? 'fixed' : 'percent';
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  title: { fontSize: 18, fontWeight: '700' },
-  form: { padding: 16, gap: 4 },
-  label: { fontSize: 13, color: '#666', fontWeight: '600', marginTop: 12, marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderRadius: 10, padding: 14, fontSize: 15, borderWidth: 1, borderColor: '#e0e0e0' },
-  typeRow: { flexDirection: 'row', gap: 10 },
-  typeBtn: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#ddd', alignItems: 'center' },
-  typeBtnActive: { borderColor: '#e74c3c', backgroundColor: '#ffeaea' },
-  typeBtnText: { fontWeight: '600', color: '#666' },
-  typeBtnTextActive: { color: '#e74c3c' },
-  createBtn: { backgroundColor: '#e74c3c', padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24 },
-  createBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-})
+export default function CreateCouponScreen() {
+  const params = useLocalSearchParams<{ type?: string }>();
+  const [code, setCode] = useState('');
+  const [discount, setDiscount] = useState('');
+  const [type, setType] = useState<CouponType>(() => normalizeCouponType(params.type));
+  const [minOrder, setMinOrder] = useState('');
+  const [expiry, setExpiry] = useState('');
+
+  useEffect(() => {
+    setType(normalizeCouponType(params.type));
+  }, [params.type]);
+
+  const selectType = (nextType: CouponType) => {
+    setType(nextType);
+    router.replace(
+      nextType === 'percent'
+        ? ('/owner/create-coupon' as any)
+        : ({ pathname: '/owner/create-coupon' as any, params: { type: nextType } } as any),
+    );
+  };
+
+  const handleCreate = () => {
+    if (!code.trim() || !discount.trim()) {
+      Alert.alert('Анхаар', 'Код болон хямдралын хэмжээг оруулна уу');
+      return;
+    }
+
+    Alert.alert('Амжилттай', `"${code}" купон үүслээ`, [
+      { text: 'За', onPress: () => router.back() },
+    ]);
+  };
+
+  return (
+    <AppScreen>
+      <AppTopBar eyebrow="Дэлгүүр" title="Купон" />
+
+      <AppHeader
+        title="Купон үүсгэх"
+        subtitle="Дэлгүүрийн захиалгад ашиглах промо код тохируулна."
+        icon="ticket-outline"
+        accent={C.store}
+      />
+
+      <AppCard style={{ gap: R.md }}>
+        <Field label="Купоны код">
+          <TextInput
+            style={inputStyle}
+            placeholder="SUMMER2026"
+            placeholderTextColor={C.textMuted}
+            value={code}
+            onChangeText={(t) => setCode(t.toUpperCase())}
+            autoCapitalize="characters"
+          />
+        </Field>
+
+        <Field label="Хямдралын төрөл">
+          <View style={{ flexDirection: 'row', gap: R.sm }}>
+            <TypeButton
+              active={type === 'percent'}
+              label="% Хувиар"
+              onPress={() => selectType('percent')}
+            />
+            <TypeButton
+              active={type === 'fixed'}
+              label="₮ Дүнгээр"
+              onPress={() => selectType('fixed')}
+            />
+          </View>
+        </Field>
+
+        <Field label={`Хямдралын хэмжээ ${type === 'percent' ? '(%)' : '(₮)'}`}>
+          <TextInput
+            style={inputStyle}
+            placeholder={type === 'percent' ? '10' : '5000'}
+            placeholderTextColor={C.textMuted}
+            value={discount}
+            onChangeText={setDiscount}
+            keyboardType="numeric"
+          />
+        </Field>
+
+        <Field label="Хамгийн бага захиалгын дүн">
+          <TextInput
+            style={inputStyle}
+            placeholder="20000"
+            placeholderTextColor={C.textMuted}
+            value={minOrder}
+            onChangeText={setMinOrder}
+            keyboardType="numeric"
+          />
+        </Field>
+
+        <Field label="Дуусах огноо">
+          <TextInput
+            style={inputStyle}
+            placeholder="2026-12-31"
+            placeholderTextColor={C.textMuted}
+            value={expiry}
+            onChangeText={setExpiry}
+          />
+        </Field>
+
+        <View style={{ flexDirection: 'row', gap: R.sm, marginTop: R.sm }}>
+          <AppButton
+            label="Буцах"
+            variant="secondary"
+            icon="arrow-back"
+            onPress={() => router.back()}
+            style={{ flex: 1 }}
+          />
+          <AppButton
+            label="Үүсгэх"
+            icon="checkmark"
+            onPress={handleCreate}
+            style={{ flex: 2, backgroundColor: C.store, borderColor: C.store }}
+          />
+        </View>
+      </AppCard>
+    </AppScreen>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={{ gap: R.sm }}>
+      <Text style={{ ...F.small, color: C.textSub, fontWeight: '800' }}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+function TypeButton({
+  active,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.84}
+      onPress={onPress}
+      style={{
+        flex: 1,
+        minHeight: 44,
+        borderRadius: UI.controlRadius,
+        borderWidth: 1,
+        borderColor: active ? C.store : C.border,
+        backgroundColor: active ? C.store + '14' : C.bgSection,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: R.sm,
+      }}
+    >
+      <Text style={{ ...F.small, color: active ? C.store : C.textSub, fontWeight: '800' }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const inputStyle = {
+  backgroundColor: C.bgInput,
+  borderRadius: UI.controlRadius,
+  paddingHorizontal: R.md,
+  paddingVertical: R.md,
+  fontSize: 15,
+  color: C.text,
+  borderWidth: 1,
+  borderColor: C.border,
+};

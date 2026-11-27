@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { View } from 'react-native'
+import { View, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
   useSharedValue,
   withRepeat,
@@ -51,9 +51,9 @@ export function Skeleton({
   )
 }
 
-export function ProductCardSkeleton() {
+export function ProductCardSkeleton({ style }: { style?: StyleProp<ViewStyle> } = {}) {
   return (
-    <View style={{
+    <View style={[{
       flex:            1,
       margin:          6,
       backgroundColor: C.bgCard,
@@ -61,7 +61,7 @@ export function ProductCardSkeleton() {
       overflow:        'hidden',
       borderWidth:     1,
       borderColor:     C.border,
-    }}>
+    }, style]}>
       <Skeleton
         width="100%"
         height={160}

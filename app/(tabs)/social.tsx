@@ -3,20 +3,70 @@ import {
   View, Text, FlatList, Image, TouchableOpacity, ScrollView,
   StyleSheet, Dimensions, Animated, RefreshControl,
   TextInput, KeyboardAvoidingView, Platform, Modal,
-  Share, ActivityIndicator,
+  Share, ActivityIndicator, Alert,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as SecureStore from 'expo-secure-store';
 import { SocialAPI } from '../../src/services/api';
+import { apiUrl } from '../../src/config/apiBase';
 import { useAuth } from '../../src/store/auth';
 import { useCart } from '../../src/store/cart';
-import { QuickBuyBottomSheet } from '../components/QuickBuyBottomSheet';
-import { GroupBuyCard } from '../components/GroupBuyCard';
-
-const API = process.env.EXPO_PUBLIC_API_URL || 'https://eseller.mn';
+import { QuickBuyBottomSheet } from '../../src/components/QuickBuyBottomSheet';
+import { GroupBuyCard } from '../../src/components/GroupBuyCard';
+import { encodeApiPathSegment } from '../../src/shared/apiPath';
+import { shadowStyle } from '../../src/shared/shadow';
+import { C, R, UI } from '../../src/shared/design';
+import {
+  firstProductImage,
+  getProductName,
+  getPublicProductPrice,
+  getPublicProductQualityIssue,
+} from '../../src/shared/productQuality';
+import { encodeRouteParam } from '../../src/shared/routeParams';
+import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
 const { height: H } = Dimensions.get('window');
+type SocialTab = 'feed' | 'trending' | 'live';
+const SOCIAL_TABS: Array<{ key: SocialTab; label: string; accessibilityLabel: string }> = [
+  { key: 'feed', label: 'Feed', accessibilityLabel: 'Social feed харах' },
+  { key: 'trending', label: 'Тренд', accessibilityLabel: 'Тренд постууд харах' },
+  { key: 'live', label: 'Live', accessibilityLabel: 'Live худалдаа руу очих' },
+];
+
+function normalizeSocialTab(value?: string | string[] | null): SocialTab {
+  return value === 'trending' || value === 'live' ? value : 'feed';
+}
+
+function getProductRouteId(product: any): string {
+  const id = product?.id ?? product?._id ?? product;
+  return encodeRouteParam(id);
+}
+
+function SocialHeader({ showCreate = false }: { showCreate?: boolean }) {
+  return (
+    <View style={s.header}>
+      <AppTopBar
+        eyebrow="Пост, бараа, live худалдаа нэг дор"
+        title="Нийгмийн худалдаа"
+        showBack={false}
+        right={showCreate ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Шинэ зар нэмэх"
+            activeOpacity={0.84}
+            onPress={() => router.push('/feed/create' as any)}
+            style={s.createBtn}
+          >
+            <Ionicons name="add" size={15} color={C.bgCard} />
+            <Text style={s.createBtnText}>Зар нэмэх</Text>
+          </TouchableOpacity>
+        ) : null}
+        style={s.topBar}
+      />
+    </View>
+  );
+}
 
 interface Post {
   id: string;
@@ -26,8 +76,11 @@ interface Post {
   products: {
     id: string;
     product: {
-      id: string;
-      name: string;
+      id?: string;
+      _id?: string;
+      name?: string;
+      title?: string;
+      productName?: string;
       price: number;
       salePrice: number | null;
       images: string[];
@@ -40,6 +93,8 @@ interface Post {
 }
 
 export default function SocialScreen() {
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const layout = useAppLayoutMetrics();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,12 +104,34 @@ export default function SocialScreen() {
   const { user } = useAuth();
 
   // Tabs: feed | trending | live
-  const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'live'>('feed');
+  const [activeTab, setActiveTab] = useState<SocialTab>(() => normalizeSocialTab(params.tab));
   const [trending, setTrending] = useState<Post[]>([]);
   const [groupBuys, setGroupBuys] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
   const [activeStory, setActiveStory] = useState<any>(null);
   const [storyProgress, setStoryProgress] = useState(0);
+
+  useEffect(() => {
+    const nextTab = normalizeSocialTab(params.tab);
+    if (nextTab === 'live') {
+      router.replace('/live' as any);
+      return;
+    }
+    setActiveTab(nextTab);
+  }, [params.tab]);
+
+  function selectTab(nextTab: SocialTab) {
+    if (nextTab === 'live') {
+      router.push('/live' as any);
+      return;
+    }
+    setActiveTab(nextTab);
+    router.replace(
+      nextTab === 'feed'
+        ? ('/social' as any)
+        : ({ pathname: '/social' as any, params: { tab: nextTab } } as any),
+    );
+  }
 
   // Fetch stories + group buys on mount
   useEffect(() => {
@@ -62,11 +139,11 @@ export default function SocialScreen() {
     // component аль хэдийн destroy болсон бол "can't setState on unmounted"
     // warning гарна.
     let mounted = true;
-    fetch(`${API}/api/stories`)
+    fetch(apiUrl('/stories'))
       .then((r) => r.json())
       .then((d) => { if (mounted) setStories(d?.data?.stories || []); })
       .catch((e) => { if (__DEV__) console.warn('[stories]', e); });
-    fetch(`${API}/api/group-buy`)
+    fetch(apiUrl('/group-buy'))
       .then((r) => r.json())
       .then((d) => { if (mounted) setGroupBuys(d?.data?.groupBuys || []); })
       .catch((e) => { if (__DEV__) console.warn('[group-buy]', e); });
@@ -76,7 +153,7 @@ export default function SocialScreen() {
   // Trending fetch
   useEffect(() => {
     if (activeTab === 'trending' && trending.length === 0) {
-      fetch(`${API}/api/social/trending`)
+      fetch(apiUrl('/social/trending'))
         .then((r) => r.json())
         .then((d) => {
           const list = d?.data?.posts || [];
@@ -104,7 +181,7 @@ export default function SocialScreen() {
   function openStory(story: any) {
     setActiveStory(story);
     setStoryProgress(0);
-    fetch(`${API}/api/stories/${story.id}/view`, { method: 'POST' }).catch(() => {});
+    fetch(apiUrl(`/stories/${encodeApiPathSegment(story.id)}/view`), { method: 'POST' }).catch(() => {});
   }
 
   function closeStory() {
@@ -158,8 +235,13 @@ export default function SocialScreen() {
 
   if (loading) {
     return (
-      <View style={s.center}>
-        <ActivityIndicator size="large" color="#1B3A5C" />
+      <View style={s.screen}>
+        <View style={{ paddingTop: layout.screenTop }}>
+          <SocialHeader />
+        </View>
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={C.primary} />
+        </View>
       </View>
     );
   }
@@ -167,36 +249,36 @@ export default function SocialScreen() {
   if (feedError && posts.length === 0) {
     return (
       <View style={s.screen}>
-        <View style={s.header}>
-          <Text style={s.headerTitle}>Нийгмийн худалдаа</Text>
+        <View style={{ paddingTop: layout.screenTop }}>
+          <SocialHeader />
         </View>
-        <View style={[s.center, { padding: 24 }]}>
-          <Text style={{ fontSize: 48, marginBottom: 12 }}>⚠️</Text>
+        <View style={[s.center, { padding: UI.screenPad }]}>
+          <Ionicons name="alert-circle-outline" size={48} color={C.error} style={{ marginBottom: 12 }} />
           <Text style={s.emptyTitle}>Feed татахад алдаа гарлаа</Text>
-          <Text style={{ color: '#888', fontSize: 13, textAlign: 'center', marginVertical: 10 }}>
+          <Text style={{ color: C.textSub, fontSize: 13, textAlign: 'center', marginVertical: 10 }}>
             {feedError}
           </Text>
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Social feed дахин татах"
+            activeOpacity={0.84}
             onPress={() => { setLoading(true); setFeedError(null); fetchPosts(1, true); }}
-            style={{ backgroundColor: '#1B3A5C', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 }}
+            style={{ backgroundColor: C.primary, borderRadius: R.md, paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 }}
           >
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Дахин оролдох</Text>
+            <Text style={{ color: C.bgCard, fontWeight: '600' }}>Дахин оролдох</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
+  const storyRouteId = getProductRouteId(activeStory?.product);
+  const storyProductName = getProductName(activeStory?.product) || 'Бараа';
+
   return (
     <View style={s.screen}>
-      <View style={s.header}>
-        <Text style={s.headerTitle}>Нийгмийн худалдаа</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/(customer)/create-post' as any)}
-          style={s.createBtn}
-        >
-          <Text style={s.createBtnText}>＋ Пост</Text>
-        </TouchableOpacity>
+      <View style={{ paddingTop: layout.screenTop }}>
+        <SocialHeader showCreate />
       </View>
 
       <FlatList
@@ -215,7 +297,7 @@ export default function SocialScreen() {
         onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: layout.screenBottom }}
         ListHeaderComponent={
           <View>
             {/* Story circles */}
@@ -223,17 +305,30 @@ export default function SocialScreen() {
               <View style={s.storyBar}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ padding: 10, gap: 12 }}>
-                  <TouchableOpacity style={s.storyItem}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Шинэ зар нэмэх"
+                    activeOpacity={0.84}
+                    onPress={() => router.push('/feed/create' as any)}
+                    style={s.storyItem}
+                  >
                     <View style={s.storyAddCircle}>
-                      <Text style={{ fontSize: 22, color: '#E67E22' }}>＋</Text>
+                      <Text style={{ fontSize: 22, color: C.seller }}>＋</Text>
                     </View>
                     <Text style={s.storyName}>Минийх</Text>
                   </TouchableOpacity>
                   {stories.map((story) => (
-                    <TouchableOpacity key={story.id} onPress={() => openStory(story)} style={s.storyItem}>
+                    <TouchableOpacity
+                      key={story.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${story.user?.name || 'Хэрэглэгч'} story нээх`}
+                      activeOpacity={0.84}
+                      onPress={() => openStory(story)}
+                      style={s.storyItem}
+                    >
                       <View style={[
                         s.storyCircle,
-                        { borderColor: story.product ? '#E67E22' : '#1B3A5C' },
+                        { borderColor: story.product ? C.seller : C.primary },
                       ]}>
                         <Image
                           source={{ uri: story.user?.avatar || story.imageUrl }}
@@ -241,7 +336,7 @@ export default function SocialScreen() {
                         />
                         {story.product && (
                           <View style={s.storyProductBadge}>
-                            <Text style={{ fontSize: 9 }}>🛍</Text>
+                            <Ionicons name="bag-outline" size={10} color={C.bgCard} />
                           </View>
                         )}
                       </View>
@@ -256,14 +351,14 @@ export default function SocialScreen() {
 
             {/* Tab switcher */}
             <View style={s.tabSwitcher}>
-              {([
-                { key: 'feed', label: '👥 Feed' },
-                { key: 'trending', label: '🔥 Trending' },
-                { key: 'live', label: '📡 Live' },
-              ] as const).map((tab) => (
+              {SOCIAL_TABS.map((tab) => (
                 <TouchableOpacity
                   key={tab.key}
-                  onPress={() => setActiveTab(tab.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={tab.accessibilityLabel}
+                  accessibilityState={{ selected: activeTab === tab.key }}
+                  activeOpacity={0.84}
+                  onPress={() => selectTab(tab.key)}
                   style={[s.tabBtn, activeTab === tab.key && s.tabBtnActive]}
                 >
                   <Text style={[s.tabBtnText, activeTab === tab.key && s.tabBtnTextActive]}>
@@ -290,22 +385,28 @@ export default function SocialScreen() {
 
       {/* Story full-screen modal */}
       <Modal visible={!!activeStory} animationType="fade" statusBarTranslucent>
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={{ flex: 1, backgroundColor: C.text }}>
           <View style={s.storyProgressTrack}>
             <View style={[s.storyProgressFill, { width: `${storyProgress}%` as any }]} />
           </View>
 
-          <TouchableOpacity onPress={closeStory} style={s.storyClose}>
-            <Text style={{ color: '#fff', fontSize: 22 }}>✕</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Story хаах"
+            hitSlop={8}
+            onPress={closeStory}
+            style={s.storyClose}
+          >
+            <Ionicons name="close" size={24} color={C.bgCard} />
           </TouchableOpacity>
 
           <View style={s.storyUserInfo}>
             <View style={s.storyUserAvatar}>
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+              <Text style={{ color: C.bgCard, fontSize: 12, fontWeight: '600' }}>
                 {activeStory?.user?.name?.[0] || '?'}
               </Text>
             </View>
-            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+            <Text style={{ color: C.bgCard, fontSize: 13, fontWeight: '600' }}>
               {activeStory?.user?.name || 'Хэрэглэгч'}
             </Text>
           </View>
@@ -317,30 +418,35 @@ export default function SocialScreen() {
 
           {activeStory?.caption && (
             <View style={[s.storyCaption, { bottom: activeStory?.product ? 140 : 60 }]}>
-              <Text style={{ color: '#fff', fontSize: 13 }}>{activeStory.caption}</Text>
+              <Text style={{ color: C.bgCard, fontSize: 13 }}>{activeStory.caption}</Text>
             </View>
           )}
 
-          {activeStory?.product && (
+          {activeStory?.product && !getPublicProductQualityIssue(activeStory.product) && (
             <View style={s.storyProductCard}>
-              <Image source={{ uri: activeStory.product.images?.[0] || 'https://via.placeholder.com/52' }}
-                style={{ width: 52, height: 52, borderRadius: 10 }} />
+              <Image source={{ uri: firstProductImage(activeStory.product) }}
+                style={{ width: 52, height: 52, borderRadius: R.md }} />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1a1a1a' }} numberOfLines={1}>
-                  {activeStory.product.name}
+                <Text style={{ fontSize: 13, fontWeight: '600', color: C.text }} numberOfLines={1}>
+                  {storyProductName}
                 </Text>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1B3A5C' }}>
-                  {activeStory.product.price?.toLocaleString()}₮
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: C.primary }}>
+                  {getPublicProductPrice(activeStory.product).toLocaleString()}₮
                 </Text>
               </View>
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${storyProductName} авах`}
+                accessibilityState={{ disabled: !storyRouteId }}
+                disabled={!storyRouteId}
+                activeOpacity={0.84}
                 onPress={() => {
                   closeStory();
-                  router.push(`/product/${activeStory.product.id}` as any);
+                  if (storyRouteId) router.push(`/product/${storyRouteId}` as any);
                 }}
-                style={s.storyBuyBtn}
+                style={[s.storyBuyBtn, !storyRouteId && { opacity: 0.55 }]}
               >
-                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>⚡ Авах</Text>
+                <Text style={{ color: C.bgCard, fontSize: 12, fontWeight: '600' }}>Авах</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -365,6 +471,7 @@ function PostCard({
   const [showComment, setShowComment] = useState(false);
   const [quickBuyProduct, setQuickBuyProduct] = useState<any>(null);
   const addToCart = useCart((state) => state.add);
+  const visibleProducts = post.products.filter(({ product }) => !getPublicProductQualityIssue(product));
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const lastTap = useRef(0);
   const heartAnim = useRef(new Animated.Value(0)).current;
@@ -404,13 +511,19 @@ function PostCard({
   }
 
   function handleAddLocalCart(product: any) {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const issue = getPublicProductQualityIssue(product);
+    if (issue) {
+      Alert.alert('Бараа шалгалтад байна', issue.message);
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     addToCart(
       {
-        id: product.id,
-        name: product.name,
-        price: product.salePrice ?? product.price,
-        image: product.images?.[0] || null,
+        id: product.id ?? product._id ?? '',
+        name: getProductName(product) || 'Бараа',
+        price: getPublicProductPrice(product),
+        image: firstProductImage(product, '') || null,
         entityId: '',
         entityName: '',
       },
@@ -420,9 +533,11 @@ function PostCard({
 
   async function handleShare() {
     const product = post.products[0]?.product;
+    const routeId = getProductRouteId(product);
+    const name = getProductName(product) || 'eseller.mn';
     await Share.share({
-      message: `${post.content ?? ''}\n\nhttps://eseller.mn/product/${product?.id}`,
-      title: product?.name ?? 'eseller.mn',
+      message: routeId ? `${post.content ?? ''}\n\nhttps://eseller.mn/product/${routeId}` : `${post.content ?? ''}`,
+      title: name,
     });
   }
 
@@ -442,70 +557,110 @@ function PostCard({
           <Text style={s.userName}>{post.user.name}</Text>
           <Text style={s.timeAgo}>{timeAgo}</Text>
         </View>
-        <TouchableOpacity style={s.moreBtn}>
-          <Text style={{ color: '#aaa', fontSize: 18 }}>···</Text>
-        </TouchableOpacity>
+        <View style={s.moreBtn} accessible={false}>
+          <Ionicons name="ellipsis-horizontal" size={18} color={C.textMuted} />
+        </View>
       </View>
 
       {post.content && <Text style={s.postContent}>{post.content}</Text>}
 
       {post.images.length > 0 && (
-        <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} style={s.imageContainer}>
+        <TouchableOpacity
+          activeOpacity={1}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="Постын зураг, давхар товшиж таалах"
+          onPress={handleDoubleTap}
+          style={s.imageContainer}
+        >
           <Image source={{ uri: post.images[0] }} style={s.postImage} resizeMode="cover" />
-          <Animated.Text style={[
+          <Animated.View style={[
             s.heartOverlay,
             { opacity: heartAnim, transform: [{ scale: heartAnim }] },
           ]}>
-            ❤️
-          </Animated.Text>
+            <Ionicons name="heart" size={72} color={C.error} />
+          </Animated.View>
         </TouchableOpacity>
       )}
 
-      {post.products.length > 0 && (
+      {visibleProducts.length > 0 && (
         <View style={s.productsSection}>
           <Text style={s.productsSectionTitle}>Бүтээгдэхүүнүүд</Text>
-          {post.products.map(({ id, product }) => (
+          {visibleProducts.map(({ id, product }) => {
+            const routeId = getProductRouteId(product);
+            const name = getProductName(product) || 'Бараа';
+
+            return (
             <TouchableOpacity
-              key={id}
-              onPress={() => router.push(`/product/${product.id}` as any)}
-              style={s.productCard}
+              key={id || routeId || name}
+              accessibilityRole="button"
+              accessibilityLabel={`${name} бүтээгдэхүүн нээх`}
+              accessibilityState={{ disabled: !routeId }}
+              disabled={!routeId}
+              activeOpacity={0.84}
+              onPress={() => {
+                if (routeId) router.push(`/product/${routeId}` as any);
+              }}
+              style={[s.productCard, !routeId && { opacity: 0.55 }]}
             >
               <Image
-                source={{ uri: product.images?.[0] || 'https://via.placeholder.com/52' }}
+                source={{ uri: firstProductImage(product) }}
                 style={s.productThumb}
               />
               <View style={s.productInfo}>
-                <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
+                <Text style={s.productName} numberOfLines={1}>{name}</Text>
                 <Text style={s.productPrice}>
-                  {(product.salePrice ?? product.price).toLocaleString()}₮
+                  {getPublicProductPrice(product).toLocaleString()}₮
                 </Text>
               </View>
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${name} шууд авах`}
+                activeOpacity={0.84}
                 onPress={() => setQuickBuyProduct(product)}
                 style={s.addCartBtn}
               >
-                <Text style={s.addCartBtnText}>⚡ Шууд авах</Text>
+                <Ionicons name="flash-outline" size={13} color={C.bgCard} />
+                <Text style={s.addCartBtnText}>Шууд авах</Text>
               </TouchableOpacity>
             </TouchableOpacity>
-          ))}
+          )})}
         </View>
       )}
 
       <View style={s.actions}>
-        <TouchableOpacity onPress={handleLike} style={s.actionBtn}>
-          <Animated.Text style={[s.actionIcon, { transform: [{ scale: scaleAnim }] }]}>
-            {liked ? '❤️' : '🤍'}
-          </Animated.Text>
-          <Text style={[s.actionCount, liked && { color: '#E74C3C' }]}>{likeCount}</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={liked ? 'Таалснаа болиулах' : 'Пост таалах'}
+          accessibilityState={{ selected: liked }}
+          activeOpacity={0.84}
+          onPress={handleLike}
+          style={s.actionBtn}
+        >
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={19} color={liked ? C.error : C.textSub} />
+          </Animated.View>
+          <Text style={[s.actionCount, liked && { color: C.error }]}>{likeCount}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setShowComment(true)} style={s.actionBtn}>
-          <Text style={s.actionIcon}>💬</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Сэтгэгдэл нээх"
+          activeOpacity={0.84}
+          onPress={() => setShowComment(true)}
+          style={s.actionBtn}
+        >
+          <Ionicons name="chatbubble-outline" size={18} color={C.textSub} />
           <Text style={s.actionCount}>{post._count.comments}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleShare} style={s.actionBtn}>
-          <Text style={s.actionIcon}>↗️</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Пост хуваалцах"
+          activeOpacity={0.84}
+          onPress={handleShare}
+          style={s.actionBtn}
+        >
+          <Ionicons name="share-social-outline" size={18} color={C.textSub} />
           <Text style={s.actionCount}>Хуваалцах</Text>
         </TouchableOpacity>
       </View>
@@ -586,7 +741,13 @@ function CommentModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <TouchableOpacity style={s.modalOverlay} onPress={onClose} activeOpacity={1} />
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Сэтгэгдлийн цонх хаах"
+        style={s.modalOverlay}
+        onPress={onClose}
+        activeOpacity={1}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={s.commentSheet}
@@ -601,21 +762,25 @@ function CommentModal({
           renderItem={({ item }) =>
             item.isBot ? (
               <View style={s.commentItem}>
-                <View style={[s.commentAvatar, { backgroundColor: '#E67E22' }]}>
-                  <Text style={{ fontSize: 14 }}>🤖</Text>
+                <View style={[s.commentAvatar, { backgroundColor: C.seller }]}>
+                  <Ionicons name="sparkles-outline" size={15} color={C.bgCard} />
                 </View>
                 <View style={s.botBubble}>
                   <Text style={s.botLabel}>eSeller Bot</Text>
                   <Text style={s.commentText}>{item.content}</Text>
                   {item.quickBuyProductId && (
                     <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Бүтээгдэхүүн рүү очиж захиалах"
+                      activeOpacity={0.84}
                       onPress={() => {
+                        const routeId = getProductRouteId(item.quickBuyProductId);
                         onClose();
-                        router.push(`/product/${item.quickBuyProductId}` as any);
+                        if (routeId) router.push(`/product/${routeId}` as any);
                       }}
                       style={s.botBuyBtn}
                     >
-                      <Text style={s.botBuyBtnText}>⚡ Шууд захиалах</Text>
+                      <Text style={s.botBuyBtnText}>Шууд захиалах</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -637,6 +802,7 @@ function CommentModal({
 
         <View style={s.commentInput}>
           <TextInput
+            accessibilityLabel="Сэтгэгдэл бичих"
             style={s.commentTextInput}
             placeholder="Сэтгэгдэл бичих..."
             value={text}
@@ -645,11 +811,14 @@ function CommentModal({
             returnKeyType="send"
           />
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Сэтгэгдэл илгээх"
+            activeOpacity={0.84}
             onPress={handleSend}
             disabled={!text.trim() || sending}
             style={[s.sendBtn, (!text.trim() || sending) && { opacity: 0.4 }]}
           >
-            <Text style={{ color: '#fff', fontSize: 14 }}>↑</Text>
+            <Ionicons name="arrow-up" size={16} color={C.bgCard} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -664,7 +833,7 @@ function CommentModal({
 function EmptyFeed() {
   return (
     <View style={s.empty}>
-      <Text style={{ fontSize: 48, marginBottom: 12 }}>📸</Text>
+      <Ionicons name="images-outline" size={48} color={C.textMuted} style={{ marginBottom: 12 }} />
       <Text style={s.emptyTitle}>Одоогоор пост байхгүй</Text>
       <Text style={s.emptySub}>Найзуудынхаа худалдан авалтыг энд харна</Text>
     </View>
@@ -683,112 +852,123 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F5F7FA' },
+  screen: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 10,
-    backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#e5e5e5',
+    minHeight: UI.headerMinHeight,
+    justifyContent: 'center',
+    paddingHorizontal: UI.screenPad,
+    paddingBottom: R.sm,
+    backgroundColor: C.bgCard, borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1B3A5C' },
-  createBtn: { backgroundColor: '#1B3A5C', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
-  createBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  topBar: { marginBottom: 0 },
+  createBtn: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: C.primary,
+    borderRadius: R.full,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  createBtnText: { color: C.bgCard, fontSize: 12, fontWeight: '800' },
   card: {
-    backgroundColor: '#fff', borderRadius: 16,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8, elevation: 2, overflow: 'hidden',
+    backgroundColor: C.bgCard, borderRadius: R.lg,
+    ...shadowStyle({ y: 2, blur: 8, opacity: 0.06, elevation: 2 }),
+    overflow: 'hidden',
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
   avatar: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: '#1B3A5C',
+    width: 40, height: 40, borderRadius: R.full, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   avatarImg: { width: 40, height: 40 },
-  avatarText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  userName: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  timeAgo: { fontSize: 11, color: '#aaa', marginTop: 1 },
+  avatarText: { color: C.bgCard, fontSize: 16, fontWeight: '600' },
+  userName: { fontSize: 14, fontWeight: '600', color: C.text },
+  timeAgo: { fontSize: 11, color: C.textMuted, marginTop: 1 },
   moreBtn: { padding: 4 },
-  postContent: { fontSize: 14, color: '#333', lineHeight: 20, paddingHorizontal: 14, paddingBottom: 10 },
+  postContent: { fontSize: 14, color: C.text, lineHeight: 20, paddingHorizontal: 14, paddingBottom: 10 },
   imageContainer: { width: '100%', aspectRatio: 1, position: 'relative' },
   postImage: { width: '100%', height: '100%' },
-  heartOverlay: { position: 'absolute', top: '40%', left: '40%', fontSize: 72 },
-  productsSection: { padding: 12, borderTopWidth: 0.5, borderTopColor: '#f0f0f0' },
-  productsSectionTitle: { fontSize: 11, color: '#888', marginBottom: 8, fontWeight: '500' },
+  heartOverlay: { position: 'absolute', top: '40%', left: '40%' },
+  productsSection: { padding: 12, borderTopWidth: 1, borderTopColor: C.border },
+  productsSectionTitle: { fontSize: 11, color: C.textSub, marginBottom: 8, fontWeight: '500' },
   productCard: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  productThumb: { width: 52, height: 52, borderRadius: 10, backgroundColor: '#f0f0f0' },
+  productThumb: { width: 52, height: 52, borderRadius: R.md, backgroundColor: C.bgSection },
   productInfo: { flex: 1 },
-  productName: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
-  productPrice: { fontSize: 14, fontWeight: '700', color: '#1B3A5C', marginTop: 2 },
-  addCartBtn: { backgroundColor: '#1B3A5C', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  addCartBtnText: { color: '#fff', fontSize: 11, fontWeight: '500' },
+  productName: { fontSize: 13, fontWeight: '500', color: C.text },
+  productPrice: { fontSize: 14, fontWeight: '700', color: C.primary, marginTop: 2 },
+  addCartBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
+  addCartBtnText: { color: C.bgCard, fontSize: 11, fontWeight: '500' },
   actions: {
     flexDirection: 'row', gap: 4, padding: 12, paddingTop: 8,
-    borderTopWidth: 0.5, borderTopColor: '#f0f0f0',
+    borderTopWidth: 1, borderTopColor: C.border,
   },
   actionBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8,
   },
   actionIcon: { fontSize: 18 },
-  actionCount: { fontSize: 13, color: '#666', fontWeight: '500' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  commentSheet: { backgroundColor: '#fff', borderRadius: 24, maxHeight: H * 0.75, paddingBottom: 24 },
-  sheetHandle: { width: 36, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginTop: 10 },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', padding: 16, paddingBottom: 12 },
+  actionCount: { fontSize: 13, color: C.textSub, fontWeight: '500' },
+  modalOverlay: { flex: 1, backgroundColor: C.text + '66' },
+  commentSheet: { backgroundColor: C.bgCard, borderRadius: R.xxl, maxHeight: H * 0.75, paddingBottom: 24 },
+  sheetHandle: { width: 36, height: 4, backgroundColor: C.border2, borderRadius: 2, alignSelf: 'center', marginTop: 10 },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: C.text, padding: 16, paddingBottom: 12 },
   commentItem: { flexDirection: 'row', gap: 10, paddingVertical: 8, alignItems: 'flex-start' },
   commentAvatar: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: '#1B3A5C',
+    width: 32, height: 32, borderRadius: R.lg, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  commentAvatarText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  commentAvatarText: { color: C.bgCard, fontSize: 12, fontWeight: '600' },
   commentBody: { flex: 1 },
-  commentUser: { fontSize: 12, fontWeight: '600', color: '#1a1a1a' },
-  commentText: { fontSize: 13, color: '#444', marginTop: 2, lineHeight: 18 },
+  commentUser: { fontSize: 12, fontWeight: '600', color: C.text },
+  commentText: { fontSize: 13, color: C.textSub, marginTop: 2, lineHeight: 18 },
   commentInput: {
     flexDirection: 'row', gap: 8, padding: 12,
-    borderTopWidth: 0.5, borderTopColor: '#e5e5e5',
+    borderTopWidth: 1, borderTopColor: C.border,
   },
   commentTextInput: {
-    flex: 1, backgroundColor: '#F5F7FA', borderRadius: 20,
+    flex: 1, backgroundColor: C.bgSection, borderRadius: R.xl,
     paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, maxHeight: 80,
   },
   sendBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#1B3A5C',
+    width: 36, height: 36, borderRadius: R.full, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end',
   },
-  emptyText: { textAlign: 'center', color: '#aaa', fontSize: 13, padding: 24 },
+  emptyText: { textAlign: 'center', color: C.textMuted, fontSize: 13, padding: UI.screenPad },
   empty: { alignItems: 'center', paddingTop: 80 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
-  emptySub: { fontSize: 13, color: '#aaa', marginTop: 6, textAlign: 'center', lineHeight: 18 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: C.text },
+  emptySub: { fontSize: 13, color: C.textMuted, marginTop: 6, textAlign: 'center', lineHeight: 18 },
 
   // Story bar
-  storyBar: { backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
+  storyBar: { backgroundColor: C.bgCard, borderBottomWidth: 1, borderBottomColor: C.border },
   storyItem: { alignItems: 'center', gap: 4 },
   storyAddCircle: {
-    width: 56, height: 56, borderRadius: 28,
-    borderWidth: 2, borderColor: '#E67E22', borderStyle: 'dashed',
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0',
+    width: 56, height: 56, borderRadius: R.full,
+    borderWidth: 2, borderColor: C.seller, borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldDim,
   },
   storyCircle: {
-    width: 56, height: 56, borderRadius: 28, padding: 2, borderWidth: 2,
+    width: 56, height: 56, borderRadius: R.full, padding: 2, borderWidth: 2,
     position: 'relative',
   },
-  storyImg: { width: 48, height: 48, borderRadius: 24 },
+  storyImg: { width: 48, height: 48, borderRadius: R.xxl },
   storyProductBadge: {
     position: 'absolute', bottom: 0, right: 0,
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: '#E67E22', borderWidth: 1.5, borderColor: '#fff',
+    width: 18, height: 18, borderRadius: R.full,
+    backgroundColor: C.seller, borderWidth: 1.5, borderColor: C.bgCard,
     alignItems: 'center', justifyContent: 'center',
   },
-  storyName: { fontSize: 9, color: '#555', maxWidth: 56 },
+  storyName: { fontSize: 9, color: C.textSub, maxWidth: 56 },
 
   // Story modal
   storyProgressTrack: {
     position: 'absolute', top: 48, left: 12, right: 12,
-    height: 2.5, backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 2.5, backgroundColor: C.bgCard + '4D',
     borderRadius: 2, zIndex: 10,
   },
-  storyProgressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
+  storyProgressFill: { height: '100%', backgroundColor: C.bgCard, borderRadius: 2 },
   storyClose: {
     position: 'absolute', top: 52, right: 16, zIndex: 11,
     width: 32, height: 32, alignItems: 'center', justifyContent: 'center',
@@ -798,46 +978,47 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
   },
   storyUserAvatar: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: '#1B3A5C',
+    width: 32, height: 32, borderRadius: R.lg, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',
   },
   storyCaption: {
     position: 'absolute', left: 16, right: 16,
-    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: 10,
+    backgroundColor: C.text + '80', borderRadius: R.md, padding: 10,
   },
   storyProductCard: {
     position: 'absolute', bottom: 40, left: 16, right: 16,
-    backgroundColor: '#fff', borderRadius: 16, padding: 12,
+    backgroundColor: C.bgCard, borderRadius: R.lg, padding: 12,
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   storyBuyBtn: {
-    backgroundColor: '#E67E22', borderRadius: 10,
+    backgroundColor: C.seller, borderRadius: R.md,
     paddingHorizontal: 14, paddingVertical: 9,
   },
 
   // Tab switcher
   tabSwitcher: {
-    flexDirection: 'row', backgroundColor: '#F0F0F0',
-    margin: 12, marginBottom: 0, borderRadius: 10, padding: 3,
+    flexDirection: 'row', backgroundColor: C.bgSection,
+    margin: 12, marginBottom: 0, borderRadius: R.md, padding: 3,
   },
   tabBtn: {
-    flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
+    flex: 1, minHeight: 36, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'transparent',
   },
-  tabBtnActive: { backgroundColor: '#fff' },
-  tabBtnText: { fontSize: 11, fontWeight: '400', color: '#888' },
-  tabBtnTextActive: { fontWeight: '600', color: '#1B3A5C' },
+  tabBtnActive: { backgroundColor: C.bgCard },
+  tabBtnText: { fontSize: 11, fontWeight: '400', color: C.textSub },
+  tabBtnTextActive: { fontWeight: '600', color: C.primary },
 
   // Bot reply
   botBubble: {
-    flex: 1, backgroundColor: '#FFF8F0', borderRadius: 12,
+    flex: 1, backgroundColor: C.goldDim, borderRadius: R.md,
     paddingHorizontal: 10, paddingVertical: 8,
-    borderWidth: 0.5, borderColor: '#F0C060',
+    borderWidth: 1, borderColor: C.gold + '35',
   },
-  botLabel: { fontSize: 11, fontWeight: '600', color: '#E67E22', marginBottom: 3 },
+  botLabel: { fontSize: 11, fontWeight: '600', color: C.seller, marginBottom: 3 },
   botBuyBtn: {
-    backgroundColor: '#E67E22', borderRadius: 8, padding: 8,
+    backgroundColor: C.seller, borderRadius: 8, padding: 8,
     alignItems: 'center', marginTop: 6,
   },
-  botBuyBtnText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  botBuyBtnText: { color: C.bgCard, fontSize: 11, fontWeight: '600' },
 });

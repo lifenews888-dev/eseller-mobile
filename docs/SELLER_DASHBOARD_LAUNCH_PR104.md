@@ -231,7 +231,9 @@ npm run lint
 npm run test:smoke
 
 # eseller-mobile
-npx tsc --noEmit
+npm run smoke:p0
+npm run smoke:seller-dashboard
+ESELLER_API_TOKEN=<seller-jwt> npm run smoke:api:auth
 ```
 
 Suggested mobile guardrail greps:
