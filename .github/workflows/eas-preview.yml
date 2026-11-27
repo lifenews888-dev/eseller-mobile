@@ -1,0 +1,54 @@
+name: EAS Preview Build (Android APK)
+
+# Гараар эхлүүлнэ (Actions → "EAS Preview Build" → Run workflow).
+# Шаардлага: репогийн Secrets-д EXPO_TOKEN (expo.dev → Account settings → Access tokens).
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "android эсвэл ios"
+        default: android
+        required: true
+
+jobs:
+  build:
+    name: EAS build (preview)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_NO_TELEMETRY: "1"
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
+    steps:
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret тохируулаагүй байна (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # Build-ийг Expo-гийн серверт эхлүүлээд хүлээхгүй — суулгах холбоос expo.dev дээр гарна
+      - name: Start EAS build
+        run: eas build --profile preview --platform ${{ github.event.inputs.platform }} --non-interactive --no-wait --json > build.json && cat build.json
+
+      - name: Summary
+        run: |
+          URL=$(node -e "const b=require('./build.json');const x=Array.isArray(b)?b[0]:b;console.log('https://expo.dev/accounts/'+(x.project?.ownerAccount?.name||'eseller.mn')+'/projects/'+(x.project?.slug||'eseller-mn')+'/builds/'+x.id)")
+          echo "### EAS build эхэллээ" >> $GITHUB_STEP_SUMMARY
+          echo "$URL" >> $GITHUB_STEP_SUMMARY
+          echo "BUILD_URL=$URL"
