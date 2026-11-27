@@ -36,7 +36,7 @@ const MOCK_NOTIFS: NotificationItem[] = [
     id: '3',
     icon: 'pricetag',
     color: C.brand,
-    title: 'Flash sale эхэллээ!',
+    title: 'Хямдрал эхэллээ!',
     body: '50% хүртэл хямдрал авах боломжтой',
     time: '2 цаг өмнө',
   },

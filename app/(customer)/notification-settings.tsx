@@ -13,7 +13,7 @@ const SETTINGS = [
   { key: 'delivery_update', label: 'Хүргэлтийн шинэчлэл', sub: 'Жолооч авлаа, хүрнэ', icon: 'car-outline' as const, color: C.driver },
   { key: 'flash_sale', label: 'Flash sale', sub: 'Эхлэхээс 1 цагийн өмнө', icon: 'flash-outline' as const, color: C.seller },
   { key: 'points_earned', label: 'Оноо олсон', sub: 'Оноо нэмэгдэх бүрт', icon: 'star-outline' as const, color: C.gold },
-  { key: 'tier_change', label: 'Түвшин ахих', sub: 'Bronze-аас Silver зэрэг рүү', icon: 'trophy-outline' as const, color: C.seller },
+  { key: 'tier_change', label: 'Түвшин ахих', sub: 'Хүрлээс Мөнгө зэрэг рүү', icon: 'trophy-outline' as const, color: C.seller },
   { key: 'new_chat', label: 'Шинэ мессеж', sub: 'Борлуулагчаас мессеж', icon: 'chatbubble-outline' as const, color: C.primary },
   { key: 'promo_coupon', label: 'Промо ба купон', sub: 'Тусгай санал', icon: 'ticket-outline' as const, color: C.secondary },
 ];

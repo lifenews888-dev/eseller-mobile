@@ -17,7 +17,7 @@ export function LiveBadge({ isLive, currentLiveId, size = 'sm' }: LiveBadgeProps
   const badge = (
     <View style={[styles.badge, size === 'md' && styles.badgeMd]}>
       <View style={[styles.dot, size === 'md' && styles.dotMd]} />
-      <Text style={[styles.text, size === 'md' && styles.textMd]}>LIVE</Text>
+      <Text style={[styles.text, size === 'md' && styles.textMd]}>ШУУД</Text>
     </View>
   );
 
@@ -26,7 +26,7 @@ export function LiveBadge({ isLive, currentLiveId, size = 'sm' }: LiveBadgeProps
       <TouchableOpacity
         style={styles.container}
         accessibilityRole="button"
-        accessibilityLabel="Live нээх"
+        accessibilityLabel="Шууд дамжуулалт нээх"
         onPress={() => router.push(`/live/${routeId}`)}
         activeOpacity={0.8}
       >

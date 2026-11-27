@@ -96,16 +96,16 @@ export default function LiveListScreen() {
         columnWrapperStyle={list.length > 0 ? styles.row : undefined}
         ListHeaderComponent={
           <View>
-            <AppTopBar eyebrow="Дэлгүүр" title="Live" showBack={false} />
+            <AppTopBar eyebrow="Дэлгүүр" title="Шууд худалдаа" showBack={false} />
             <AppHeader
-              title="Live худалдаа"
-              subtitle={activeList.length > 0 ? `${activeList.length} идэвхтэй live` : 'Шууд худалдан авалтын нэвтрүүлгүүд'}
+              title="Шууд худалдаа"
+              subtitle={activeList.length > 0 ? `${activeList.length} идэвхтэй шууд дамжуулалт` : 'Шууд худалдан авалтын нэвтрүүлгүүд'}
               icon="videocam-outline"
               accent={LIVE_ACCENT}
             />
             <View style={styles.tabRow}>
               {([
-                { key: 'active', label: 'Одоо Live', badge: activeList.length },
+                { key: 'active', label: 'Одоо шууд', badge: activeList.length },
                 { key: 'scheduled', label: 'Удахгүй', badge: scheduledList.length },
               ] as { key: LiveTab; label: string; badge: number }[]).map((item) => {
                 const active = tab === item.key;
@@ -113,7 +113,7 @@ export default function LiveListScreen() {
                   <TouchableOpacity
                     key={item.key}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.label} live таб сонгох`}
+                    accessibilityLabel={`${item.label} таб сонгох`}
                     accessibilityState={{ selected: active }}
                     activeOpacity={0.86}
                     onPress={() => selectTab(item.key)}
@@ -142,14 +142,14 @@ export default function LiveListScreen() {
             <AppCard style={styles.emptyCard}>
               <Ionicons name="videocam-off-outline" size={42} color={C.textMuted} />
               <Text style={styles.emptyText}>
-                {tab === 'active' ? 'Одоогоор live байхгүй' : 'Удахгүй live байхгүй'}
+                {tab === 'active' ? 'Одоогоор шууд дамжуулалт алга' : 'Удахгүй эхлэх дамжуулалт алга'}
               </Text>
               <Text style={styles.emptySubText}>
-                {tab === 'active' ? 'Удахгүй эхлэх live-г дахин шалгаарай.' : 'Дараа дахин шалгаарай.'}
+                {tab === 'active' ? 'Удахгүй эхлэх дамжуулалтыг дахин шалгаарай.' : 'Дараа дахин шалгаарай.'}
               </Text>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel="Live жагсаалтыг дахин шалгах"
+                accessibilityLabel="Шууд дамжуулалтын жагсаалтыг дахин шалгах"
                 activeOpacity={0.84}
                 onPress={onRefresh}
                 style={styles.refreshButton}
@@ -178,7 +178,7 @@ function LiveCard({ stream, mode }: { stream: LiveStreamItem; mode: LiveTab }) {
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={`${stream.title} live нээх`}
+      accessibilityLabel={`${stream.title} дамжуулалт нээх`}
       accessibilityState={{ disabled: !routeId }}
       disabled={!routeId}
       style={[styles.cardTouchable, !routeId && { opacity: 0.55 }]}
@@ -193,7 +193,7 @@ function LiveCard({ stream, mode }: { stream: LiveStreamItem; mode: LiveTab }) {
           {isActive ? (
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveText}>LIVE</Text>
+              <Text style={styles.liveText}>ШУУД</Text>
             </View>
           ) : null}
           {isActive ? (

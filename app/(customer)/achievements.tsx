@@ -87,7 +87,7 @@ export default function AchievementsScreen() {
     return (
       <RequireAuthScreen
         title="Амжилт"
-        subtitle="Амжилт, badge болон оноогоо харахын тулд нэвтэрнэ үү."
+        subtitle="Амжилт, тэмдэг болон оноогоо харахын тулд нэвтэрнэ үү."
         icon="trophy-outline"
         accent={C.gold}
         returnTo="/achievements"
@@ -128,7 +128,7 @@ export default function AchievementsScreen() {
             <AppTopBar eyebrow="Профайл" title="Амжилт" showBack={false} />
             <AppHeader
               title="Амжилтууд"
-              subtitle="Цуглуулсан оноо, дараалал болон нээгдсэн badge-уудаа харна."
+              subtitle="Цуглуулсан оноо, дараалал болон нээгдсэн тэмдгүүдээ харна."
               icon="trophy-outline"
               accent={C.gold}
             />

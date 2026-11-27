@@ -152,7 +152,7 @@ export function QuickBuyBottomSheet({ product, visible, onClose, onSuccess }: Pr
         />
         <View style={s.safeRow}>
           <Ionicons name="lock-closed-outline" size={13} color={C.success} />
-          <Text style={s.safeText}>Аюулгүй · Escrow хамгаалалт</Text>
+          <Text style={s.safeText}>Аюулгүй · Дундын дансны хамгаалалт</Text>
         </View>
       </View>
     </Modal>

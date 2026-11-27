@@ -206,12 +206,12 @@ export default function StorefrontScreen() {
                 <EmptyState
                   icon="cube-outline"
                   title="Энэ дэлгүүрт бараа хараахан байхгүй"
-                  subtitle="Бусад баталгаат дэлгүүр болон marketplace бараануудыг үзээрэй."
+                  subtitle="Бусад баталгаат дэлгүүр болон нэгдсэн захын бараануудыг үзээрэй."
                   compact
                 />
                 <View style={{ flexDirection: 'row', gap: R.sm, paddingHorizontal: R.lg, paddingBottom: R.lg }}>
                   <AppButton
-                    label="Marketplace"
+                    label="Нэгдсэн зах"
                     icon="grid-outline"
                     onPress={() => router.push('/store' as any)}
                     style={{ flex: 1 }}

@@ -29,9 +29,9 @@ import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 const { height: H } = Dimensions.get('window');
 type SocialTab = 'feed' | 'trending' | 'live';
 const SOCIAL_TABS: Array<{ key: SocialTab; label: string; accessibilityLabel: string }> = [
-  { key: 'feed', label: 'Feed', accessibilityLabel: 'Social feed харах' },
+  { key: 'feed', label: 'Мэдээ', accessibilityLabel: 'Нийгмийн мэдээ харах' },
   { key: 'trending', label: 'Тренд', accessibilityLabel: 'Тренд постууд харах' },
-  { key: 'live', label: 'Live', accessibilityLabel: 'Live худалдаа руу очих' },
+  { key: 'live', label: 'Шууд', accessibilityLabel: 'Шууд худалдаа руу очих' },
 ];
 
 function normalizeSocialTab(value?: string | string[] | null): SocialTab {
@@ -47,7 +47,7 @@ function SocialHeader({ showCreate = false }: { showCreate?: boolean }) {
   return (
     <View style={s.header}>
       <AppTopBar
-        eyebrow="Пост, бараа, live худалдаа нэг дор"
+        eyebrow="Пост, бараа, шууд худалдаа нэг дор"
         title="Нийгмийн худалдаа"
         showBack={false}
         right={showCreate ? (
@@ -254,13 +254,13 @@ export default function SocialScreen() {
         </View>
         <View style={[s.center, { padding: UI.screenPad }]}>
           <Ionicons name="alert-circle-outline" size={48} color={C.error} style={{ marginBottom: 12 }} />
-          <Text style={s.emptyTitle}>Feed татахад алдаа гарлаа</Text>
+          <Text style={s.emptyTitle}>Мэдээ татахад алдаа гарлаа</Text>
           <Text style={{ color: C.textSub, fontSize: 13, textAlign: 'center', marginVertical: 10 }}>
             {feedError}
           </Text>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Social feed дахин татах"
+            accessibilityLabel="Нийгмийн мэдээг дахин татах"
             activeOpacity={0.84}
             onPress={() => { setLoading(true); setFeedError(null); fetchPosts(1, true); }}
             style={{ backgroundColor: C.primary, borderRadius: R.md, paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 }}
@@ -321,7 +321,7 @@ export default function SocialScreen() {
                     <TouchableOpacity
                       key={story.id}
                       accessibilityRole="button"
-                      accessibilityLabel={`${story.user?.name || 'Хэрэглэгч'} story нээх`}
+                      accessibilityLabel={`${story.user?.name || 'Хэрэглэгч'} түүх нээх`}
                       activeOpacity={0.84}
                       onPress={() => openStory(story)}
                       style={s.storyItem}
@@ -392,7 +392,7 @@ export default function SocialScreen() {
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Story хаах"
+            accessibilityLabel="Түүх хаах"
             hitSlop={8}
             onPress={closeStory}
             style={s.storyClose}

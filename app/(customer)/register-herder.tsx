@@ -302,7 +302,7 @@ export default function RegisterHerderScreen() {
 
       {step === 4 && (<>
         <Text style={st.title}>Мал эмнэлгийн гэрчилгээ</Text>
-        <Text style={st.helper}>Зөвлөмж — мах, сүү зарахад шаардлагатай. Дараа ч upload хийж болно.</Text>
+        <Text style={st.helper}>Зөвлөмж — мах, сүү зарахад шаардлагатай. Дараа ч хавсаргаж болно.</Text>
         <TouchableOpacity style={st.certPick} onPress={pickVetCert}>
           {vetCertUri ? (
             <Image source={{ uri: vetCertUri }} style={{ width: '100%', height: '100%', borderRadius: R.md }} resizeMode="cover" />

@@ -102,8 +102,8 @@ export default function BNPLScreen() {
   if (!user) {
     return (
       <RequireAuthScreen
-        title="BNPL"
-        subtitle="BNPL төлбөрийн хуваарь, зээлийн төлөвөө харахын тулд нэвтэрнэ үү."
+        title="Хуваан төлөх"
+        subtitle="Хуваан төлөлтийн хуваарь, зээлийн төлөвөө харахын тулд нэвтэрнэ үү."
         icon="card-outline"
         accent={C.primary}
         returnTo="/bnpl"
@@ -116,7 +116,7 @@ export default function BNPLScreen() {
       <View style={st.screen}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[st.list, { paddingTop: layout.screenTop, paddingBottom: layout.screenBottom }]}>
-          <AppTopBar eyebrow="Санхүү" title="BNPL" showBack={false} />
+          <AppTopBar eyebrow="Санхүү" title="Хуваан төлөх" showBack={false} />
           <AppCard style={st.centerCard}>
             <ActivityIndicator size="large" color={C.primary} />
           </AppCard>
@@ -136,10 +136,10 @@ export default function BNPLScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
         ListHeaderComponent={
           <>
-            <AppTopBar eyebrow="Санхүү" title="BNPL" showBack={false} />
+            <AppTopBar eyebrow="Санхүү" title="Хуваан төлөх" showBack={false} />
             <AppHeader
             title="Зээлээр авах"
-            subtitle="BNPL төлөв, сар бүрийн төлбөр болон дараагийн төлөх огноогоо хянана."
+            subtitle="Хуваан төлөлтийн төлөв, сар бүрийн төлбөр болон дараагийн төлөх огноогоо хянана."
             icon="card-outline"
               accent={C.primary}
             />
@@ -148,7 +148,7 @@ export default function BNPLScreen() {
         ListEmptyComponent={
           <AppCard style={st.empty}>
             <Ionicons name="card-outline" size={42} color={C.textMuted} />
-            <Text style={st.emptyTitle}>Идэвхтэй BNPL зээл алга</Text>
+            <Text style={st.emptyTitle}>Идэвхтэй хуваан төлөлт алга</Text>
             <Text style={st.emptyText}>Зээлээр авах захиалга баталгаажмагц энд төлбөрийн хуваарь харагдана.</Text>
             <View style={st.emptyActions}>
               <AppButton

@@ -42,7 +42,7 @@ const STORE_BENEFITS = [
 const STORE_PROMOS = [
   'Шинэ хэрэглэгчид 10,000₮ купон',
   '50,000₮-өөс дээш үнэгүй хүргэлт',
-  'Gold гишүүнд 2x оноо',
+  'Түвшин ахих тусам 2 хүртэл дахин оноо',
   'Долоо хоног бүр шинэ ирэлт',
 ];
 
@@ -169,7 +169,7 @@ function BuyerStoreScreen() {
       <AppTopBar eyebrow="eSeller" title="Дэлгүүр" showBack={false} />
       <AppHeader
         title="Дэлгүүр"
-        subtitle="Нэгдсэн marketplace-ээс бараа, үйлчилгээ, шинэ саналуудыг хайна."
+        subtitle="Нэгдсэн захаас бараа, үйлчилгээ, шинэ саналуудыг хайна."
         icon="storefront-outline"
         accent={STORE_MARKET_ACCENT}
         style={{ marginBottom: R.md }}

@@ -126,7 +126,7 @@ function ProfileStatusCard({ me }: { me: SellerMeResponse }) {
         <Badge label={`Төлөв: ${mnSellerStatus(status)}`} tone={statusTone(status)} />
         <Badge label={`KYC: ${mnKycStatus(kyc)}`} tone={kycTone(kyc)} />
         <Badge
-          label={verified ? 'Identity баталгаажсан' : 'Identity баталгаажаагүй'}
+          label={verified ? 'Хэрэглэгч баталгаажсан' : 'Хэрэглэгч баталгаажаагүй'}
           tone={verified ? 'success' : 'muted'}
         />
       </View>
@@ -151,7 +151,7 @@ function WalletCard({ wallet }: { wallet: SellerWalletSummary }) {
           label="Тооцоолсон"
           value={fmtMnt(wallet.estimatedMnt)}
           tone="info"
-          hint="Dry-run, төлөгдөх биш"
+          hint="Урьдчилсан тооцоо, төлөгдөөгүй"
         />
         <Bucket
           label="Хяналтанд"
@@ -218,7 +218,7 @@ function DisabledPayableBucket({ value }: { value: string }) {
 function CommissionCard({ commission }: { commission: SellerCommissionSummary }) {
   return (
     <Card>
-      <CardTitle icon="cash" title="Шимтгэлийн тооцоо (dry-run)" />
+      <CardTitle icon="cash" title="Шимтгэлийн урьдчилсан тооцоо" />
       <Text style={{ color: C.textMuted, fontSize: 11, marginBottom: 8 }}>
         Бүх мөр dry-run, төлөгдөх биш. effective=false.
       </Text>
@@ -276,14 +276,14 @@ function LeadCard({ lead }: { lead: SellerLeadSummary }) {
   const t = lead.totals;
   return (
     <Card>
-      <CardTitle icon="people" title="Lead" />
+      <CardTitle icon="people" title="Сонирхогчид" />
       <Row>
         <Stat label="Шинэ" value={String(t.new)} tone="info" />
         <Stat label="Хариу авсан" value={String(t.contacted)} tone="warning" />
       </Row>
       <Row>
         <Stat label="Хүсэлт болсон" value={String(t.convertedToRequest)} tone="success" />
-        <Stat label="Татгалзсан / spam" value={String(t.rejected + t.spam)} tone="muted" />
+        <Stat label="Татгалзсан / спам" value={String(t.rejected + t.spam)} tone="muted" />
       </Row>
       {lead.recentLeads.length > 0 ? (
         <View style={{ marginTop: 10 }}>
@@ -311,7 +311,7 @@ function LeadCard({ lead }: { lead: SellerLeadSummary }) {
           ))}
         </View>
       ) : (
-        <Note text="Lead одоогоор байхгүй." tone="muted" />
+        <Note text="Сонирхогч одоогоор байхгүй." tone="muted" />
       )}
       <Text style={{ color: C.textMuted, fontSize: 10, marginTop: 8 }}>
         Хэрэглэгчийн утас / имэйл / нэр / тэмдэглэлийг харуулахгүй.

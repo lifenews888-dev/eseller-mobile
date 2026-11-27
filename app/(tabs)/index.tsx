@@ -86,7 +86,7 @@ const HOME_SERVICE_ITEMS = [
     icon: 'help-circle-outline' as const,
     color: C.primary,
     name: 'Тусламж',
-    sub: 'FAQ, холбоо барих',
+    sub: 'Түгээмэл асуулт, холбоо барих',
     route: '/help',
   },
 ]

@@ -16,15 +16,14 @@ export function getReferralCode(userId?: string | null): string {
 }
 
 const TIER_LABELS: Record<string, string> = {
-  BRONZE: 'Bronze',
-  SILVER: 'Silver',
-  GOLD: 'Gold',
-  PLATINUM: 'Platinum',
-  DIAMOND: 'Diamond',
+  BRONZE: 'Хүрэл',
+  SILVER: 'Мөнгө',
+  GOLD: 'Алт',
+  PLATINUM: 'Платинум',
 };
 
 export function getTierLabel(tier?: string | null): string {
-  if (!tier) return 'Silver';
+  if (!tier) return 'Хүрэл';
   return TIER_LABELS[tier.toLocaleUpperCase('en-US')] ?? tier;
 }
 
@@ -33,7 +32,6 @@ const TIER_COLORS: Record<string, string> = {
   SILVER: C.textMuted,
   GOLD: C.gold,
   PLATINUM: C.primary,
-  DIAMOND: C.herder,
 };
 
 export function getTierColor(tier?: string | null): string {

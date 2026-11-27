@@ -56,7 +56,7 @@ export function LiveCarousel() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.error }} />
-          <Text style={{ ...F.h3, color: C.text }}>Одоо Live</Text>
+          <Text style={{ ...F.h3, color: C.text }}>Одоо шууд</Text>
         </View>
         <TouchableOpacity activeOpacity={0.86} onPress={() => router.push('/live' as any)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -102,7 +102,7 @@ function LiveCard({ stream }: { stream: LiveStreamItem }) {
     <TouchableOpacity
       activeOpacity={0.86}
       accessibilityRole="button"
-      accessibilityLabel={`${stream.title || 'Live'} live нээх`}
+      accessibilityLabel={`${stream.title || 'Шууд дамжуулалт'} нээх`}
       accessibilityState={{ disabled: !routeId }}
       disabled={!routeId}
       onPress={() => {
@@ -140,7 +140,7 @@ function LiveCard({ stream }: { stream: LiveStreamItem }) {
             }}
           >
             <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.bgCard }} />
-            <Text style={{ color: C.bgCard, fontSize: 9, fontWeight: '900' }}>LIVE</Text>
+            <Text style={{ color: C.bgCard, fontSize: 9, fontWeight: '900' }}>ШУУД</Text>
           </View>
 
           <View

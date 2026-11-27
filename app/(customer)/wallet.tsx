@@ -56,10 +56,10 @@ const parseMoney = (value: string) => parseInt((value || '').replace(/[,\s₮]/g
 const normalize = (value?: string) => (value ?? '').toLocaleUpperCase();
 
 const TIER_META: Record<string, { icon: IconName; color: string; label: string }> = {
-  BRONZE: { icon: 'ribbon-outline', color: C.seller, label: 'Bronze' },
-  SILVER: { icon: 'shield-outline', color: C.textSub, label: 'Silver' },
-  GOLD: { icon: 'star-outline', color: C.gold, label: 'Gold' },
-  PLATINUM: { icon: 'diamond-outline', color: C.primary, label: 'Platinum' },
+  BRONZE: { icon: 'ribbon-outline', color: C.seller, label: 'Хүрэл' },
+  SILVER: { icon: 'shield-outline', color: C.textSub, label: 'Мөнгө' },
+  GOLD: { icon: 'star-outline', color: C.gold, label: 'Алт' },
+  PLATINUM: { icon: 'diamond-outline', color: C.primary, label: 'Платинум' },
 };
 
 const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000];

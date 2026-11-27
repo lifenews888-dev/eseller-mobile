@@ -366,7 +366,7 @@ export const POSAPI = {
     post('/payment/qpay/create', {
       orderId,
       amount,
-      description: description || 'POS захиалга',
+      description: description || 'Кассын захиалга',
     }),
 
   /** Poll payment status — GET /payment/qpay/check/:invoiceId; response `{paid, paidDate?}` */

@@ -20,13 +20,13 @@ const SLIDES = [
   {
     icon:  'cash' as const,
     title: 'Борлуулагч болж орлого ол',
-    desc:  'Share хийж commission авах — хамгийн хялбар арга',
+    desc:  'Хуваалцаж шимтгэл авах — хамгийн хялбар арга',
     color: C.primary,
   },
   {
     icon:  'lock-closed' as const,
     title: 'Аюулгүй төлбөр',
-    desc:  'Escrow систем — бараа авмагц л мөнгө шилжинэ',
+    desc:  'Дундын данс — бараа авмагц л мөнгө шилжинэ',
     color: C.success,
   },
   {

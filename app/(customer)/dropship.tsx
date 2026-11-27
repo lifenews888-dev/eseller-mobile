@@ -183,9 +183,9 @@ export default function DropshipScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <View style={{ paddingHorizontal: R.lg, paddingTop: layout.screenTop }}>
-          <AppTopBar eyebrow="Нэмэлт" title="Dropship" showBack={false} style={{ marginBottom: R.md }} />
+          <AppTopBar eyebrow="Нэмэлт" title="Импортын бараа" showBack={false} style={{ marginBottom: R.md }} />
           <AppHeader
-            title="Dropship"
+            title="Импортын бараа"
             subtitle="AliExpress болон CJ-ээс бараа хайж, дэлгүүртээ импортлоно."
             icon="earth-outline"
             accent={C.seller}
@@ -204,7 +204,7 @@ export default function DropshipScreen() {
             }}>
               <Ionicons name="search" size={16} color={C.textMuted} />
               <TextInput
-                accessibilityLabel="Dropship бараа хайх"
+                accessibilityLabel="Импортын бараа хайх"
                 value={query}
                 onChangeText={setQuery}
                 onSubmitEditing={submitSearch}
@@ -227,7 +227,7 @@ export default function DropshipScreen() {
             </View>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Dropship хайх"
+              accessibilityLabel="Импортын бараа хайх"
               activeOpacity={0.84}
               onPress={submitSearch}
               style={{

@@ -17,7 +17,7 @@ const isTestUser = (phone?: string | null) =>
 const ROLES = [
   { key: 'BUYER',  icon: 'cart',       label: 'Худалдан авагч', desc: 'Бараа авах, захиалах',     color: C.buyer },
   { key: 'STORE',  icon: 'storefront', label: 'Дэлгүүр эзэн',  desc: 'Дэлгүүр удирдах',          color: C.store },
-  { key: 'SELLER', icon: 'megaphone',  label: 'Борлуулагч',     desc: 'Share хийж комисс авах',    color: C.seller },
+  { key: 'SELLER', icon: 'megaphone',  label: 'Борлуулагч',     desc: 'Хуваалцаж шимтгэл авах',    color: C.seller },
   { key: 'DRIVER', icon: 'car',        label: 'Жолооч',         desc: 'Хүргэлт хийх',             color: C.driver },
 ] as const;
 

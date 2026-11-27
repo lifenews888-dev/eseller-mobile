@@ -25,7 +25,7 @@ const REGISTER_SHOP_RETURN_TO = '/register-shop';
 
 const TYPES_BASE = [
   { key: 'GENERAL', icon: 'storefront-outline' as const, label: 'Ерөнхий' },
-  { key: 'PREORDER', icon: 'time-outline' as const, label: 'Preorder' },
+  { key: 'PREORDER', icon: 'time-outline' as const, label: 'Захиалгат' },
   { key: 'REAL_ESTATE', icon: 'home-outline' as const, label: 'Үл хөдлөх' },
   { key: 'CONSTRUCTION', icon: 'construct-outline' as const, label: 'Барилга' },
   { key: 'AUTO', icon: 'car-outline' as const, label: 'Авто' },
@@ -271,7 +271,7 @@ export default function RegisterShopScreen() {
                 onChangeText={setName}
               />
             </Field>
-            <Field label="Slug">
+            <Field label="Дэлгүүрийн хаяг (холбоос)">
               <TextInput
                 style={styles.input}
                 placeholder="my-shop"

@@ -55,7 +55,7 @@ export default function AboutScreen() {
       <AppCard style={st.card}>
         <MetaRow label="Байгуулагдсан" value="2024" />
         <MetaRow label="Хувилбар" value={`v${version}`} />
-        <MetaRow label="Runtime" value={runtime} />
+        <MetaRow label="Шинэчлэлтийн хувилбар" value={runtime} />
         <MetaRow label="Платформ" value="iOS / Android / Web" />
       </AppCard>
 

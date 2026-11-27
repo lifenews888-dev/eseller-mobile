@@ -27,7 +27,7 @@ export default function TrackSearchScreen() {
   const submit = () => {
     const value = code.trim();
     if (!value) {
-      Alert.alert('Код оруулна уу', 'Захиалгын tracking кодоо бичнэ үү.');
+      Alert.alert('Код оруулна уу', 'Захиалгын хяналтын кодоо бичнэ үү.');
       return;
     }
     router.push(`/track/${encodeRouteParam(value)}` as never);
@@ -40,13 +40,13 @@ export default function TrackSearchScreen() {
 
         <AppHeader
           title="Хүргэлт шалгах"
-          subtitle="Захиалгын tracking кодоо оруулаад хүргэлтийн явцыг харна."
+          subtitle="Захиалгын хяналтын кодоо оруулаад хүргэлтийн явцыг харна."
           icon="barcode-outline"
           accent={C.driver}
         />
 
         <AppCard style={{ marginBottom: R.md }}>
-        <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm }}>Tracking код</Text>
+        <Text style={{ ...F.h4, color: C.text, marginBottom: R.sm }}>Хяналтын код</Text>
         <View
           style={{
             minHeight: 50,
@@ -70,7 +70,7 @@ export default function TrackSearchScreen() {
             placeholderTextColor={C.textMuted}
             returnKeyType="go"
             onSubmitEditing={submit}
-            accessibilityLabel="Tracking код"
+            accessibilityLabel="Хяналтын код"
             accessibilityHint="Захиалгын хүргэлтийг шалгах кодоо оруулна уу"
             style={{ flex: 1, color: C.text, paddingVertical: R.sm, fontSize: 16 }}
           />
@@ -79,7 +79,7 @@ export default function TrackSearchScreen() {
               activeOpacity={0.82}
               onPress={clearCode}
               accessibilityRole="button"
-              accessibilityLabel="Tracking код цэвэрлэх"
+              accessibilityLabel="Хяналтын код цэвэрлэх"
               hitSlop={8}
             >
               <Ionicons name="close-circle" size={18} color={C.textMuted} />
@@ -106,7 +106,7 @@ export default function TrackSearchScreen() {
           label="Шалгах"
           icon="search-outline"
           onPress={submit}
-          accessibilityHint="Tracking кодоор хүргэлтийн явцыг нээнэ"
+          accessibilityHint="Хяналтын кодоор хүргэлтийн явцыг нээнэ"
           style={{ backgroundColor: C.driver, borderColor: C.driver }}
         />
       </View>
