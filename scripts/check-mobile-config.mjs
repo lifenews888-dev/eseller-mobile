@@ -77,7 +77,7 @@ expect(isBooleanFlag(envExample.get('EXPO_PUBLIC_MALCHNAAS_ENABLED')), '.env.exa
 expect(isBooleanFlag(envExample.get('EXPO_PUBLIC_SELLER_NETWORK_ENABLED')), '.env.example seller-network flag is boolean-like');
 expect(isBooleanFlag(envExample.get('EXPO_PUBLIC_OTP_ENABLED')), '.env.example OTP flag is boolean-like');
 expect(
-  envExample.get('EXPO_PUBLIC_MALCHNAAS_PILOT_AIMAGS') === 'AKH,TOV,SEL',
+  envExample.get('EXPO_PUBLIC_MALCHNAAS_PILOT_AIMAGS') === 'AKH,BOL,BKH,BUL,GOA,GOS,DAR,DOR,DOG,DUN,ZAV,OVR,OMN,SUK,SEL,TOV,UVS,KHO,KHV,KHE,ORK',
   '.env.example pilot aimags match launch default',
 );
 

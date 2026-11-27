@@ -37,12 +37,16 @@ export const MALCHNAAS_ENABLED_DEFAULT = boolFlag('EXPO_PUBLIC_MALCHNAAS_ENABLED
 export const SELLER_NETWORK_ENABLED_DEFAULT = boolFlag('EXPO_PUBLIC_SELLER_NETWORK_ENABLED', true);
 
 /**
- * Build-time default pilot aimag list. Overridable via
- * `EXPO_PUBLIC_MALCHNAAS_PILOT_AIMAGS="AKH,TOV,SEL"` (comma-separated codes).
+ * Build-time default: бүх 21 аймагт бүртгэл нээлттэй (2026-11-27).
+ * Хязгаарлах бол `EXPO_PUBLIC_MALCHNAAS_PILOT_AIMAGS="AKH,TOV"` эсвэл backend /config/mobile.
  */
+export const MALCHNAAS_ALL_AIMAGS: readonly string[] = [
+  'AKH', 'BOL', 'BKH', 'BUL', 'GOA', 'GOS', 'DAR', 'DOR', 'DOG', 'DUN', 'ZAV', 'OVR', 'OMN', 'SUK', 'SEL', 'TOV', 'UVS', 'KHO', 'KHV', 'KHE', 'ORK',
+];
+
 export const MALCHNAAS_PILOT_AIMAGS_DEFAULT: readonly string[] = csvFlag(
   'EXPO_PUBLIC_MALCHNAAS_PILOT_AIMAGS',
-  ['AKH', 'TOV', 'SEL'],
+  MALCHNAAS_ALL_AIMAGS,
 );
 
 /**

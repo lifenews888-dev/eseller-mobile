@@ -75,7 +75,7 @@ const BANKS = ['Хаан банк', 'Голомт банк', 'TDB банк', 'Х
 const TX_FILTERS: { label: string; value?: string }[] = [
   { label: 'Бүгд' },
   { label: 'Цэнэглэлт', value: 'TOPUP' },
-  { label: 'Escrow', value: 'ESCROW_HOLD' },
+  { label: 'Дундын данс', value: 'ESCROW_HOLD' },
   { label: 'Цуцлалт', value: 'ESCROW_REFUND' },
   { label: 'Оноо мөнгө', value: 'POINTS_REDEEM' },
   { label: 'Гаргалт', value: 'PAYOUT' },
@@ -263,7 +263,7 @@ export default function WalletScreen() {
       <AppTopBar eyebrow="Профайл" title="eSeller хэтэвч" showBack={false} />
       <AppHeader
         title="eSeller хэтэвч"
-        subtitle="Цэнэглэх, гаргах, escrow болон онооны хөдөлгөөнөө нэг дор хянана."
+        subtitle="Цэнэглэх, гаргах, дундын данс болон онооны хөдөлгөөнөө нэг дор хянана."
         icon="wallet-outline"
         accent={C.primary}
       />
@@ -279,7 +279,7 @@ export default function WalletScreen() {
           </View>
         </View>
         <View style={st.metricRow}>
-          <AppMetricCard label="Escrow" value={fmt(wallet?.escrowHold || 0)} icon="lock-closed-outline" accent={C.seller} />
+          <AppMetricCard label="Дундын данс" value={fmt(wallet?.escrowHold || 0)} icon="lock-closed-outline" accent={C.seller} />
           <AppMetricCard label="Оноо" value={(loyalty?.balance ?? 0).toLocaleString()} icon={tier.icon} accent={tier.color} />
         </View>
         <View style={st.tierRow}>
@@ -407,7 +407,7 @@ function Overview({
         <EmptyCard
           icon="card-outline"
           title="Гүйлгээ хараахан алга"
-          text="Цэнэглэлт, төлбөр, escrow болон гаргалтын түүх энд харагдана."
+          text="Цэнэглэлт, төлбөр, дундын данс болон гаргалтын түүх энд харагдана."
         />
       ) : (
         <View style={st.txList}>
@@ -691,8 +691,8 @@ function txColor(type: string, amount: number) {
 
 function txLabel(type: string) {
   if (type === 'TOPUP') return 'Цэнэглэлт';
-  if (type === 'ESCROW_HOLD') return 'Escrow барьцаа';
-  if (type === 'ESCROW_RELEASE') return 'Escrow чөлөөлөлт';
+  if (type === 'ESCROW_HOLD') return 'Дундын дансанд барьсан';
+  if (type === 'ESCROW_RELEASE') return 'Дундын данснаас шилжсэн';
   if (type === 'ESCROW_REFUND') return 'Буцаалт';
   if (type === 'POINTS_REDEEM') return 'Оноо мөнгө';
   if (type === 'PAYOUT') return 'Мөнгө гаргалт';

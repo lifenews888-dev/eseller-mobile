@@ -71,7 +71,7 @@ export default function HerderEarnings() {
           accent={C.success}
         />
         <AppMetricCard
-          label="Escrow-д хадгалагдаж байна"
+          label="Дундын дансанд хадгалагдаж байна"
           value={formatMoney(data?.held.total)}
           icon="lock-closed-outline"
           accent={C.gold}
