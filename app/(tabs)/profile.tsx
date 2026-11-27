@@ -114,7 +114,7 @@ export default function ProfileScreen() {
         { icon: 'person-outline', label: 'Профайл засах', sub: 'Нэр, утас, мэдээлэл', route: '/edit-profile', color: C.primary },
         { icon: 'notifications-outline', label: 'Мэдэгдэл', sub: 'Тохиргоо', route: '/notification-settings', color: C.seller },
         { icon: 'shield-checkmark-outline', label: 'Аюулгүй байдал', sub: 'Нууцлал ба хамгаалалт', route: '/security', color: C.secondary },
-        { icon: 'help-circle-outline', label: 'Тусламж ба FAQ', sub: 'Асуулт, хариулт', route: '/help', color: C.primary },
+        { icon: 'help-circle-outline', label: 'Тусламж, түгээмэл асуулт', sub: 'Асуулт, хариулт', route: '/help', color: C.primary },
         { icon: 'information-circle-outline', label: 'Тухай', sub: 'eSeller.mn', route: '/about', color: C.textSub },
         { icon: 'call-outline', label: 'Холбоо барих', sub: 'Санал хүсэлт', route: '/contact', color: C.secondary },
         { icon: 'document-text-outline', label: 'Нууцлалын бодлого', sub: 'Өгөгдөл хамгаалалт', route: '/privacy', color: C.textSub },

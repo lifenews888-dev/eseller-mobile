@@ -40,9 +40,9 @@ const STORE_BENEFITS = [
 ];
 
 const STORE_PROMOS = [
-  'Шинэ хэрэглэгчид 10,000₮ купон',
+  'Промо кодоор нэмэлт хөнгөлөлт',
   '50,000₮-өөс дээш үнэгүй хүргэлт',
-  'Gold гишүүнд 2x оноо',
+  'Түвшин ахих тусам 2 хүртэл дахин оноо',
   'Долоо хоног бүр шинэ ирэлт',
 ];
 
@@ -169,7 +169,7 @@ function BuyerStoreScreen() {
       <AppTopBar eyebrow="eSeller" title="Дэлгүүр" showBack={false} />
       <AppHeader
         title="Дэлгүүр"
-        subtitle="Нэгдсэн marketplace-ээс бараа, үйлчилгээ, шинэ саналуудыг хайна."
+        subtitle="Нэгдсэн захаас бараа, үйлчилгээ, шинэ саналуудыг хайна."
         icon="storefront-outline"
         accent={STORE_MARKET_ACCENT}
         style={{ marginBottom: R.md }}
@@ -507,7 +507,7 @@ function StoreOwnerProductsScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await del(`/products/${encodeApiPathSegment(id)}`);
+            await del(`/store/products/${encodeApiPathSegment(id)}`);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             refetch();
           } catch (error: any) {

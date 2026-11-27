@@ -12,18 +12,17 @@ type MessageType = {
   icon: keyof typeof Ionicons.glyphMap;
 };
 
-type MessageTypeId = 'question' | 'bug' | 'idea' | 'complaint' | 'gold';
+type MessageTypeId = 'question' | 'bug' | 'idea' | 'complaint';
 
 const MESSAGE_TYPES: MessageType[] = [
   { id: 'question', label: 'Асуулт', icon: 'help-circle-outline' },
   { id: 'bug', label: 'Алдаа мэдээлэх', icon: 'bug-outline' },
   { id: 'idea', label: 'Санал', icon: 'bulb-outline' },
   { id: 'complaint', label: 'Гомдол', icon: 'chatbox-ellipses-outline' },
-  { id: 'gold', label: 'Gold', icon: 'star-outline' },
 ];
 
 function isMessageTypeId(value: unknown): value is MessageTypeId {
-  return value === 'question' || value === 'bug' || value === 'idea' || value === 'complaint' || value === 'gold';
+  return value === 'question' || value === 'bug' || value === 'idea' || value === 'complaint';
 }
 
 const CONTACTS = [
@@ -104,7 +103,6 @@ export default function ContactScreen() {
         `Нэр: ${name.trim()}`,
         `Имэйл: ${email.trim()}`,
         `Төрөл: ${selectedType}`,
-        plan ? `Gold төлөвлөгөө: ${plan}` : '',
         '',
         message.trim(),
       ].filter(Boolean).join('\n'),
@@ -112,9 +110,7 @@ export default function ContactScreen() {
     const recipient = type === 'idea' ? 'feedback@eseller.mn' : 'info@eseller.mn';
     const subject = type === 'idea'
       ? 'Санал хүсэлт'
-      : type === 'gold'
-        ? 'eSeller Gold хүсэлт'
-        : `eSeller ${selectedType}`;
+      : `eSeller ${selectedType}`;
 
     setSending(true);
     try {

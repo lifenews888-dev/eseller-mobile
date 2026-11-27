@@ -54,7 +54,7 @@ export default function CorporateOrder() {
     placeholder: string;
     keyboard?: KeyboardTypeOptions;
   }[] = [
-    { label: 'Байгууллагын нэр *', value: company, setter: setCompany, placeholder: 'ХК, ХХК, NGO...' },
+    { label: 'Байгууллагын нэр *', value: company, setter: setCompany, placeholder: 'ХК, ХХК, ТББ...' },
     { label: 'Холбоо барих хүн *', value: contact, setter: setContact, placeholder: 'Таны нэр' },
     { label: 'Утасны дугаар *', value: phone, setter: setPhone, placeholder: '99112233', keyboard: 'phone-pad' },
     { label: 'Имэйл', value: email, setter: setEmail, placeholder: 'company@mail.mn', keyboard: 'email-address' },
@@ -68,7 +68,7 @@ export default function CorporateOrder() {
         <AppTopBar eyebrow="Бизнес" title="Корпоратив захиалга" showBack={false} />
         <AppHeader
           title="Корпоратив захиалга"
-          subtitle="Байгууллагын хэмжээний захиалга, хямдрал, BNPL болон тусгай нөхцөл"
+          subtitle="Байгууллагын хэмжээний захиалга, хямдрал, хуваан төлөлт болон тусгай нөхцөл"
           icon="briefcase-outline"
           accent={C.primary}
         />

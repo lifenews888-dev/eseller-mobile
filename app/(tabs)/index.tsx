@@ -86,7 +86,7 @@ const HOME_SERVICE_ITEMS = [
     icon: 'help-circle-outline' as const,
     color: C.primary,
     name: 'Тусламж',
-    sub: 'FAQ, холбоо барих',
+    sub: 'Түгээмэл асуулт, холбоо барих',
     route: '/help',
   },
 ]
@@ -455,7 +455,7 @@ function MarketplaceSearchBlock() {
           Монголын нэгдсэн цахим зах
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-          {['10,000+ бараа', '500+ дэлгүүр', 'Хурдан хүргэлт'].map((item) => (
+          {['Олон дэлгүүр', 'QPay төлбөр', 'Хурдан хүргэлт'].map((item) => (
             <View
               key={item}
               style={{

@@ -23,7 +23,7 @@ const SUPPORT_SERVICES: ServiceItem[] = [
   { icon: 'reader-outline', label: 'Нөхцөл', sub: 'Үйлчилгээний нөхцөл', route: '/terms', color: C.textSub },
   { icon: 'document-text-outline', label: 'Нууцлал', sub: 'Нууцлалын бодлого', route: '/privacy', color: C.primary },
   { icon: 'call-outline', label: 'Холбоо барих', sub: 'Санал хүсэлт илгээх', route: '/contact', color: C.secondary },
-  { icon: 'help-circle-outline', label: 'Тусламж', sub: 'FAQ, захиалга, хүргэлт', route: '/help', color: C.seller },
+  { icon: 'help-circle-outline', label: 'Тусламж', sub: 'Түгээмэл асуулт, захиалга, хүргэлт', route: '/help', color: C.seller },
   { icon: 'chatbubble-ellipses-outline', label: 'Санал хүсэлт', sub: 'Санал, алдаа, гомдол', route: '/feedback', color: C.secondary },
 ];
 
@@ -45,7 +45,7 @@ const ACCOUNT_SERVICES: ServiceItem[] = [
 ];
 
 const APP_SERVICES_BASE: ServiceItem[] = [
-  { icon: 'radio-button-on-outline', label: 'Live худалдаа', sub: 'Шууд дамжуулалт', route: '/live', color: C.error },
+  { icon: 'radio-button-on-outline', label: 'Шууд худалдаа', sub: 'Шууд дамжуулалт', route: '/live', color: C.error },
   { icon: 'globe-outline', label: 'Dropship', sub: 'Дэлхий даяар захиалах', route: '/dropship', color: C.secondary },
   { icon: 'lock-closed-outline', label: 'BNPL', sub: 'Дараа төлөх', route: '/bnpl', color: C.seller },
   { icon: 'sparkles-outline', label: 'AI туслах', sub: 'Худалдан авалтын туслах', route: '/ai-shopper', color: C.primary },

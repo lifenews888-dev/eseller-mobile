@@ -220,7 +220,8 @@ export const SocialAPI = {
   like: (postId: string) =>
     post(`/social/posts/${pathSegment(postId)}/like`),
   unlike: (postId: string) =>
-    del(`/social/posts/${pathSegment(postId)}/like`),
+    // Вэб дээр POST нь like-ийг сэлгэнэ (дахин дарвал болиулна)
+    post(`/social/posts/${pathSegment(postId)}/like`),
   comments: (postId: string) =>
     get(`/social/posts/${pathSegment(postId)}/comment`),
   comment: (postId: string, content: string) =>
@@ -366,7 +367,7 @@ export const POSAPI = {
     post('/payment/qpay/create', {
       orderId,
       amount,
-      description: description || 'POS захиалга',
+      description: description || 'Кассын захиалга',
     }),
 
   /** Poll payment status — GET /payment/qpay/check/:invoiceId; response `{paid, paidDate?}` */

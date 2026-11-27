@@ -63,7 +63,7 @@ const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'Хүргэлтийн кодоо хаанаас харах вэ?',
-        a: 'Захиалгын дэлгэрэнгүй болон хүргэлт хэсэгт tracking код, төлөв харагдана.',
+        a: 'Захиалгын дэлгэрэнгүй болон хүргэлт хэсэгт хяналтын код, төлөв харагдана.',
       },
     ],
   },
@@ -132,7 +132,7 @@ export default function HelpScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <AppTopBar eyebrow="Дэмжлэг" title="Тусламж" showBack={false} />
         <AppHeader
-          title="Тусламж ба FAQ"
+          title="Тусламж, түгээмэл асуулт"
           subtitle="Захиалга, төлбөр, хүргэлт болон борлуулалтын түгээмэл асуултууд."
           icon="help-circle-outline"
           accent={C.primary}
@@ -151,7 +151,7 @@ export default function HelpScreen() {
               activeOpacity={0.86}
               onPress={() => selectGroup(item.id)}
               accessibilityRole="button"
-              accessibilityLabel={`${item.label} FAQ ангилал`}
+              accessibilityLabel={`${item.label} асуултын ангилал`}
               accessibilityState={{ selected: active }}
               style={[st.chip, active && st.chipActive]}
             >

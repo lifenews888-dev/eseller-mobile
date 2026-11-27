@@ -87,7 +87,7 @@ export function StoriesRow() {
         <TouchableOpacity
           key={id || `${label}-${index}`}
           accessibilityRole="button"
-          accessibilityLabel={`${label} story нээх`}
+          accessibilityLabel={`${label} түүх нээх`}
           accessibilityState={{ disabled: !routeId }}
           disabled={!routeId}
           onPress={() => {

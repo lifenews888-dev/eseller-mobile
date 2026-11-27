@@ -63,7 +63,7 @@ export default function OwnerProfile() {
         <SectionTitle>Дэлгүүр</SectionTitle>
         <Card>
           <MenuRow icon="settings-outline" label="Дэлгүүрийн тохиргоо" accent={C.store} onPress={() => router.push('/owner/settings' as never)} />
-          <MenuRow icon="desktop-outline" label="POS терминал" accent={C.primary} onPress={() => router.push('/owner/pos' as never)} />
+          <MenuRow icon="desktop-outline" label="Касс" accent={C.primary} onPress={() => router.push('/owner/pos' as never)} />
           <MenuRow icon="bar-chart-outline" label="Тайлан" accent={C.seller} onPress={() => router.push('/owner/analytics' as never)} />
         </Card>
 

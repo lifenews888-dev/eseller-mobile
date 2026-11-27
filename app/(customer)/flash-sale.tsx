@@ -94,9 +94,9 @@ export default function FlashSaleScreen() {
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.primary} />}
     >
       <Stack.Screen options={{ headerShown: false }} />
-      <AppTopBar eyebrow="Дэлгүүр" title="Flash sale" showBack={false} />
+      <AppTopBar eyebrow="Дэлгүүр" title="Хямдрал" showBack={false} />
       <AppHeader
-        title="Flash sale"
+        title="Хямдрал"
         subtitle="Дэлгүүрүүдийн одоо хямдарсан бараанууд."
         icon="flash-outline"
         accent={C.seller}
@@ -134,7 +134,7 @@ export default function FlashSaleScreen() {
         <AppCard style={st.emptyCard}>
           <Ionicons name="flash-outline" size={42} color={C.textMuted} />
           <Text style={st.emptyTitle}>Идэвхтэй хямдрал алга</Text>
-          <Text style={st.emptyText}>Дараагийн flash sale эхлэхэд энд бараанууд харагдана.</Text>
+          <Text style={st.emptyText}>Дэлгүүрүүд хямдрал зарлахад энд бараанууд харагдана.</Text>
           <AppButton label="Дэлгүүр үзэх" icon="bag-outline" variant="secondary" onPress={() => router.push('/store' as any)} />
         </AppCard>
       ) : (

@@ -82,7 +82,7 @@ export default function CatalogScreen() {
       <AppTopBar eyebrow="Борлуулагч" title="Каталог" showBack={false} />
       <AppHeader
         title="Каталог"
-        subtitle="Бараагаа сонгоод referral линк үүсгэнэ."
+        subtitle="Бараагаа сонгоод урилгын линк үүсгэнэ."
         icon="cube-outline"
         accent={C.seller}
       />

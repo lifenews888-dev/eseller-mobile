@@ -30,7 +30,7 @@ export default function OwnerDashboard() {
     { icon: 'add-circle-outline' as const, label: 'Бараа нэмэх', color: C.store, route: '/owner/products' },
     { icon: 'receipt-outline' as const, label: 'Захиалгууд', color: C.primary, route: '/owner/orders' },
     { icon: 'bar-chart-outline' as const, label: 'Тайлан', color: C.gold, route: '/owner/analytics' },
-    { icon: 'desktop-outline' as const, label: 'POS терминал', color: C.seller, route: '/owner/pos' },
+    { icon: 'desktop-outline' as const, label: 'Касс', color: C.seller, route: '/owner/pos' },
     { icon: 'settings-outline' as const, label: 'Тохиргоо', color: C.secondary, route: '/owner/settings' },
   ];
 

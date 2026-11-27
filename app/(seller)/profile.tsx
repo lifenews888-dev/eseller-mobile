@@ -150,8 +150,8 @@ function SellerNetworkCard({ me }: { me: ReturnType<typeof useSellerMe> }) {
               <Text style={{ ...F.small, color: PC.text }}>Профайлын төлөв</Text>
               <StatusBadge status={statusToBadgeState(me.data.resellerProfile.status)} label={mnSellerStatus(me.data.resellerProfile.status)} />
             </View>
-            <InfoRow icon="id-card-outline" label="KYC" value={mnKycStatus(me.data.resellerProfile.kycStatus)} accent={C.primary} />
-            <InfoRow icon="link-outline" label="Identity холбоо" value={mnIdentityStatus(me.data.identityLink?.status)} accent={C.secondary} />
+            <InfoRow icon="id-card-outline" label="Иргэний баталгаажуулалт" value={mnKycStatus(me.data.resellerProfile.kycStatus)} accent={C.primary} />
+            <InfoRow icon="link-outline" label="Баталгаажуулалт" value={mnIdentityStatus(me.data.identityLink?.status)} accent={C.secondary} />
             <InfoRow icon="card-outline" label="Олголтын эрх" value={mnEligibility(me.data.financeEligibility)} accent={C.seller} />
           </>
         ) : null}

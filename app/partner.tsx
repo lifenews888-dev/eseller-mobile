@@ -15,7 +15,7 @@ import { AppButton, AppHeader, AppTopBar, useAppLayoutMetrics } from '../src/sha
 
 const PARTNER_TYPES = [
   { id: 'LOGISTICS', label: 'Логистик', icon: 'car-outline' },
-  { id: 'WAREHOUSE', label: 'Агуулах / Pick-up', icon: 'storefront-outline' },
+  { id: 'WAREHOUSE', label: 'Агуулах / Очиж авах цэг', icon: 'storefront-outline' },
   { id: 'PAYMENT', label: 'Төлбөрийн систем', icon: 'card-outline' },
   { id: 'TECH', label: 'Технологи / API', icon: 'phone-portrait-outline' },
   { id: 'OTHER', label: 'Бусад', icon: 'people-outline' },
@@ -26,7 +26,7 @@ const OPPORTUNITIES = [
   {
     icon: 'storefront-outline' as const,
     title: 'Агуулахын хамтрал',
-    text: 'Pick-up цэг болох, агуулах үйлчилгээ',
+    text: 'Очиж авах цэг болох, агуулах үйлчилгээ',
   },
   {
     icon: 'bus-outline' as const,

@@ -131,11 +131,11 @@ export default function LiveDetailScreen() {
     return (
       <View style={styles.container}>
         <View style={[styles.topBarWrap, { paddingTop: layout.screenTop }]}>
-          <AppTopBar eyebrow="Live" title="Дэлгэрэнгүй" style={{ marginBottom: 0 }} />
+          <AppTopBar eyebrow="Шууд худалдаа" title="Дэлгэрэнгүй" style={{ marginBottom: 0 }} />
         </View>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={LIVE_ACCENT} />
-          <Text style={styles.loadingText}>Live мэдээлэл ачааллаж байна...</Text>
+          <Text style={styles.loadingText}>Дамжуулалтын мэдээлэл ачааллаж байна...</Text>
         </View>
       </View>
     );
@@ -148,13 +148,13 @@ export default function LiveDetailScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.topBarWrap, { paddingTop: layout.screenTop }]}>
-        <AppTopBar eyebrow="Live" title={stream.title} style={{ marginBottom: 0 }} />
+        <AppTopBar eyebrow="Шууд худалдаа" title={stream.title} style={{ marginBottom: 0 }} />
       </View>
 
       {embedUrl ? (
         <View style={styles.video}>
           <WebView
-            accessibilityLabel={`${stream.title} live видео`}
+            accessibilityLabel={`${stream.title} шууд видео`}
             source={{ uri: embedUrl }}
             style={{ flex: 1 }}
             allowsFullscreenVideo
@@ -166,7 +166,7 @@ export default function LiveDetailScreen() {
               {isLive && (
                 <View style={styles.liveBadge}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>LIVE</Text>
+                  <Text style={styles.liveText}>ШУУД</Text>
                 </View>
               )}
               <View style={styles.viewerBadge}>
@@ -186,7 +186,7 @@ export default function LiveDetailScreen() {
               {isLive && (
                 <View style={styles.liveBadge}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>LIVE</Text>
+                  <Text style={styles.liveText}>ШУУД</Text>
                 </View>
               )}
               <View style={styles.viewerBadge}>
@@ -205,7 +205,7 @@ export default function LiveDetailScreen() {
 
       <View style={styles.productsSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Live бүтээгдэхүүн</Text>
+          <Text style={styles.sectionTitle}>Дамжуулалтын бүтээгдэхүүн</Text>
           <Text style={styles.sectionCount}>{visibleProducts.length}</Text>
         </View>
         <FlatList
@@ -284,7 +284,7 @@ export default function LiveDetailScreen() {
         </ScrollView>
         <View style={[styles.chatInputRow, { paddingBottom: layout.insets.bottom + R.md }]}>
           <TextInput
-            accessibilityLabel="Live chat мессеж бичих"
+            accessibilityLabel="Шууд чатад мессеж бичих"
             style={styles.chatInput}
             value={chatInput}
             onChangeText={setChatInput}
@@ -295,7 +295,7 @@ export default function LiveDetailScreen() {
           />
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Live chat мессеж илгээх"
+            accessibilityLabel="Шууд чатад мессеж илгээх"
             activeOpacity={0.84}
             hitSlop={8}
             style={[styles.sendBtn, (!chatInput.trim() || sending) && styles.sendBtnDisabled]}

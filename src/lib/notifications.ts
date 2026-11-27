@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { post } from '../services/api';
 import { C } from '../shared/design';
+import { encodeRouteParam } from '../shared/routeParams';
 import type { Notification, NotificationResponse } from 'expo-notifications';
 
 async function loadNotifications() {
@@ -104,33 +105,57 @@ export async function registerPushToken(): Promise<string | null> {
   }
 }
 
+const SCREEN_ROUTES: Record<string, string> = {
+  wallet: '/wallet',
+  'seller-orders': '/owner/orders',
+  'driver-deliveries': '/driver/deliveries',
+  'herder-dashboard': '/herder-admin/dashboard',
+  'herder-register': '/register-herder',
+  orders: '/orders',
+};
+
+const TYPE_ROUTES: Record<string, string> = {
+  order_new: '/owner/orders',
+  order_confirmed: '/orders',
+  order_paid: '/orders',
+  order_status: '/orders',
+  delivery: '/orders',
+  delivery_assigned: '/driver/deliveries',
+  delivery_start: '/driver/deliveries',
+  delivery_done: '/orders',
+  payment_success: '/wallet',
+  wallet: '/wallet',
+  flash_sale: '/flash-sale',
+  live_start: '/live',
+  'seller-orders': '/owner/orders',
+};
+
 /**
- * Map a received notification's `data.type` to an in-app route.
+ * Мэдэгдлийн өгөгдлөөс аппын хуудас тодорхойлно (push дарах болон мэдэгдлийн жагсаалтад нэг дүрэм).
+ * screen → тодорхой хуудас; захиалга худалдан авагчид бол захиалгын дэлгэрэнгүй.
+ */
+export function routeForNotificationData(raw: unknown): string {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const screen = typeof data.screen === 'string' ? data.screen : '';
+  if (screen && SCREEN_ROUTES[screen]) return SCREEN_ROUTES[screen];
+  if (screen.startsWith('/')) return screen;
+  const type = typeof data.type === 'string' ? data.type : '';
+  const orderId = typeof data.orderId === 'string' ? data.orderId : '';
+  const buyerOrderTypes = ['order_paid', 'order_confirmed', 'order_status', 'delivery', 'delivery_done'];
+  if (orderId && (!type || buyerOrderTypes.includes(type))) {
+    return `/order/${encodeRouteParam(orderId)}`;
+  }
+  return TYPE_ROUTES[type] ?? '/notifications';
+}
+
+/**
+ * Map a received notification to an in-app route.
  * Called from notification tap handler in the root layout.
  */
 export function resolveNotificationRoute(
   response: NotificationResponse,
 ): string {
-  const data = (response.notification.request.content.data ?? {}) as Record<string, string>;
-
-  // Explicit screen override wins
-  if (data.screen) return data.screen;
-
-  const routes: Record<string, string> = {
-    order_new: '/owner/orders',
-    order_confirmed: '/orders',
-    order_paid: '/orders',
-    delivery_start: '/driver/deliveries',
-    delivery_done: '/orders',
-    payment_success: '/wallet',
-    promo: '/',
-    gold_expiry: '/',
-    flash_sale: '/flash-sale',
-    live_start: '/live',
-    'seller-orders': '/owner/orders',
-  };
-
-  return routes[data.type] ?? '/';
+  return routeForNotificationData(response.notification.request.content.data);
 }
 
 /** Keep the older export name working — used elsewhere. */

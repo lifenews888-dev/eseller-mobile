@@ -86,7 +86,7 @@ export default function POSHistory() {
       if (isVoid) {
         await POSAPI.voidOrder(sale.id);
       } else {
-        await POSAPI.refundOrder(sale.id, 'POS буцаалт');
+        await POSAPI.refundOrder(sale.id, 'Кассын буцаалт');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       qc.invalidateQueries({ queryKey: ['pos', 'history'] });
@@ -148,7 +148,7 @@ export default function POSHistory() {
         ListHeaderComponent={
           <View style={{ paddingTop: layout.screenTop, paddingBottom: R.sm }}>
             <AppTopBar
-              eyebrow="POS"
+              eyebrow="Касс"
               title="Өнөөдрийн борлуулалт"
               right={
                 <AppIconButton
@@ -163,7 +163,7 @@ export default function POSHistory() {
 
             <AppHeader
               title="Өнөөдрийн борлуулалт"
-              subtitle="POS гүйлгээ, буцаалт, хүчингүй захиалгаа хянана."
+              subtitle="Кассын гүйлгээ, буцаалт, хүчингүй захиалгаа хянана."
               icon="receipt-outline"
               accent={C.store}
               style={{ marginBottom: R.md }}

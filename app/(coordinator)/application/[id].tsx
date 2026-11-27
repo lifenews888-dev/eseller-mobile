@@ -190,7 +190,7 @@ export default function CoordinatorApplicationDetail() {
               />
             </View>
           ) : (
-            <Text style={{ ...F.small, color: C.textMuted }}>Гэрчилгээ upload хийгээгүй</Text>
+            <Text style={{ ...F.small, color: C.textMuted }}>Гэрчилгээ хавсаргаагүй</Text>
           )}
         </Section>
 

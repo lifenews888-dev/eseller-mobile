@@ -353,14 +353,14 @@ export default function POSTerminal() {
           }}
         >
           <AppTopBar
-            eyebrow="POS"
-            title="eSeller POS"
+            eyebrow="Касс"
+            title="eSeller касс"
             showBack={false}
             style={{ marginBottom: 0 }}
             right={
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: R.sm }}>
                 <TouchableOpacity
-                  accessibilityLabel="POS түүх"
+                  accessibilityLabel="Кассын түүх"
                   onPress={() => router.push('/owner/pos-history' as any)}
                   style={{
                     backgroundColor: C.bgSection,
@@ -403,7 +403,7 @@ export default function POSTerminal() {
             <TextInput
               value={search}
               onChangeText={onSearchChange}
-              placeholder="Барааны нэр эсвэл barcode..."
+              placeholder="Барааны нэр эсвэл баркод..."
               placeholderTextColor={C.textMuted}
               style={{ flex: 1, color: C.text, fontSize: 14 }}
               autoFocus
@@ -411,11 +411,11 @@ export default function POSTerminal() {
             {searching && <ActivityIndicator size="small" color={C.store} />}
           </View>
           <TouchableOpacity
-            accessibilityLabel="Barcode сканнер"
+            accessibilityLabel="Баркод уншигч"
             onPress={() =>
               Alert.alert(
                 'Шинэ билд шаардлагатай',
-                'Barcode сканнер ажиллахын тулд аппын шинэ хувилбарыг суулгана уу.',
+                'Баркод уншигч ажиллахын тулд аппын шинэ хувилбарыг суулгана уу.',
                 [{ text: 'OK' }],
               )
             }

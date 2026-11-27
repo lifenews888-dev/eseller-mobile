@@ -30,46 +30,39 @@ type Tier = {
 
 const POINT_VALUE = 5;
 
+// Вэбийн LOYALTY_CONFIG-тэй ижил (босго, онооны үржүүлэгч). 100₮ тутамд 1 үндсэн оноо.
 const TIERS: Tier[] = [
   {
     key: 'BRONZE',
     icon: 'ribbon-outline',
     color: C.seller,
-    label: 'Bronze',
+    label: 'Хүрэл',
     min: 0,
-    benefits: ['Захиалгын 10% оноо', 'Үндсэн хүргэлтийн дэмжлэг'],
+    benefits: ['100₮ тутамд 1 оноо', 'Оноогоо мөнгө болгон хэтэвчиндээ шилжүүлэх'],
   },
   {
     key: 'SILVER',
     icon: 'shield-outline',
     color: C.textSub,
-    label: 'Silver',
+    label: 'Мөнгө',
     min: 5000,
-    benefits: ['12% оноо', 'Flash sale 30 минутын өмнө', 'Сарын 1 купон'],
+    benefits: ['Оноо 1.2 дахин', 'Оноогоо мөнгө болгон хэтэвчиндээ шилжүүлэх'],
   },
   {
     key: 'GOLD',
     icon: 'star-outline',
     color: C.gold,
-    label: 'Gold',
+    label: 'Алт',
     min: 20000,
-    benefits: ['15% оноо', 'Gold бараанд 2x оноо', '50,000₮+ захиалгад үнэгүй хүргэлт', 'Flash sale 1 цагийн өмнө'],
+    benefits: ['Оноо 1.5 дахин', 'Оноогоо мөнгө болгон хэтэвчиндээ шилжүүлэх'],
   },
   {
     key: 'PLATINUM',
     icon: 'diamond-outline',
     color: C.primary,
-    label: 'Platinum',
+    label: 'Платинум',
     min: 50000,
-    benefits: ['18% оноо', 'Тэргүүлэх дэмжлэг', 'Сар бүр купон', 'VIP зар үнэгүй'],
-  },
-  {
-    key: 'DIAMOND',
-    icon: 'sparkles-outline',
-    color: C.secondary,
-    label: 'Diamond',
-    min: 100000,
-    benefits: ['20% оноо', 'Бүх давуу эрх', 'Хувийн менежер', 'Төрсөн өдрийн бэлэг'],
+    benefits: ['Оноо 2 дахин', 'Оноогоо мөнгө болгон хэтэвчиндээ шилжүүлэх'],
   },
 ];
 

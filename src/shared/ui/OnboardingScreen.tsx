@@ -14,19 +14,19 @@ const SLIDES = [
   {
     icon:  'storefront' as const,
     title: 'Монголын бараа бүтээгдэхүүн',
-    desc:  '10,000+ бараа, 500+ дэлгүүр нэг дороос',
+    desc:  'Олон дэлгүүрийн бараа нэг дороос',
     color: C.brand,
   },
   {
     icon:  'cash' as const,
     title: 'Борлуулагч болж орлого ол',
-    desc:  'Share хийж commission авах — хамгийн хялбар арга',
+    desc:  'Хуваалцаж шимтгэл авах — хамгийн хялбар арга',
     color: C.primary,
   },
   {
     icon:  'lock-closed' as const,
     title: 'Аюулгүй төлбөр',
-    desc:  'Escrow систем — бараа авмагц л мөнгө шилжинэ',
+    desc:  'Дундын данс — бараа авмагц л мөнгө шилжинэ',
     color: C.success,
   },
   {

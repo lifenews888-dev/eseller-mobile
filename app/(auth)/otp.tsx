@@ -64,7 +64,7 @@ export default function OtpScreen() {
 
   return (
     <AppScreen keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <AppTopBar eyebrow="Нэвтрэлт" title="OTP код" />
+      <AppTopBar eyebrow="Нэвтрэлт" title="Нэг удаагийн код" />
       <AppHeader
         title="Утсаар нэвтрэх"
         subtitle={sent ? `${phone} дугаар руу илгээсэн кодыг оруулна уу.` : 'Утасны дугаараа оруулаад нэг удаагийн код авна.'}
