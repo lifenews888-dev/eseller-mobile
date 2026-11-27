@@ -77,24 +77,12 @@ export const LIVE_STORE_CATEGORIES: LiveStoreCategory[] = [
   })),
 ];
 
+// Зарын булангийн ангилал = вэбийн FeedItem.category (root key). Өмнө нь мобайл өөр slug
+// (auto-moto, electronics...) ашигладаг байсан тул вэбийн заруудтай шүүлт таардаггүй байсан.
 export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
   { slug: '', name: 'Бүгд', icon: 'grid' },
-  { slug: 'electronics', name: 'Электроник', icon: 'phone-portrait' },
-  { slug: 'fashion', name: 'Хувцас', icon: 'shirt' },
-  { slug: 'home-living', name: 'Гэр', icon: 'home' },
-  { slug: 'beauty-health', name: 'Гоо', icon: 'sparkles' },
-  { slug: 'kids-toys', name: 'Хүүхдийн', icon: 'happy' },
-  { slug: 'sports-travel', name: 'Спорт', icon: 'football' },
-  { slug: 'food', name: 'Хоол', icon: 'fast-food' },
-  { slug: 'auto-moto', name: 'Авто', icon: 'car' },
-  { slug: 'construction', name: 'Барилга', icon: 'business' },
-  { slug: 'digital', name: 'Дижитал', icon: 'desktop' },
-  { slug: 'books', name: 'Ном', icon: 'book' },
-  { slug: 'coins', name: 'Зоос', icon: 'disc' },
-  { slug: 'pets-plants', name: 'Амьтан', icon: 'leaf' },
-  { slug: 'art', name: 'Урлаг', icon: 'color-palette' },
-  { slug: 'agriculture', name: 'Хөдөө', icon: 'flower' },
-  { slug: 'office', name: 'Оффис', icon: 'briefcase' },
+  { slug: 'jobs', name: 'Ажил', icon: 'briefcase' },
+  ...LIVE_CATEGORY_ITEMS.map((item) => ({ slug: item.key, name: item.name, icon: item.icon })),
 ];
 
 export const LIVE_FEED_POST_CATEGORIES = LIVE_FEED_CATEGORIES.filter((category) => category.slug);

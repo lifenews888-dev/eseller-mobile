@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/store/auth';
 import { C, UI, roleColor } from '../../src/shared/design';
+import { useFeedBadge } from '../../src/hooks/useFeedBadge';
 
 type TabItem = { title: string; icon: string; iconActive: string };
 
@@ -37,6 +38,7 @@ export default function TabsLayout() {
   const color = role === 'BUYER' ? C.brand : roleColor(role);
   const config = TAB_CONFIG[role] || TAB_CONFIG.BUYER;
   const insets = useSafeAreaInsets();
+  const feedBadge = useFeedBadge();
 
   return (
     <Tabs
@@ -73,6 +75,8 @@ export default function TabsLayout() {
             name={name}
             options={{
               title: tabConfig.title,
+              tabBarBadge: name === 'feed' && feedBadge > 0 ? (feedBadge > 99 ? '99+' : feedBadge) : undefined,
+              tabBarBadgeStyle: { backgroundColor: C.brand, fontSize: 10 },
               tabBarIcon: ({ focused, color: iconColor }: { focused: boolean; color: string }) => (
                 <Ionicons
                   name={(focused ? tabConfig.iconActive : tabConfig.icon) as any}

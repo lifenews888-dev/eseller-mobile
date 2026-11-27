@@ -87,6 +87,7 @@ export default function ProfileScreen() {
         { icon: 'cart-outline', label: `Сагс (${cartCount})`, sub: 'Сонгосон бараа', route: '/cart', color: C.brand },
         { icon: 'heart-outline', label: 'Хадгалсан', sub: 'Дуртай бараа', route: '/wishlist', color: C.error },
         { icon: 'chatbubbles-outline', label: 'Зарын чат', sub: 'Зарын эзэдтэй харилцах', route: '/messages', color: C.brand },
+        { icon: 'notifications-outline', label: 'Хадгалсан хайлт', sub: 'Шинэ зарын мэдэгдэл', route: '/saved-searches', color: C.seller },
         { icon: 'refresh-outline', label: 'Буцаалт ба маргаан', sub: 'Буцаалтын хүсэлт', route: '/returns', color: C.primary },
         { icon: 'location-outline', label: 'Хүргэлтийн хаяг', sub: 'Хаяг хадгалах', route: '/addresses', color: C.driver },
       ],

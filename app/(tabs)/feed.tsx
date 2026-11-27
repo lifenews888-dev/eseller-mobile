@@ -13,6 +13,9 @@ import { filterPublicProducts, firstProductImage, getProductName, getPublicProdu
 import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppHeader, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 import { FeedItemSkeleton } from '../../src/shared/ui/Skeleton';
+import { ListingFilterPanel } from '../../src/components/listing/ListingFilterPanel';
+import { filtersForCategory, metaParams } from '../../src/shared/listingFilters';
+import { SavedSearchAPI } from '../../src/services/listings';
 
 const LazyStoreOrders = React.lazy(() => import('../(owner)/orders'));
 
@@ -38,11 +41,6 @@ const SORTS: Array<{ key: FeedSort; label: string; icon: IconName }> = [
   { key: 'price_desc', label: 'Үнэ өндөр', icon: 'arrow-up-outline' },
 ];
 
-const FEATURED_BUSINESSES = [
-  { initials: 'AC', type: 'Авто', name: 'AutoCity Mongolia', meta: 'Шалгасан авто зар', rating: '4.8', route: '/shops?q=AutoCity' },
-  { initials: 'MP', type: 'Үл хөдлөх', name: 'Mongolian Properties', meta: 'Орон сууц, оффис', rating: '4.7', route: '/shops?q=property' },
-  { initials: 'BS', type: 'Үйлчилгээ', name: 'Business Service', meta: 'Мэргэжлийн үйлчилгээ', rating: '4.9', route: '/shops?q=service' },
-];
 
 function isFeedSort(value: unknown): value is FeedSort {
   return value === 'newest' || value === 'price_asc' || value === 'price_desc' || value === 'popular';
@@ -85,13 +83,25 @@ export default function FeedScreen() {
 }
 
 function BuyerFeedScreen() {
-  const params = useLocalSearchParams<{ category?: string; q?: string; district?: string; sort?: string }>();
+  const params = useLocalSearchParams<Record<string, string>>();
+  const token = useAuth((st) => st.token);
   const layout = useAppLayoutMetrics();
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [district, setDistrict] = useState('');
   const [sort, setSort] = useState<FeedSort>('newest');
   const appliedSearch = typeof params.q === 'string' ? params.q : '';
+  // m_* нарийн шүүлтүүр (вэбтэй ижил) — route параметрээс уншина
+  const metaKey = Object.keys(params).filter((k) => k.startsWith('m_') && params[k]).sort().map((k) => `${k}=${params[k]}`).join('&');
+  const metaValues: Record<string, string> = {};
+  for (const k of Object.keys(params)) if (k.startsWith('m_') && typeof params[k] === 'string' && params[k]) metaValues[k.slice(2)] = params[k];
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  useEffect(() => { setSaveState('idle'); }, [params.category, appliedSearch, params.district, metaKey]);
+
+  // Хадгалсан хайлтаас орж ирвэл "шинэ" тоог тэглэнэ
+  useEffect(() => {
+    if (token && typeof params.ss === 'string' && params.ss) SavedSearchAPI.seen(params.ss).catch(() => null);
+  }, [token, params.ss]);
 
   useEffect(() => {
     setCategory(typeof params.category === 'string' ? params.category : '');
@@ -100,7 +110,7 @@ function BuyerFeedScreen() {
     setSort(isFeedSort(params.sort) ? params.sort : 'newest');
   }, [appliedSearch, params.category, params.district, params.sort]);
 
-  const replaceFeedRoute = (patch: { category?: string; search?: string; district?: string; sort?: FeedSort }) => {
+  const replaceFeedRoute = (patch: { category?: string; search?: string; district?: string; sort?: FeedSort; meta?: Record<string, string> }) => {
     const nextCategory = patch.category ?? category;
     const nextSearch = patch.search ?? search;
     const nextDistrict = patch.district ?? district;
@@ -111,19 +121,42 @@ function BuyerFeedScreen() {
     if (nextSearch.trim()) routeParams.q = nextSearch.trim();
     if (nextDistrict) routeParams.district = nextDistrict;
     if (nextSort !== 'newest') routeParams.sort = nextSort;
+    // Ангилал солигдвол нарийн шүүлтүүр цэвэрлэгдэнэ
+    const nextMeta = patch.meta ?? (patch.category !== undefined && patch.category !== category ? {} : metaValues);
+    Object.assign(routeParams, metaParams(nextMeta));
 
     router.replace(Object.keys(routeParams).length ? ({ pathname: '/feed' as any, params: routeParams } as any) : ('/feed' as any));
   };
 
   const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
-    queryKey: ['feed', category, appliedSearch, district, sort],
-    queryFn: () => get('/feed', { category, q: appliedSearch, district, sort, limit: 20 }),
+    queryKey: ['feed', category, appliedSearch, district, sort, metaKey],
+    queryFn: () => get('/feed', { category, q: appliedSearch, district, sort, limit: 20, ...metaParams(metaValues) }),
     retry: false,
   });
 
   const posts = filterPublicProducts<any>(extractFeedItems(data));
-  const vipCount = posts.filter((post: any) => post.vip || post.isVip || post.tier === 'VIP').length;
-  const hasActiveFeedQuery = Boolean(category || appliedSearch || district || sort !== 'newest');
+  const vipCount = posts.filter((post: any) => post.vip || post.isVip || String(post.tier || '').toLowerCase() === 'vip').length;
+  const hasActiveFeedQuery = Boolean(category || appliedSearch || district || sort !== 'newest' || metaKey);
+  const canSaveSearch = Boolean(category || appliedSearch || district || metaKey);
+
+  const saveSearch = async () => {
+    if (!token) {
+      router.push({ pathname: '/login', params: { returnTo: '/saved-searches' } } as any);
+      return;
+    }
+    const parts: string[] = [];
+    if (category) parts.push(`category=${encodeURIComponent(category)}`);
+    if (appliedSearch) parts.push(`q=${encodeURIComponent(appliedSearch)}`);
+    if (district) parts.push(`district=${encodeURIComponent(district)}`);
+    for (const [k, v] of Object.entries(metaParams(metaValues))) parts.push(`${k}=${encodeURIComponent(v)}`);
+    setSaveState('saving');
+    try {
+      await SavedSearchAPI.create(parts.join('&'));
+      setSaveState('saved');
+    } catch {
+      setSaveState('idle');
+    }
+  };
   const hasPendingSearch = search.trim() !== appliedSearch.trim();
 
   const submitSearch = () => replaceFeedRoute({ search });
@@ -145,7 +178,21 @@ function BuyerFeedScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.brand} />}
         ListHeaderComponent={
           <View style={{ paddingTop: layout.screenTop }}>
-            <AppTopBar eyebrow="eSeller" title="Зарын булан" showBack={false} />
+            <AppTopBar
+              eyebrow="eSeller"
+              title="Зарын булан"
+              showBack={false}
+              right={
+                <View style={{ flexDirection: 'row', gap: R.sm }}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Хадгалсан хайлт" hitSlop={8} onPress={() => router.push('/saved-searches' as any)}>
+                    <Ionicons name="notifications-outline" size={22} color={C.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Зарын чат" hitSlop={8} onPress={() => router.push('/messages' as any)}>
+                    <Ionicons name="chatbubbles-outline" size={22} color={C.text} />
+                  </TouchableOpacity>
+                </View>
+              }
+            />
             <AppHeader
               title="Зарын булан"
               subtitle="Бараа, үйлчилгээ, авто, үл хөдлөх болон өдөр тутмын хэрэгцээг нэг дороос хайна."
@@ -216,10 +263,22 @@ function BuyerFeedScreen() {
               }}
             />
 
-            <SectionTitle title="Онцлох бизнесүүд" action="Бүгдийг харах" onAction={() => router.push('/shops' as any)} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-              {FEATURED_BUSINESSES.map((business) => <FeaturedBusinessCard key={business.name} business={business} />)}
-            </ScrollView>
+            {filtersForCategory(category).length > 0 ? (
+              <View style={{ marginTop: R.md }}>
+                <ListingFilterPanel key={category} category={category} values={metaValues} onApply={(next) => replaceFeedRoute({ meta: next })} />
+              </View>
+            ) : null}
+
+            {canSaveSearch ? (
+              <AppButton
+                label={saveState === 'saved' ? 'Хадгалсан · шинэ зар гарвал мэдэгдэнэ' : saveState === 'saving' ? 'Хадгалж байна...' : 'Хайлт хадгалах · шинэ зар мэдэгдэх'}
+                icon={saveState === 'saved' ? 'notifications' : 'notifications-outline'}
+                variant="secondary"
+                disabled={saveState !== 'idle'}
+                onPress={saveSearch}
+                style={{ marginTop: R.md }}
+              />
+            ) : null}
 
             <View style={styles.resultHeader}>
               <View>
@@ -307,30 +366,6 @@ function SectionTitle({ title, action, onAction }: { title: string; action?: str
   );
 }
 
-function FeaturedBusinessCard({ business }: { business: typeof FEATURED_BUSINESSES[number] }) {
-  return (
-    <TouchableOpacity
-      accessibilityRole="button"
-      accessibilityLabel={`${business.name} бизнесийг нээх`}
-      activeOpacity={0.84}
-      onPress={() => router.push(business.route as any)}
-      style={styles.featuredCard}
-    >
-      <View style={styles.featuredLogo}>
-        <Text style={styles.featuredLogoText}>{business.initials}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.featuredType}>{business.type}</Text>
-        <Text numberOfLines={1} style={styles.featuredName}>{business.name}</Text>
-        <View style={styles.featuredMetaRow}>
-          <Text numberOfLines={1} style={styles.featuredMeta}>{business.meta}</Text>
-          <Ionicons name="star" size={11} color={C.gold} />
-          <Text style={styles.featuredRating}>{business.rating}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 function FeedCard({ item }: { item: any }) {
   const itemId = item.id || item._id || item.slug;
