@@ -124,7 +124,7 @@ export function resolveNotificationRoute(
     delivery_done: '/orders',
     payment_success: '/wallet',
     promo: '/',
-    gold_expiry: '/gold',
+    gold_expiry: '/',
     flash_sale: '/flash-sale',
     live_start: '/live',
     'seller-orders': '/owner/orders',

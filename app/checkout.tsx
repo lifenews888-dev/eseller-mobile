@@ -315,9 +315,9 @@ function QPayScreen({ qrUri, countdown }: { qpayData: any; qrUri: string | null;
       <AppCard style={{ flexDirection: 'row', gap: R.sm, alignItems: 'flex-start', borderColor: C.success + '35', marginBottom: R.md }}>
         <Ionicons name="shield-checkmark-outline" size={21} color={C.success} />
         <View style={{ flex: 1 }}>
-          <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>Дундын данс</Text>
+          <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>QPay баталгаажуулалт</Text>
           <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
-            Таны төлбөр 3 хоног хамгаалагдаж, бараа хүргэгдсэний дараа дэлгүүрт шилжинэ.
+            Төлбөр QPay-ээр баталгаажмагц захиалга тань дэлгүүрт очно.
           </Text>
         </View>
       </AppCard>

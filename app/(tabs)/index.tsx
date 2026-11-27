@@ -25,7 +25,6 @@ import { getShopName } from '../../src/shared/shopIdentity'
 
 import { Skeleton } from '../../src/shared/ui/Skeleton'
 import { FlashSaleRow } from '../../src/components/home/FlashSaleRow'
-import { GoldCta } from '../../src/components/home/GoldCta'
 import { AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
 
 const { width } = Dimensions.get('window')
@@ -48,7 +47,6 @@ const QA_ITEMS = [
   { icon: 'bag-outline' as const, label: 'Дэлгүүр', color: C.brand, bg: C.brandDim, route: '/store' },
   { icon: 'megaphone-outline' as const, label: 'Зар', color: C.primary, bg: C.primaryDim, route: '/feed' },
   { icon: 'storefront-outline' as const, label: 'Дэлгүүрүүд', color: C.herder, bg: C.herder + '14', route: '/shops' },
-  { icon: 'star-outline' as const, label: 'Gold', color: C.gold, bg: C.goldDim, route: '/gold' },
   { icon: 'cube-outline' as const, label: 'Захиалга', color: C.store, bg: C.store + '14', route: '/orders' },
   { icon: 'cart-outline' as const, label: 'Сагс', color: C.seller, bg: C.seller + '14', route: '/cart' },
   { icon: 'car-outline' as const, label: 'Хүргэлт', color: C.driver, bg: C.driver + '14', route: '/track/search' },
@@ -56,13 +54,6 @@ const QA_ITEMS = [
 ]
 
 const HOME_SERVICE_ITEMS = [
-  {
-    icon: 'checkmark-done' as const,
-    color: C.brand,
-    name: 'Яагаад бид?',
-    sub: 'eSeller давуу тал',
-    route: '/compare',
-  },
   {
     icon: 'storefront' as const,
     color: C.store,
@@ -102,22 +93,15 @@ const HOME_SERVICE_ITEMS = [
 
 const SEARCH_KEYWORDS = LIVE_SEARCH_KEYWORDS
 
+// Вэбтэй ижил — зөвхөн бодитоор ажилладаг боломжууд (хэрэгжээгүй амлалт харуулахгүй)
 const PLATFORM_FEATURES = [
-  { icon: 'star-outline' as const, label: 'Gold гишүүнчлэл', route: '/gold', color: C.gold, bg: C.goldDim },
-  { icon: 'megaphone-outline' as const, label: 'Борлуулагч комисс', route: '/become-seller', color: C.seller, bg: C.seller + '14' },
-  { icon: 'car-outline' as const, label: 'Өөрийн жолооч', route: '/become-driver', color: C.driver, bg: C.driver + '14' },
-  { icon: 'lock-closed-outline' as const, label: 'Дундын данс', route: '/compare', color: C.herder, bg: C.herder + '14' },
-  { icon: 'cube-outline' as const, label: '50,000₮+ үнэгүй хүргэлт', route: '/help', color: C.brand, bg: C.brandDim },
-  { icon: 'refresh-outline' as const, label: '48 цагийн буцаалт', route: '/returns', color: C.primary, bg: C.primaryDim },
-  { icon: 'qr-code-outline' as const, label: 'QPay аюулгүй төлбөр', route: '/help', color: C.seller, bg: C.seller + '14' },
-  { icon: 'shield-checkmark-outline' as const, label: 'Баталгаат бараа', route: '/compare', color: C.success, bg: C.secondaryDim },
+  { icon: 'qr-code-outline' as const, label: 'QPay төлбөр', route: '/help', color: C.seller, bg: C.seller + '14' },
+  { icon: 'megaphone-outline' as const, label: 'Үнэгүй зар', route: '/feed', color: C.primary, bg: C.primaryDim },
+  { icon: 'chatbubbles-outline' as const, label: 'Зарын эзэнтэй шууд чат', route: '/feed', color: C.brand, bg: C.brandDim },
+  { icon: 'storefront-outline' as const, label: 'Олон дэлгүүр нэг дор', route: '/shops', color: C.herder, bg: C.herder + '14' },
+  { icon: 'people-outline' as const, label: 'Борлуулагчийн комисс', route: '/become-seller', color: C.seller, bg: C.seller + '14' },
 ]
 
-const HOME_STATS = [
-  { value: '10,000+', label: 'бараа' },
-  { value: '500+', label: 'дэлгүүр' },
-  { value: '50,000+', label: 'хэрэглэгч' },
-]
 
 const HOME_FOOTER_GROUPS = [
   {
@@ -126,7 +110,6 @@ const HOME_FOOTER_GROUPS = [
       { label: 'Дэлгүүрүүд', route: '/shops' },
       { label: 'Зарын булан', route: '/feed' },
       { label: 'Бараанууд', route: '/store' },
-      { label: 'Gold', route: '/gold' },
     ],
   },
   {
@@ -567,41 +550,6 @@ function PlatformFeatureStrip() {
   )
 }
 
-function HomeStatsStrip() {
-  return (
-    <View style={{
-      flexDirection: 'row',
-      marginHorizontal: 16,
-      marginBottom: 24,
-      backgroundColor: C.bgCard,
-      borderRadius: R.lg,
-      borderWidth: 1,
-      borderColor: C.border,
-      overflow: 'hidden',
-      ...shadowStyle({ y: 1, blur: 4, opacity: 0.05, elevation: 1 }),
-    }}>
-      {HOME_STATS.map((item, idx) => (
-        <View
-          key={item.label}
-          style={{
-            flex: 1,
-            paddingVertical: 14,
-            alignItems: 'center',
-            borderLeftWidth: idx === 0 ? 0 : 1,
-            borderLeftColor: C.border,
-          }}
-        >
-          <Text style={{ color: C.brand, fontSize: 18, fontWeight: '900' }}>
-            {item.value}
-          </Text>
-          <Text style={{ color: C.textSub, fontSize: 11, fontWeight: '700', marginTop: 3 }}>
-            {item.label}
-          </Text>
-        </View>
-      ))}
-    </View>
-  )
-}
 
 function SellerBusinessCta({ bottom = 24 }: { bottom?: number }) {
   return (
@@ -1136,19 +1084,19 @@ function BuyerHome() {
   const displayBanners = [
     {
       id: '1', type: 'static' as const,
-      title: 'Зуны мега хямдрал эхэллээ',
-      subtitle: '70% хүртэл хөнгөлөлт · 10,000+ бараа',
+      title: 'Монголын дэлгүүрүүд нэг дор',
+      subtitle: 'Бараа хайж, харьцуулж, QPay-ээр төлөөрэй',
       surface: C.brandDim,
       accent: C.brand,
       tag: 'ШИНЭ СЕЗОН',
     },
     {
       id: '2', type: 'static' as const,
-      title: 'Gold гишүүн болж 200,000₮+ хэмнэнэ',
-      subtitle: 'Хямдрал, оноо, давуу эрх',
-      surface: C.goldDim,
-      accent: C.gold,
-      tag: 'GOLD',
+      title: 'Зараа үнэгүй нийтлээрэй',
+      subtitle: 'Машин, байр, ажил, үйлчилгээ — 30 хоног',
+      surface: C.primaryDim,
+      accent: C.primary,
+      tag: 'ЗАР',
     },
     {
       id: '3', type: 'static' as const,
@@ -1331,13 +1279,8 @@ function BuyerHome() {
 
         <FeaturedStoresSection loadingStores={loadingStores} stores={stores} />
 
-        <HomeStatsStrip />
-
         {/* ═══ FLASH SALE ═══ */}
         <FlashSaleRow />
-
-        {/* ═══ GOLD CTA ═══ */}
-        <GoldCta />
 
         <SellerBusinessCta />
 

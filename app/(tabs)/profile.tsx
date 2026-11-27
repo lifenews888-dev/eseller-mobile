@@ -31,7 +31,6 @@ const GUEST_LINKS: MenuItem[] = [
   { icon: 'bag-outline', label: 'Бараанууд', sub: 'Нэгдсэн дэлгүүр', route: '/store', color: C.brand },
   { icon: 'megaphone-outline', label: 'Зарын булан', sub: 'Шинэ зарууд', route: '/feed', color: C.primary },
   { icon: 'storefront-outline', label: 'Дэлгүүрүүд', sub: 'Баталгаат дэлгүүр', route: '/shops', color: C.secondary },
-  { icon: 'star-outline', label: 'Gold', sub: 'Гишүүнчлэл', route: '/gold', color: C.gold },
 ];
 
 export default function ProfileScreen() {
@@ -96,7 +95,7 @@ export default function ProfileScreen() {
         { icon: 'wallet-outline', label: 'eSeller хэтэвч', sub: 'QPay, SocialPay', route: '/wallet', color: C.primary },
         { icon: 'flash-outline', label: 'Хямдралтай бараа', sub: 'Онцгой санал', onPress: () => router.push({ pathname: '/store', params: { sale: 'true' } } as any), color: C.seller },
         { icon: 'gift-outline', label: 'Купон ба промо код', sub: 'Хөнгөлөлт ашиглах', route: '/coupons', color: C.gold },
-        { icon: 'trophy-outline', label: 'Урамшууллын оноо', sub: 'Gold түвшин', route: '/tier-details', color: C.seller },
+        { icon: 'trophy-outline', label: 'Урамшууллын оноо', sub: 'Онооны түвшин', route: '/tier-details', color: C.seller },
       ],
     },
     {

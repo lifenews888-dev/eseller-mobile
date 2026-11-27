@@ -17,8 +17,6 @@ const PLATFORM_SERVICES: ServiceItem[] = [
   { icon: 'storefront-outline', label: 'Дэлгүүрүүд', sub: 'Баталгаатай дэлгүүрүүд', route: '/shops', color: C.secondary },
   { icon: 'megaphone-outline', label: 'Зарын булан', sub: 'Бараа, үйлчилгээ, авто', route: '/feed', color: C.primary },
   { icon: 'bag-outline', label: 'Бараанууд', sub: 'Нэгдсэн цахим зах', route: '/store', color: C.brand },
-  { icon: 'star-outline', label: 'Gold', sub: 'Гишүүнчлэл, хэмнэлт', route: '/gold', color: C.gold },
-  { icon: 'checkmark-done-outline', label: 'Яагаад бид?', sub: 'eSeller-ийн давуу тал', route: '/compare', color: C.brand },
 ];
 
 const SUPPORT_SERVICES: ServiceItem[] = [
