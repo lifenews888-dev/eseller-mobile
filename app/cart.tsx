@@ -5,6 +5,7 @@ import { useCart } from '../src/store/cart';
 import { C, F, R, UI } from '../src/shared/design';
 import { getCartItemQualityIssue, getInvalidCartItems } from '../src/shared/productQuality';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../src/shared/ui/AppUI';
+import { FREE_DELIVERY_THRESHOLD, deliveryFeeFor } from '../src/shared/orderPricing';
 
 export default function CartScreen() {
   const { items, remove, update, total, count } = useCart();
@@ -172,9 +173,14 @@ export default function CartScreen() {
           </View>
         ) : null}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: R.md }}>
-          <Text style={{ ...F.body, color: C.textSub }}>Нийт дүн</Text>
+          <Text style={{ ...F.body, color: C.textSub }}>Барааны дүн</Text>
           <Text style={{ ...F.h2, color: C.brand }}>{formatMoney(total())}</Text>
         </View>
+        <Text style={{ ...F.tiny, color: C.textMuted, marginTop: -R.sm, marginBottom: R.md }}>
+          {deliveryFeeFor(total()) === 0
+            ? 'Хүргэлт үнэгүй'
+            : `Хүргэлт ${formatMoney(deliveryFeeFor(total()))} · ${formatMoney(FREE_DELIVERY_THRESHOLD)}-өөс дээш үнэгүй`}
+        </Text>
         <AppButton
           label={hasCartIssues ? 'Сагсаа шалгана уу' : `Захиалах (${count()} бараа)`}
           icon="arrow-forward"

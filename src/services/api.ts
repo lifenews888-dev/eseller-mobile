@@ -220,7 +220,8 @@ export const SocialAPI = {
   like: (postId: string) =>
     post(`/social/posts/${pathSegment(postId)}/like`),
   unlike: (postId: string) =>
-    del(`/social/posts/${pathSegment(postId)}/like`),
+    // Вэб дээр POST нь like-ийг сэлгэнэ (дахин дарвал болиулна)
+    post(`/social/posts/${pathSegment(postId)}/like`),
   comments: (postId: string) =>
     get(`/social/posts/${pathSegment(postId)}/comment`),
   comment: (postId: string, content: string) =>

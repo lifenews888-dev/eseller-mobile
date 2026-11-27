@@ -14,7 +14,7 @@ const SLIDES = [
   {
     icon:  'storefront' as const,
     title: 'Монголын бараа бүтээгдэхүүн',
-    desc:  '10,000+ бараа, 500+ дэлгүүр нэг дороос',
+    desc:  'Олон дэлгүүрийн бараа нэг дороос',
     color: C.brand,
   },
   {

@@ -16,6 +16,7 @@ import { post } from '../src/services/api';
 import { useCart } from '../src/store/cart';
 import { C, F, R, UI } from '../src/shared/design';
 import { getCartItemQualityIssue, getInvalidCartItems } from '../src/shared/productQuality';
+import { FREE_DELIVERY_THRESHOLD, deliveryFeeFor } from '../src/shared/orderPricing';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../src/shared/ui/AppUI';
 
 const PAYMENT_METHODS = [
@@ -232,6 +233,17 @@ export default function CheckoutScreen() {
             );
           })}
           <View style={{ height: 1, backgroundColor: C.border, marginVertical: R.sm }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, marginBottom: R.xs }}>
+            <Text style={{ ...F.small, color: C.textSub }}>Хүргэлт</Text>
+            <Text style={{ ...F.small, color: C.text, fontWeight: '800' }}>
+              {deliveryFeeFor(total()) === 0 ? 'Үнэгүй' : formatMoney(deliveryFeeFor(total()))}
+            </Text>
+          </View>
+          {deliveryFeeFor(total()) > 0 ? (
+            <Text style={{ ...F.tiny, color: C.textMuted, marginBottom: R.xs }}>
+              {formatMoney(FREE_DELIVERY_THRESHOLD)}-өөс дээш захиалгад хүргэлт үнэгүй
+            </Text>
+          ) : null}
           {coupon ? (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, marginBottom: R.xs }}>
               <Text style={{ ...F.small, color: C.success, fontWeight: '800' }}>Купон ({coupon.code})</Text>
@@ -240,7 +252,7 @@ export default function CheckoutScreen() {
           ) : null}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md }}>
             <Text style={{ ...F.h4, color: C.text }}>Нийт</Text>
-            <Text style={{ ...F.h4, color: C.brand }}>{formatMoney(Math.max(0, total() - (coupon?.discount || 0)))}</Text>
+            <Text style={{ ...F.h4, color: C.brand }}>{formatMoney(Math.max(0, total() + deliveryFeeFor(total()) - (coupon?.discount || 0)))}</Text>
           </View>
         </Section>
 

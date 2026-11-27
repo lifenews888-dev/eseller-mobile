@@ -40,7 +40,7 @@ const STORE_BENEFITS = [
 ];
 
 const STORE_PROMOS = [
-  'Шинэ хэрэглэгчид 10,000₮ купон',
+  'Промо кодоор нэмэлт хөнгөлөлт',
   '50,000₮-өөс дээш үнэгүй хүргэлт',
   'Түвшин ахих тусам 2 хүртэл дахин оноо',
   'Долоо хоног бүр шинэ ирэлт',
@@ -507,7 +507,7 @@ function StoreOwnerProductsScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await del(`/products/${encodeApiPathSegment(id)}`);
+            await del(`/store/products/${encodeApiPathSegment(id)}`);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             refetch();
           } catch (error: any) {
