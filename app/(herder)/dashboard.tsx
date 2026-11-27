@@ -49,7 +49,7 @@ export default function HerderDashboard() {
       <AppTopBar eyebrow="Малчин" title="Самбар" showBack={false} />
       <AppHeader
         title="Малчны самбар"
-        subtitle="Бүтээгдэхүүн, захиалга, escrow орлогоо нэг дор хянана."
+        subtitle="Бүтээгдэхүүн, захиалга, орлогоо нэг дор хянана."
         icon="leaf-outline"
         accent={C.herder}
       />
@@ -91,7 +91,7 @@ export default function HerderDashboard() {
         />
         <AppMetricCard
           icon="lock-closed-outline"
-          label="Escrow-д"
+          label="Дундын дансанд"
           value={formatMoney(summary?.held?.total)}
           accent={C.gold}
         />

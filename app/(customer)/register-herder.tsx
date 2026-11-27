@@ -270,7 +270,7 @@ export default function RegisterHerderScreen() {
       {step === 3 && (<>
         <Text style={st.title}>Байршил</Text>
         <Text style={st.helper}>
-          Пилот үе шатанд зөвхөн сонгосон аймгуудад бүртгэл нээлттэй. Бусад аймагт удахгүй нэмэгдэнэ.
+          Аймаг, сумаа сонгоно уу. Таны аймгийн координатор хүсэлтийг хянана.
         </Text>
         <Text style={st.sectionLabel}>Аймаг *</Text>
         <View style={st.provinceGrid}>
@@ -323,7 +323,7 @@ export default function RegisterHerderScreen() {
 
       {step === 5 && (<>
         <Text style={st.title}>Банкны мэдээлэл</Text>
-        <Text style={st.helper}>Орлого энд шилжинэ — Escrow, хүргэлт баталгаажсанаас 48ц-д</Text>
+        <Text style={st.helper}>Орлого энэ дансанд шилжинэ — хүргэлт баталгаажмагц дундын данснаас</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: R.md }}>
           {BANKS.map((b) => (
             <TouchableOpacity
