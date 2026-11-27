@@ -108,13 +108,6 @@ export default function CouponsScreen() {
               onPress={() => router.push('/store' as any)}
               style={styles.emptyButton}
             />
-            <AppButton
-              label="Gold үзэх"
-              icon="star-outline"
-              variant="secondary"
-              onPress={() => router.push('/gold' as any)}
-              style={styles.emptyButton}
-            />
           </View>
         </AppCard>
       ) : (

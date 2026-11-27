@@ -116,19 +116,6 @@ export default function FlashSaleScreen() {
         </View>
       </AppCard>
 
-      <TouchableOpacity activeOpacity={0.86} onPress={() => router.push('/gold' as any)}>
-        <AppCard style={st.goldBanner}>
-          <View style={st.goldIcon}>
-            <Ionicons name="star-outline" size={20} color={C.gold} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={st.goldTitle}>Gold гишүүний давуу эрх</Text>
-            <Text style={st.goldText}>Flash sale эхлэхээс 1 цагийн өмнө нэвтэрнэ.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={C.gold} />
-        </AppCard>
-      </TouchableOpacity>
-
       {isLoading ? (
         <AppCard style={st.loadingCard}>
           <ActivityIndicator color={C.primary} />

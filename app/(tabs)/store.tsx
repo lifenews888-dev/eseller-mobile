@@ -46,7 +46,7 @@ const STORE_PROMOS = [
   'Долоо хоног бүр шинэ ирэлт',
 ];
 
-const STORE_TRUST = ['Баталгаат', 'Хурдан хүргэлт', '48 цагийн буцаалт', 'Аюулгүй төлбөр'];
+const STORE_TRUST = ['QPay төлбөр', 'Олон дэлгүүр', 'Үнэгүй зар'];
 const STORE_MARKET_ACCENT = C.brand;
 const STORE_MARKET_ACCENT_DIM = C.brandDim;
 

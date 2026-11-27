@@ -42,10 +42,8 @@ const SCOPES: Array<{ key: SearchScope; label: string; icon: keyof typeof Ionico
 ];
 
 const TRUST_CHIPS = [
-  { icon: 'star-outline' as const, label: 'Gold гишүүнчлэл', route: '/gold', color: C.gold },
   { icon: 'car-outline' as const, label: '50,000₮+ үнэгүй хүргэлт', route: '/help', color: C.success },
   { icon: 'card-outline' as const, label: 'QPay аюулгүй төлбөр', route: '/help', color: C.primary },
-  { icon: 'shield-checkmark-outline' as const, label: 'Баталгаат бараа', route: '/compare', color: C.secondary },
 ];
 
 function isSearchScope(value: unknown): value is SearchScope {
