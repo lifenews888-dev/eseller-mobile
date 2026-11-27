@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Alert,
   Dimensions,
@@ -15,7 +15,9 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { get } from '../../src/services/api'
-import { useCart } from '../../src/store/cart'
+import { useAuth } from '../../src/store/auth'
+import { ListingAPI, REPORT_REASONS } from '../../src/services/listings'
+import { LoanCalculator, loanKindFor } from '../../src/components/listing/LoanCalculator'
 import { C, R, F, UI } from '../../src/shared/design'
 import {
   getProductName,
@@ -32,9 +34,13 @@ const fmt = (n: number) => `${Math.round(n || 0).toLocaleString()}₮`
 
 export default function FeedDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { add } = useCart()
   const layout = useAppLayoutMetrics()
+  const token = useAuth((s) => s.token)
   const [saved, setSaved] = useState(false)
+  const [phoneShown, setPhoneShown] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reported, setReported] = useState(false)
   const [imageIndex, setImageIndex] = useState(0)
   const feedRouteParam = normalizeRouteParam(id)
   const feedRouteId = encodeRouteParam(feedRouteParam)
@@ -49,6 +55,26 @@ export default function FeedDetailScreen() {
   const item = normalizeFeedDetail(data)
   const itemId = item?.id ?? item?._id
   const itemRouteId = encodeRouteParam(itemId)
+
+  // Хадгалсан эсэх (нэвтэрсэн үед)
+  const { data: favs } = useQuery({
+    queryKey: ['listing-favorites'],
+    queryFn: () => ListingAPI.favorites(),
+    enabled: !!token,
+    retry: false,
+  })
+  const favSaved = !!itemId && Array.isArray(favs) && favs.some((f) => f.id === String(itemId))
+  useEffect(() => { setSaved(favSaved) }, [favSaved])
+
+  // Зарын эзэн бол VIP болгох боломж (бусдад 404 буцаана)
+  const { data: promoteInfo } = useQuery({
+    queryKey: ['feed-promote', itemId],
+    queryFn: () => ListingAPI.promoteInfo(String(itemId)),
+    enabled: !!token && !!itemId,
+    retry: false,
+  })
+  const isOwner = !!promoteInfo
+  const isVip = promoteInfo?.item?.tier === 'vip' && !!promoteInfo.item.tierExpiresAt && new Date(promoteInfo.item.tierExpiresAt) > new Date()
 
   if (isLoading) {
     return (
@@ -130,29 +156,42 @@ export default function FeedDetailScreen() {
       ? sellerDisplayName
       : item.sellerName || item.shopName || 'Зарлагч'
   const sellerPhone = seller.phone || item.phone || item.contactPhone
-  const productId = item.productId || item.product?.id || itemId
   const district = item.district || item.location || item.address
   const views = item.views ?? item.viewCount ?? 0
   const createdAt = item.createdAt || item.updatedAt
+  const loanKind = loanKindFor({ price, category: item.category, subcategory: item.subcategory, entityType: item.entityType, title, metadata: item.metadata })
 
-  function handleOrder() {
-    if (qualityIssue) {
-      Alert.alert('Бараа шалгалтад байна', qualityIssue.message)
+  function handleChat() {
+    router.push({ pathname: '/messages/new' as never, params: { feedItemId: String(itemId), title } } as never)
+  }
+
+  async function handleSave() {
+    if (!token) {
+      router.push({ pathname: '/login', params: { returnTo: `/feed/${itemRouteId}` } } as never)
       return
     }
+    const prev = saved
+    setSaved(!prev)
+    try {
+      const r = await ListingAPI.toggleFavorite(String(itemId))
+      setSaved(Boolean(r?.saved))
+    } catch {
+      setSaved(prev)
+    }
+  }
 
-    add(
-      {
-        id: String(productId),
-        name: title,
-        price,
-        image: images[0] || null,
-        entityId: seller.id || item.sellerId || item.shopId || '',
-        entityName: sellerName,
-      },
-      1,
-    )
-    router.push('/checkout' as any)
+  async function handleReport() {
+    if (!token) {
+      router.push({ pathname: '/login', params: { returnTo: `/feed/${itemRouteId}` } } as never)
+      return
+    }
+    if (!reportReason) return
+    try {
+      await ListingAPI.report(String(itemId), reportReason)
+      setReported(true)
+    } catch (e) {
+      Alert.alert('Алдаа', e instanceof Error ? e.message : 'Гомдол илгээж чадсангүй')
+    }
   }
 
   function handleShare() {
@@ -254,19 +293,32 @@ export default function FeedDetailScreen() {
           </Text>
         </AppCard>
 
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Борлуулж эхлэх"
-          activeOpacity={0.84}
-          disabled={!!qualityIssue}
-          style={[st.affiliateBtn, qualityIssue && st.disabledAction]}
-          onPress={handleAffiliate}
-        >
-          <Ionicons name="megaphone-outline" size={18} color={C.brand} />
-          <Text style={{ color: C.brand, fontSize: 14, fontWeight: '900' }}>
-            Борлуулж эхлэх (8%)
-          </Text>
-        </TouchableOpacity>
+        {loanKind ? <LoanCalculator price={price} kind={loanKind} /> : null}
+
+        {isOwner && !isVip ? (
+          <AppButton
+            label={`VIP болгох · ${Math.round(promoteInfo?.price || 0).toLocaleString('en-US')}₮ / ${promoteInfo?.days} хоног`}
+            icon="trophy-outline"
+            variant="secondary"
+            onPress={() => router.push(`/feed/promote/${itemRouteId}` as never)}
+          />
+        ) : null}
+
+        {item.allowAffiliate ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Борлуулж эхлэх"
+            activeOpacity={0.84}
+            disabled={!!qualityIssue}
+            style={[st.affiliateBtn, qualityIssue && st.disabledAction]}
+            onPress={handleAffiliate}
+          >
+            <Ionicons name="megaphone-outline" size={18} color={C.brand} />
+            <Text style={{ color: C.brand, fontSize: 14, fontWeight: '900' }}>
+              Борлуулж эхлэх{item.affiliateCommission ? ` (${item.affiliateCommission}%)` : ''}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
         {(sellerName || sellerPhone) ? (
           <AppCard style={st.sellerCard}>
@@ -277,7 +329,9 @@ export default function FeedDetailScreen() {
               <Text style={st.sellerLabel}>Зарлагч</Text>
               <Text style={st.sellerName}>{sellerName}</Text>
               {sellerPhone ? (
-                <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>{sellerPhone}</Text>
+                <Text style={{ ...F.tiny, color: C.textMuted, marginTop: 2 }}>
+                  {phoneShown ? sellerPhone : 'Дугаар харахын тулд товчийг дарна уу'}
+                </Text>
               ) : null}
             </View>
             {sellerPhone ? (
@@ -286,12 +340,41 @@ export default function FeedDetailScreen() {
                 accessibilityLabel={`${sellerPhone} руу залгах`}
                 activeOpacity={0.84}
                 style={st.callBtn}
-                onPress={() => Linking.openURL(`tel:${sellerPhone}`).catch((e) => Alert.alert('Алдаа', e.message))}
+                onPress={() => phoneShown
+                  ? Linking.openURL(`tel:${sellerPhone}`).catch((e) => Alert.alert('Алдаа', e.message))
+                  : setPhoneShown(true)}
               >
-                <Ionicons name="call" size={18} color={C.bgCard} />
+                <Ionicons name={phoneShown ? 'call' : 'eye-outline'} size={18} color={C.bgCard} />
               </TouchableOpacity>
             ) : null}
           </AppCard>
+        ) : null}
+
+        {/* Гомдол гаргах */}
+        {!isOwner ? (
+          reported ? (
+            <Text style={{ ...F.small, color: C.secondary, textAlign: 'center' }}>Гомдол хүлээн авлаа. Баярлалаа.</Text>
+          ) : reportOpen ? (
+            <AppCard style={{ padding: R.md, gap: R.sm }}>
+              <Text style={{ ...F.small, color: C.text, fontWeight: '800' }}>Гомдлын шалтгаан</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {Object.entries(REPORT_REASONS).map(([k, label]) => (
+                  <TouchableOpacity
+                    key={k}
+                    onPress={() => setReportReason(k)}
+                    style={{ borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderColor: reportReason === k ? C.brand : C.border2, backgroundColor: reportReason === k ? C.brandDim : 'transparent' }}
+                  >
+                    <Text style={{ fontSize: 12, color: reportReason === k ? C.brand : C.textSub, fontWeight: '700' }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <AppButton label="Илгээх" icon="flag-outline" onPress={handleReport} disabled={!reportReason} />
+            </AppCard>
+          ) : (
+            <TouchableOpacity accessibilityRole="button" onPress={() => setReportOpen(true)} style={{ alignSelf: 'center', paddingVertical: R.sm }}>
+              <Text style={{ ...F.tiny, color: C.textMuted }}>⚑ Зарын талаар гомдол гаргах</Text>
+            </TouchableOpacity>
+          )
         ) : null}
       </View>
       </ScrollView>
@@ -312,17 +395,15 @@ export default function FeedDetailScreen() {
           accessibilityState={{ selected: saved }}
           activeOpacity={0.84}
           style={[st.iconAction, { backgroundColor: saved ? C.brandDim : C.bgCard }]}
-          onPress={() => setSaved(!saved)}
+          onPress={handleSave}
         >
           <Ionicons name={saved ? 'heart' : 'heart-outline'} size={20} color={saved ? C.brand : C.text} />
         </TouchableOpacity>
-        <AppButton
-          label={qualityIssue ? 'Шалгалтад байна' : 'Захиалах'}
-          icon="bag-check"
-          onPress={handleOrder}
-          disabled={!!qualityIssue}
-          style={{ flex: 1, minHeight: 50 }}
-        />
+        {isOwner ? (
+          <AppButton label="Зарын чатууд" icon="chatbubbles-outline" variant="secondary" onPress={() => router.push('/messages' as never)} style={{ flex: 1, minHeight: 50 }} />
+        ) : (
+          <AppButton label="Зарын эзэнтэй чатлах" icon="chatbubbles-outline" onPress={handleChat} style={{ flex: 1, minHeight: 50 }} />
+        )}
       </View>
     </View>
   )
