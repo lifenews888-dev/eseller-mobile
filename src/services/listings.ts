@@ -3,7 +3,7 @@
  * (нэвтэрсэн болон зочин), VIP болгох (QPay). Interceptor `{ success, data }`-г задална.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { get, post } from './api';
+import { del, get, post } from './api';
 import { encodeApiPathSegment } from '../shared/apiPath';
 
 const pathSegment = encodeApiPathSegment;
@@ -102,3 +102,14 @@ export function monthlyPayment(principal: number, monthlyRatePct: number, months
   if (r === 0) return Math.round(principal / months);
   return Math.round((principal * r) / (1 - Math.pow(1 + r, -months)));
 }
+
+// Хадгалсан хайлт — шинэ тохирох зарын тоо сервер дээр тоологдоно (вэбтэй ижил)
+export type SavedSearch = { id: string; name: string; query: string; summary: string; href: string; newCount: number };
+
+export const SavedSearchAPI = {
+  list: () => get('/saved-searches') as unknown as Promise<{ total: number; items: SavedSearch[] }>,
+  create: (query: string) => post('/saved-searches', { query }) as unknown as Promise<{ id: string; duplicate: boolean }>,
+  remove: (id: string) => del(`/saved-searches/${pathSegment(id)}`),
+  seen: (id: string) => post(`/saved-searches/${pathSegment(id)}/seen`),
+  count: () => get('/saved-searches/count') as unknown as Promise<{ count: number }>,
+};
