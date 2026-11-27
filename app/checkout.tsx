@@ -40,6 +40,9 @@ export default function CheckoutScreen() {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [method, setMethod] = useState('qpay');
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qpayData, setQpayData] = useState<any>(null);
   const [countdown, setCountdown] = useState(300);
@@ -68,6 +71,25 @@ export default function CheckoutScreen() {
       }
     };
   }, [qpayData]);
+
+  const applyCoupon = async () => {
+    const value = couponInput.trim();
+    if (value.length < 3) {
+      Alert.alert('Код оруулна уу', 'Промо код дор хаяж 3 тэмдэгттэй байна.');
+      return;
+    }
+    setCouponChecking(true);
+    try {
+      const res: any = await post('/coupons/validate', { code: value, cartAmount: total() });
+      if (!res?.valid) throw new Error(res?.error || 'Купон хүчингүй байна');
+      setCoupon({ code: res.coupon?.code || value, discount: Math.round(Number(res.discount) || 0) });
+    } catch (error: any) {
+      setCoupon(null);
+      Alert.alert('Купон', error?.message || 'Купон шалгаж чадсангүй.');
+    } finally {
+      setCouponChecking(false);
+    }
+  };
 
   const createOrder = async () => {
     if (!items.length) {
@@ -99,6 +121,7 @@ export default function CheckoutScreen() {
         phone,
         totalAmount: total(),
         paymentMethod: method,
+        ...(coupon ? { couponCode: coupon.code } : {}),
       });
 
       if (res?.isDemoMode) {
@@ -209,9 +232,39 @@ export default function CheckoutScreen() {
             );
           })}
           <View style={{ height: 1, backgroundColor: C.border, marginVertical: R.sm }} />
+          {coupon ? (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md, marginBottom: R.xs }}>
+              <Text style={{ ...F.small, color: C.success, fontWeight: '800' }}>Купон ({coupon.code})</Text>
+              <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>−{formatMoney(coupon.discount)}</Text>
+            </View>
+          ) : null}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: R.md }}>
             <Text style={{ ...F.h4, color: C.text }}>Нийт</Text>
-            <Text style={{ ...F.h4, color: C.brand }}>{formatMoney(total())}</Text>
+            <Text style={{ ...F.h4, color: C.brand }}>{formatMoney(Math.max(0, total() - (coupon?.discount || 0)))}</Text>
+          </View>
+        </Section>
+
+        <Section title="Промо код">
+          <View style={{ flexDirection: 'row', gap: R.sm, alignItems: 'center' }}>
+            <TextInput
+              placeholder="Жишээ: WELCOME10"
+              placeholderTextColor={C.textMuted}
+              value={couponInput}
+              onChangeText={(value) => {
+                setCouponInput(value.toLocaleUpperCase('en-US'));
+                if (coupon) setCoupon(null);
+              }}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel="Промо код"
+              style={[inputStyle, { flex: 1 }]}
+            />
+            <AppButton
+              label={couponChecking ? '...' : coupon ? 'Хэрэглэсэн' : 'Хэрэглэх'}
+              icon={coupon ? 'checkmark' : 'ticket-outline'}
+              disabled={couponChecking}
+              onPress={applyCoupon}
+            />
           </View>
         </Section>
 

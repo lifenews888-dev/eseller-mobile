@@ -37,6 +37,12 @@ type FlashSale = {
   items?: FlashProduct[];
 };
 
+function isDiscounted(product: FlashProduct) {
+  const price = Number(product.price) || 0;
+  const salePrice = Number(product.salePrice) || 0;
+  return salePrice > 0 && price > salePrice;
+}
+
 function unwrap<T = unknown>(res: any): T {
   return (res?.data ?? res) as T;
 }
@@ -70,16 +76,18 @@ function useCountdown(endsAt: string) {
 const fmt = (n: number) => `${(n ?? 0).toLocaleString('mn-MN')}₮`;
 
 export default function FlashSaleScreen() {
-  const fallbackEndsAt = new Date(Date.now() + 4 * 3600_000).toISOString();
+  // Вэбд тусдаа flash-sale API байхгүй — бодит хямдралтай (salePrice < price) бараануудыг харуулна.
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['flash-sale'],
-    queryFn: () => get('/flash-sales/active'),
+    queryFn: () => get('/products', { limit: 100 }),
   });
 
-  const sale = unwrap<FlashSale>(data) || {};
+  const raw = unwrap<FlashSale | FlashProduct[]>(data);
+  const sale: FlashSale = Array.isArray(raw) ? { products: raw } : raw || {};
   const title = sale.title || 'Хямдралтай бараа';
-  const products = filterPublicProducts(sale.products ?? sale.items ?? []);
-  const { h, m, s, ended } = useCountdown(sale.endsAt || fallbackEndsAt);
+  const products = filterPublicProducts(sale.products ?? sale.items ?? []).filter(isDiscounted);
+  const hasDeadline = !!sale.endsAt;
+  const { h, m, s, ended } = useCountdown(sale.endsAt || new Date().toISOString());
 
   return (
     <AppScreen
@@ -89,11 +97,12 @@ export default function FlashSaleScreen() {
       <AppTopBar eyebrow="Дэлгүүр" title="Flash sale" showBack={false} />
       <AppHeader
         title="Flash sale"
-        subtitle="Хугацаатай хямдрал, Gold гишүүний эрт нэвтрэх боломж."
+        subtitle="Дэлгүүрүүдийн одоо хямдарсан бараанууд."
         icon="flash-outline"
         accent={C.seller}
       />
 
+      {hasDeadline ? (
       <AppCard elevated style={st.countdownCard}>
         <View style={st.countdownHead}>
           <View style={st.flashIcon}>
@@ -115,6 +124,7 @@ export default function FlashSaleScreen() {
           ))}
         </View>
       </AppCard>
+      ) : null}
 
       {isLoading ? (
         <AppCard style={st.loadingCard}>

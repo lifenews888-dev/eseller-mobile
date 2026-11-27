@@ -202,6 +202,9 @@ export const post = (url: string, data?: any) =>
 export const put = (url: string, data?: any) =>
   api.put(url, data);
 
+export const patch = (url: string, data?: any) =>
+  api.patch(url, data);
+
 export const del = (url: string) =>
   api.delete(url);
 
@@ -222,8 +225,6 @@ export const SocialAPI = {
     get(`/social/posts/${pathSegment(postId)}/comment`),
   comment: (postId: string, content: string) =>
     post(`/social/posts/${pathSegment(postId)}/comment`, { content }),
-  create: (data: { content?: string; images?: string[]; productIds?: string[] }) =>
-    post('/social/posts', data),
 };
 
 // Herder / Малчнаас шууд endpoints live in src/features/herder/api.ts — keeps
@@ -278,7 +279,7 @@ export const WalletAPI = {
     amount: number;
     bankName: string;
     bankAccount: string;
-  }) => post('/wallet/withdraw', data),
+  }) => post('/wallet/payout', data),
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -286,7 +287,7 @@ export const WalletAPI = {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export const LoyaltyAPI = {
-  get: () => get('/loyalty'),
+  get: (userId: string) => get(`/loyalty/${pathSegment(userId)}`),
   redeemForCash: (points: number) => post('/loyalty/redeem-cash', { points }),
 };
 
@@ -418,13 +419,13 @@ export const OrderAPI = {
 
   // Buyer
   myOrders: () => get('/orders'),
-  detail: (id: string) => get(`/orders/${pathSegment(id)}`),
+  detail: (id: string) => get(`/buyer/orders/${pathSegment(id)}`),
 
   // Seller
   sellerOrders: (status?: string) =>
     get('/orders', status ? { status } : undefined),
   updateStatus: (id: string, status: string) =>
-    put(`/orders/${pathSegment(id)}/status`, { status }),
+    patch(`/orders/${pathSegment(id)}/status`, { status }),
 
   // Driver
   availableOrders: () => get('/driver/orders', { type: 'available' }),

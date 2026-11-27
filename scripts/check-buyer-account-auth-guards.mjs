@@ -10,7 +10,7 @@ const guardedScreens = [
   { file: 'app/(tabs)/chat.tsx', returnTo: '/chat', requiresEnabled: true },
   { file: 'app/(customer)/wishlist.tsx', returnTo: '/wishlist', requiresEnabled: true },
   { file: 'app/(customer)/addresses.tsx', returnTo: '/addresses', requiresEnabled: true },
-  { file: 'app/(customer)/coupons.tsx', returnTo: '/coupons', requiresEnabled: true },
+  { file: 'app/(customer)/coupons.tsx', returnTo: '/coupons', requiresEnabled: false },
   { file: 'app/(customer)/returns.tsx', returnTo: '/returns', requiresEnabled: true },
   { file: 'app/(customer)/wallet.tsx', returnTo: '/wallet', requiresEnabled: true },
   { file: 'app/(customer)/tier-details.tsx', returnTo: '/tier-details', requiresEnabled: true },
@@ -23,8 +23,7 @@ const guardedScreens = [
 
 const protectedAccountPaths = [
   '/wishlist',
-  '/buyer/addresses',
-  '/buyer/coupons',
+  '/user/addresses',
   '/orders',
   '/chat/conversations',
   '/achievements',

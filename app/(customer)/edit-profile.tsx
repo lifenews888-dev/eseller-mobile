@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Stack } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { put } from '../../src/services/api';
+import { uploadImage } from '../../src/lib/uploadImage';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
@@ -17,8 +18,18 @@ export default function EditProfileScreen() {
   const [avatar, setAvatar] = useState(user?.avatar || '');
 
   const saveMut = useMutation({
-    mutationFn: (data: any) => put('/user/profile', data),
-    onSuccess: () => Alert.alert('Амжилттай', 'Профайл хадгалагдлаа.'),
+    mutationFn: async (data: { name: string; phone: string }) => {
+      let avatarUrl = avatar || undefined;
+      if (avatarUrl && !/^https?:\/\//i.test(avatarUrl)) avatarUrl = await uploadImage(avatarUrl);
+      await put('/user/settings', { ...data, ...(avatarUrl ? { avatar: avatarUrl } : {}) });
+      return { ...data, avatar: avatarUrl };
+    },
+    onSuccess: (saved) => {
+      const current = useAuth.getState().user;
+      if (current) useAuth.setState({ user: { ...current, ...saved } });
+      if (saved.avatar) setAvatar(saved.avatar);
+      Alert.alert('Амжилттай', 'Профайл хадгалагдлаа.');
+    },
     onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Профайл хадгалж чадсангүй.'),
   });
 

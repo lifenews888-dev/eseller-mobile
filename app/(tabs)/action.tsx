@@ -28,7 +28,6 @@ const ACTIONS: Record<string, ActionItem[]> = {
   SELLER: [
     { icon: 'link-outline', label: 'Линк үүсгэх', route: '/seller/catalog', desc: 'Урилгын код' },
     { icon: 'stats-chart-outline', label: 'Орлого харах', route: '/seller/earnings', desc: 'Комисс' },
-    { icon: 'trophy-outline', label: 'Топ жагсаалт', route: '/seller/leaderboard', desc: 'Топ борлуулагчид' },
   ],
   DRIVER: [
     { icon: 'checkmark-circle-outline', label: 'Хүргэлт авах', route: '/driver/deliveries', desc: 'Шинэ захиалга' },

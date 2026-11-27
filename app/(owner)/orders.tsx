@@ -13,7 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { get, put } from '../../src/services/api';
+import { get, patch } from '../../src/services/api';
 import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
 import { normalizeRouteParam } from '../../src/shared/routeParams';
@@ -81,7 +81,7 @@ export default function OwnerOrdersScreen() {
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      put(`/orders/${encodeApiPathSegment(id)}/status`, { status }),
+      patch(`/orders/${encodeApiPathSegment(id)}/status`, { status }),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       qc.invalidateQueries({ queryKey: ['seller-orders'] });

@@ -94,9 +94,9 @@ export default function TierDetailsScreen() {
   const [customPoints, setCustomPoints] = useState('');
 
   const loyaltyQ = useQuery({
-    queryKey: ['loyalty'],
-    queryFn: async () => unwrap<LoyaltyData>(await LoyaltyAPI.get()),
-    enabled: !!user,
+    queryKey: ['loyalty', user?.id || user?._id],
+    queryFn: async () => unwrap<LoyaltyData>(await LoyaltyAPI.get(String(user?.id || user?._id))),
+    enabled: !!user && !!(user.id || user._id),
   });
 
   const redeemMut = useMutation({

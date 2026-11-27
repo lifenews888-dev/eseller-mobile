@@ -29,14 +29,6 @@ const requiredSnippets = [
     ],
   },
   {
-    file: 'app/(customer)/addresses.tsx',
-    snippets: [
-      '../../src/shared/apiPath',
-      'encodeApiPathSegment(editId)',
-      'encodeApiPathSegment(id)',
-    ],
-  },
-  {
     file: 'app/(driver)/deliveries.tsx',
     snippets: [
       '../../src/shared/apiPath',

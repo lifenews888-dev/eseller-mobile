@@ -19,6 +19,8 @@ import { post } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { LIVE_FEED_POST_CATEGORIES } from '../../src/shared/liveCategories';
+import { uploadMultipleImages } from '../../src/lib/uploadImage';
+import { encodeRouteParam } from '../../src/shared/routeParams';
 import { AppButton, AppCard, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
@@ -61,22 +63,29 @@ export default function CreateFeedScreen() {
     }
 
     setLoading(true);
+    let createdId: string | null = null;
     try {
-      const formData = new FormData();
-      formData.append('title', title.trim());
-      formData.append('description', desc.trim());
-      formData.append('category', category);
-      if (price.trim()) formData.append('price', price.trim());
-      if (phone.trim()) formData.append('phone', phone.trim());
-      if (district) formData.append('district', district);
-
-      images.forEach((uri, index) => {
-        formData.append('images', { uri, name: `photo_${index}.jpg`, type: 'image/jpeg' } as any);
-      });
-
-      await post('/feed', formData);
+      // Вэбтэй ижил: зургуудыг эхлээд хуулж, дараа нь JSON-оор зар үүсгэнэ
+      // (өмнө нь multipart илгээдэг байсан тул сервер хүлээж авдаггүй байсан)
+      const imageUrls = images.length ? await uploadMultipleImages(images) : [];
+      const numericPrice = Number(price.replace(/[^\d]/g, ''));
+      const created = (await post('/feed', {
+        title: title.trim(),
+        description: desc.trim(),
+        price: numericPrice > 0 ? numericPrice : undefined,
+        images: imageUrls,
+        category,
+        entityType: 'store',
+        district: district || undefined,
+        metadata: phone.trim() ? { ownerPhone: phone.trim() } : undefined,
+        tier: 'normal',
+      })) as unknown as { id?: string; _id?: string };
+      createdId = created?.id || created?._id || null;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert('Амжилттай', 'Зар нийтлэгдлээ.', [{ text: 'OK', onPress: () => router.back() }]);
+      const routeId = createdId ? encodeRouteParam(createdId) : '';
+      Alert.alert('Амжилттай', 'Зар нийтлэгдлээ. 30 хоног идэвхтэй байна.', [
+        { text: 'Зараа харах', onPress: () => (routeId ? router.replace(`/feed/${routeId}` as never) : router.back()) },
+      ]);
     } catch (error: any) {
       Alert.alert('Алдаа', error?.message || 'Зар нийтлэхэд алдаа гарлаа.');
     } finally {
