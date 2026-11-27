@@ -486,7 +486,7 @@ function StoreOwnerProductsScreen() {
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['my-products', tab],
-    queryFn: () => get('/products/my', { status: tab }),
+    queryFn: () => get('/seller/products', { status: tab }),
     enabled: !!user,
   });
 

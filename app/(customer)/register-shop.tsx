@@ -12,7 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { post } from '../../src/services/api';
+import { post, put } from '../../src/services/api';
+import * as SecureStore from '../../src/shared/secureStore';
 import { uploadImageToCloudinary } from '../../src/lib/uploadImage';
 import { C, F, R, UI } from '../../src/shared/design';
 import { useMalchnaasEnabled } from '../../src/config/remoteFlags';
@@ -31,6 +32,18 @@ const TYPES_BASE = [
   { key: 'SERVICE', icon: 'briefcase-outline' as const, label: 'Үйлчилгээ' },
   { key: 'DIGITAL', icon: 'cloud-outline' as const, label: 'Дижитал' },
 ];
+
+// Мобайлын төрлийн түлхүүрийг вэбийн /entities/register-ийн entityType руу хөрвүүлнэ
+const ENTITY_TYPE_BY_SHOP_TYPE: Record<string, string> = {
+  GENERAL: 'store',
+  PREORDER: 'pre_order',
+  REAL_ESTATE: 'real_estate',
+  CONSTRUCTION: 'construction',
+  AUTO: 'auto_dealer',
+  SERVICE: 'service',
+  DIGITAL: 'digital',
+};
+const STORE_ENTITY_TYPES = ['store', 'pre_order', 'digital'];
 
 const HERDER_TYPE = { key: 'HERDER', icon: 'leaf-outline' as const, label: 'Малчин' };
 
@@ -142,16 +155,26 @@ export default function RegisterShopScreen() {
 
     setSubmitting(true);
     try {
-      await post('/shops', {
-        type: shopType,
+      const entityType = ENTITY_TYPE_BY_SHOP_TYPE[shopType] || 'store';
+      const res: any = await post('/entities/register', {
+        entityType,
         name: name.trim(),
         slug: slug || name.trim().toLowerCase().replace(/\s+/g, '-'),
         phone: phone.trim(),
-        about: about.trim(),
-        bankName,
-        bankAccount: bankAccount.trim(),
+        description: about.trim(),
         logo: logo || undefined,
       });
+      // Сервер шинэ эрхтэй (seller) токен буцаадаг — сессийг шинэчилнэ
+      if (res?.token) {
+        await SecureStore.setItemAsync('token', res.token);
+        await useAuth.getState().restoreSession(res.token).catch(() => {});
+      }
+      if (STORE_ENTITY_TYPES.includes(entityType) && bankName && bankAccount.trim()) {
+        await put('/store/settings', {
+          name: name.trim(),
+          bankInfo: { bank: bankName, accountNumber: bankAccount.trim() },
+        }).catch(() => {});
+      }
       Alert.alert('Амжилттай', 'Дэлгүүр үүслээ.', [
         { text: 'OK', onPress: () => router.replace('/profile' as never) },
       ]);

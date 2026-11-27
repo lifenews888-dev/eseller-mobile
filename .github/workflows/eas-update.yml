@@ -1,0 +1,55 @@
+name: EAS Update (OTA)
+
+# Суулгасан preview/production апп руу JS шинэчлэлтийг шууд илгээнэ (APK дахин суулгах шаардлагагүй).
+# Гараар эхлүүлнэ (Actions → "EAS Update (OTA)" → Run workflow).
+# Шаардлага: репогийн Secrets-д EXPO_TOKEN.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "preview эсвэл production"
+        default: preview
+        required: true
+      message:
+        description: "Шинэчлэлтийн тайлбар"
+        default: "eseller.mn шинэчлэлт"
+        required: true
+
+jobs:
+  update:
+    name: EAS update
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_NO_TELEMETRY: "1"
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
+      EXPO_PUBLIC_API_BASE_URL: https://eseller.mn/api
+    steps:
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret тохируулаагүй байна."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - name: Publish update
+        env:
+          CHANNEL: ${{ github.event.inputs.channel }}
+          MESSAGE: ${{ github.event.inputs.message }}
+        run: eas update --channel "$CHANNEL" --message "$MESSAGE" --non-interactive

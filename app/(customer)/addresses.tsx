@@ -3,9 +3,8 @@ import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text,
 import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { del, get, post, put } from '../../src/services/api';
+import { get, post } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
-import { encodeApiPathSegment } from '../../src/shared/apiPath';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
@@ -21,16 +20,36 @@ const DISTRICTS = [
   'Багануур',
 ];
 
+type LocalAddress = { id: string; name: string; phone: string; district: string; detail: string; isDefault: boolean };
+
+function fromServer(a: any): LocalAddress {
+  const text = String(a?.address || '');
+  const district = DISTRICTS.find((d) => text.startsWith(`${d}, `) || text === d) || '';
+  return {
+    id: String(a?.id || a?._id || ''),
+    name: String(a?.label || ''),
+    phone: String(a?.phone || ''),
+    district,
+    detail: district ? text.slice(district.length).replace(/^,\s*/, '') : text,
+    isDefault: !!a?.isDefault,
+  };
+}
+
+function toServer(a: LocalAddress) {
+  return { id: a.id, label: a.name, phone: a.phone, isDefault: a.isDefault, address: [a.district, a.detail].filter(Boolean).join(', ') };
+}
+
 export default function AddressesScreen() {
   const qc = useQueryClient();
   const layout = useAppLayoutMetrics();
   const { user } = useAuth();
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['addresses'],
-    queryFn: () => get('/buyer/addresses'),
+    queryFn: () => get('/user/addresses'),
     enabled: !!user,
   });
-  const addresses = (data as any)?.addresses || [];
+  // Вэбийн /api/user/addresses ({ id, label, address, phone, isDefault }) → энэ дэлгэцийн талбарууд
+  const addresses = (Array.isArray(data) ? data : []).map(fromServer);
 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -50,8 +69,16 @@ export default function AddressesScreen() {
     setShowForm(false);
   };
 
+  // Сервер жагсаалтыг бүтнээр нь хадгална — нэмэх/засах/устгахыг энд нэгтгэнэ
+  const saveList = (list: LocalAddress[]) => post('/user/addresses', { addresses: list.map(toServer) });
+
   const saveMut = useMutation({
-    mutationFn: (body: any) => editId ? put(`/buyer/addresses/${encodeApiPathSegment(editId)}`, body) : post('/buyer/addresses', body),
+    mutationFn: (body: Omit<LocalAddress, 'id'>) => {
+      const id = editId || `a${Date.now().toString(36)}`;
+      let list = editId ? addresses.map((a: LocalAddress) => (a.id === editId ? { ...body, id } : a)) : [...addresses, { ...body, id }];
+      if (body.isDefault) list = list.map((a: LocalAddress) => ({ ...a, isDefault: a.id === id }));
+      return saveList(list);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['addresses'] });
       reset();
@@ -60,7 +87,7 @@ export default function AddressesScreen() {
   });
 
   const delMut = useMutation({
-    mutationFn: (id: string) => del(`/buyer/addresses/${encodeApiPathSegment(id)}`),
+    mutationFn: (id: string) => saveList(addresses.filter((a: LocalAddress) => a.id !== id)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['addresses'] }),
     onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Хаяг устгаж чадсангүй.'),
   });

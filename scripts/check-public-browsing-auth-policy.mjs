@@ -46,7 +46,7 @@ const publicSurfaces = [
   {
     name: 'flash sale browse',
     file: 'app/(customer)/flash-sale.tsx',
-    endpoints: ['/flash-sales/active'],
+    endpoints: ['/products'],
   },
   {
     name: 'home flash sale row',
@@ -80,7 +80,7 @@ const protectedSurfaces = [
   {
     name: 'owner product management remains protected',
     file: 'app/(tabs)/store.tsx',
-    endpoints: ['/products/my'],
+    endpoints: ['/seller/products'],
   },
   {
     name: 'orders remain protected',

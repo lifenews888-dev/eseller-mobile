@@ -62,7 +62,9 @@ export function FlashSaleRow() {
     retry: false,
   });
 
-  const items: FlashItem[] = filterPublicProducts(data?.items ?? data?.products ?? []);
+  const items: FlashItem[] = (filterPublicProducts(data?.items ?? data?.products ?? []) as FlashItem[]).filter(
+    (item) => Number(item.salePrice) > 0 && Number(item.price) > Number(item.salePrice),
+  );
   const countdown = useCountdown(data?.endsAt);
 
   if (!items.length) return null;

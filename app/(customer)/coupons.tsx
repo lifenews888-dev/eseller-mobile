@@ -2,32 +2,43 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, post } from '../../src/services/api';
+import { useMutation } from '@tanstack/react-query';
+import { post } from '../../src/services/api';
+import { useCart } from '../../src/store/cart';
 import { useAuth } from '../../src/store/auth';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
 
+type CheckedCoupon = {
+  code: string;
+  title?: string;
+  discountType?: string;
+  discountValue?: number;
+  discount?: number;
+};
+
 export default function CouponsScreen() {
-  const qc = useQueryClient();
   const { user } = useAuth();
-  const { data, isLoading } = useQuery({
-    queryKey: ['coupons'],
-    queryFn: () => get('/buyer/coupons'),
-    enabled: !!user,
-  });
-  const coupons = (data as any)?.coupons || [];
+  const cartTotal = useCart((state) => state.total());
+  const isLoading = false;
+  const [coupons, setCoupons] = useState<CheckedCoupon[]>([]);
   const [code, setCode] = useState('');
 
+  // Вэбд хэрэглэгчийн купоны жагсаалт байхгүй — кодыг /coupons/validate-аар шалгаж,
+  // хүчинтэй бол төлбөр хийх үед ашиглана.
   const redeemMut = useMutation({
-    mutationFn: (couponCode: string) => post('/buyer/coupons/redeem', { code: couponCode }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['coupons'] });
-      setCode('');
-      Alert.alert('Амжилттай', 'Купон нэмэгдлээ.');
+    mutationFn: async (couponCode: string) => {
+      const res: any = await post('/coupons/validate', { code: couponCode, cartAmount: cartTotal });
+      if (!res?.valid) throw new Error(res?.error || 'Купон хүчингүй байна');
+      return { ...(res.coupon || {}), code: res.coupon?.code || couponCode, discount: res.discount } as CheckedCoupon;
     },
-    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Купон идэвхжүүлж чадсангүй.'),
+    onSuccess: (coupon) => {
+      setCoupons((prev) => [coupon, ...prev.filter((c) => c.code !== coupon.code)]);
+      setCode('');
+      Alert.alert('Хүчинтэй купон', 'Төлбөр хийх үед энэ кодыг оруулж хөнгөлөлт эдлээрэй.');
+    },
+    onError: (error: any) => Alert.alert('Алдаа', error?.message || 'Купон шалгаж чадсангүй.'),
   });
 
   const submit = () => {
@@ -57,7 +68,7 @@ export default function CouponsScreen() {
       <AppTopBar eyebrow="Профайл" title="Купон" showBack={false} />
       <AppHeader
         title="Купон"
-        subtitle="Промо кодоо идэвхжүүлээд дараагийн захиалгадаа хөнгөлөлт эдлээрэй."
+        subtitle="Промо кодоо шалгаад, төлбөр хийх үедээ оруулж хөнгөлөлт эдлээрэй."
         icon="ticket-outline"
         accent={C.seller}
       />
@@ -81,7 +92,7 @@ export default function CouponsScreen() {
             />
           </View>
           <AppButton
-            label={redeemMut.isPending ? '...' : 'Нэмэх'}
+            label={redeemMut.isPending ? '...' : 'Шалгах'}
             icon="add"
             disabled={redeemMut.isPending}
             onPress={submit}
@@ -90,7 +101,7 @@ export default function CouponsScreen() {
         </View>
       </AppCard>
 
-      <Text style={styles.sectionTitle}>Идэвхтэй купон</Text>
+      <Text style={styles.sectionTitle}>Шалгасан купон</Text>
       {isLoading ? (
         <AppCard style={styles.centerCard}>
           <ActivityIndicator color={C.brand} />
@@ -99,8 +110,8 @@ export default function CouponsScreen() {
       ) : coupons.length === 0 ? (
         <AppCard style={styles.centerCard}>
           <Ionicons name="gift-outline" size={46} color={C.textMuted} />
-          <Text style={styles.emptyTitle}>Купон байхгүй</Text>
-          <Text style={styles.mutedText}>Шинэ промо код авмагцаа энд идэвхжүүлээрэй.</Text>
+          <Text style={styles.emptyTitle}>Шалгасан купон алга</Text>
+          <Text style={styles.mutedText}>Промо кодоо дээр оруулж хүчинтэй эсэхийг шалгаарай.</Text>
           <View style={styles.emptyActions}>
             <AppButton
               label="Дэлгүүр үзэх"
@@ -119,7 +130,7 @@ export default function CouponsScreen() {
   );
 }
 
-function CouponCard({ coupon }: { coupon: any }) {
+function CouponCard({ coupon }: { coupon: CheckedCoupon }) {
   return (
     <AppCard style={styles.couponCard}>
       <View style={styles.discountBox}>
@@ -129,23 +140,19 @@ function CouponCard({ coupon }: { coupon: any }) {
       <View style={styles.couponInfo}>
         <Text style={styles.couponTitle} numberOfLines={1}>{coupon.title || coupon.code || 'Купон'}</Text>
         <Text style={styles.mutedText}>
-          {coupon.minOrder ? `${Number(coupon.minOrder).toLocaleString('mn-MN')}₮+ захиалгад` : 'Бүх захиалгад'}
+          Код: {coupon.code}
         </Text>
-        <Text style={styles.expiryText}>Дуусах: {formatDate(coupon.expiresAt)}</Text>
+        {coupon.discount ? (
+          <Text style={styles.expiryText}>Таны сагсанд: −{Number(coupon.discount).toLocaleString('mn-MN')}₮</Text>
+        ) : null}
       </View>
     </AppCard>
   );
 }
 
-function discountText(coupon: any) {
-  if (coupon.discountPercent) return `${coupon.discountPercent}%`;
-  return `${Number(coupon.discountAmount || 0).toLocaleString('mn-MN')}₮`;
-}
-
-function formatDate(value: any) {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('mn-MN');
+function discountText(coupon: CheckedCoupon) {
+  if (coupon.discountType === 'PERCENT') return `${coupon.discountValue || 0}%`;
+  return `${Number(coupon.discountValue || 0).toLocaleString('mn-MN')}₮`;
 }
 
 const styles = StyleSheet.create({

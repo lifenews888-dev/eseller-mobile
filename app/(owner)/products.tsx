@@ -113,7 +113,7 @@ export default function OwnerProducts() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => del(`/seller/products/${encodeApiPathSegment(id)}`),
+    mutationFn: (id: string) => del(`/store/products/${encodeApiPathSegment(id)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['owner-products'] }),
   });
 

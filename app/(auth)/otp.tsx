@@ -34,7 +34,7 @@ export default function OtpScreen() {
 
     setLoading(true);
     try {
-      await post('/auth/otp-send', { phone: phone.trim() });
+      await post('/auth/otp/send', { phone: phone.trim() });
       setSent(true);
       setTimer(60);
     } catch (e: any) {
