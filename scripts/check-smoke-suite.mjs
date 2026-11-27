@@ -55,7 +55,7 @@ for (const scriptName of liveApiSteps) {
 }
 
 const workflow = read('.github/workflows/p0-smoke.yml');
-expect(workflow.includes('node-version: 20'), 'CI uses Node 20');
+expect(workflow.includes('node-version: 22'), 'CI uses Node 22 (needed for --experimental-strip-types)');
 expect(workflow.includes('run: npm ci'), 'CI installs with npm ci');
 expect(workflow.includes('run: npm run smoke:p0'), 'CI runs smoke:p0');
 
