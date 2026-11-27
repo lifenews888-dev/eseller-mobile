@@ -104,6 +104,7 @@ export default function SellerProfile() {
           <MenuRow icon="home-outline" label="Самбар" accent={C.seller} onPress={() => router.push('/seller/dashboard' as never)} />
           <MenuRow icon="cube-outline" label="Каталог" accent={C.primary} onPress={() => router.push('/seller/catalog' as never)} />
           <MenuRow icon="cash-outline" label="Орлого" accent={C.secondary} onPress={() => router.push('/seller/earnings' as never)} />
+          <MenuRow icon="trophy-outline" label="Топ жагсаалт" accent={C.gold} onPress={() => router.push('/seller/leaderboard' as never)} />
           <MenuRow icon="gift-outline" label="Урилгын код" accent={C.seller} onPress={() => router.push('/seller/referral' as never)} />
         </Card>
 

@@ -41,6 +41,7 @@ const ACCOUNT_SERVICES: ServiceItem[] = [
   { icon: 'car-outline', label: 'Хүргэлт', sub: 'Захиалга хайх', route: '/track/search', color: C.driver },
   { icon: 'wallet-outline', label: 'Хэтэвч', sub: 'QPay, SocialPay', route: '/wallet', color: C.primary },
   { icon: 'ticket-outline', label: 'Купон', sub: 'Промо код', route: '/coupons', color: C.seller },
+  { icon: 'business-outline', label: 'Байгууллагын захиалга', sub: 'Бөөний, корпоратив', route: '/corporate-order', color: C.primary },
 ];
 
 const APP_SERVICES_BASE: ServiceItem[] = [

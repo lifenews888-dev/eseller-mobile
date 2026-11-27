@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { post, put } from '../../src/services/api';
 import * as SecureStore from '../../src/shared/secureStore';
-import { uploadImageToCloudinary } from '../../src/lib/uploadImage';
+import { uploadImage } from '../../src/lib/uploadImage';
 import { C, F, R, UI } from '../../src/shared/design';
 import { useMalchnaasEnabled } from '../../src/config/remoteFlags';
 import { useAuth } from '../../src/store/auth';
@@ -122,7 +122,7 @@ export default function RegisterShopScreen() {
 
     setSubmitting(true);
     try {
-      const cloudUrl = await uploadImageToCloudinary(result.assets[0].uri);
+      const cloudUrl = await uploadImage(result.assets[0].uri);
       setLogo(cloudUrl);
     } catch {
       Alert.alert('Алдаа', 'Зураг хуулахад алдаа гарлаа.');
