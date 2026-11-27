@@ -41,18 +41,18 @@ const releasePreflight = read('scripts/release-preflight.mjs');
 expect(expo.name === 'Eseller.mn', 'app name is Eseller.mn', expo.name);
 expect(expo.slug === 'eseller-mn', 'app slug is stable', expo.slug);
 expect(expo.version === packageJson.version, 'Expo version matches package version', `${expo.version} vs ${packageJson.version}`);
-expect(expo.owner === 'eseller.mn', 'Expo owner is configured', expo.owner);
+expect(expo.owner === 'munkhbat25', 'Expo owner is configured', expo.owner);
 expect(expo.scheme === 'eseller', 'deep-link scheme is configured', expo.scheme);
 expect(expo.orientation === 'portrait', 'app locks portrait orientation', expo.orientation);
 expect(expo.runtimeVersion?.policy === 'appVersion', 'runtime version follows appVersion');
 expect(expo.updates?.enabled === true, 'OTA updates are enabled');
 expect(
-  expo.updates?.url === 'https://u.expo.dev/7dbfaf45-621d-4c06-b64d-383a47504030',
+  expo.updates?.url === 'https://u.expo.dev/efa56801-4bb4-4230-9cb9-7a9248182226',
   'OTA update URL matches EAS project',
   expo.updates?.url,
 );
 expect(
-  expo.extra?.eas?.projectId === '7dbfaf45-621d-4c06-b64d-383a47504030',
+  expo.extra?.eas?.projectId === 'efa56801-4bb4-4230-9cb9-7a9248182226',
   'EAS projectId is configured',
   expo.extra?.eas?.projectId,
 );

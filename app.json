@@ -83,10 +83,10 @@
         "origin": "https://eseller.mn"
       },
       "eas": {
-        "projectId": "7dbfaf45-621d-4c06-b64d-383a47504030"
+        "projectId": "efa56801-4bb4-4230-9cb9-7a9248182226"
       }
     },
-    "owner": "eseller.mn",
+    "owner": "munkhbat25",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -94,7 +94,7 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 5000,
-      "url": "https://u.expo.dev/7dbfaf45-621d-4c06-b64d-383a47504030"
+      "url": "https://u.expo.dev/efa56801-4bb4-4230-9cb9-7a9248182226"
     }
   }
 }
