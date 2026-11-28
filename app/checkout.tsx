@@ -34,7 +34,13 @@ const BANKS = [
 ];
 
 export default function CheckoutScreen() {
-  const { items, total, clear } = useCart();
+  const { items: cartItems, remove } = useCart();
+  // Захиалга нэг дэлгүүрийнх байна (мөнгө тухайн дэлгүүрт дундын дансаар очно) — эхний дэлгүүрийн барааг захиална
+  const shopGroups = groupByShop(cartItems);
+  const items = shopGroups[0]?.items ?? [];
+  const otherShopCount = Math.max(0, shopGroups.length - 1);
+  const total = () => Math.round(items.reduce((sum, i) => sum + i.price * i.qty, 0));
+  const clear = () => items.forEach((i) => remove(i.id));
   const layout = useAppLayoutMetrics();
   const cartIssues = getInvalidCartItems(items);
   const hasCartIssues = cartIssues.length > 0;
@@ -182,13 +188,21 @@ export default function CheckoutScreen() {
         <AppCard style={{ flexDirection: 'row', gap: R.sm, alignItems: 'flex-start', borderColor: C.success + '35', marginBottom: R.md }}>
           <Ionicons name="shield-checkmark-outline" size={21} color={C.success} />
           <View style={{ flex: 1 }}>
-            <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>3 өдрийн дундын дансны хамгаалалт</Text>
+            <Text style={{ ...F.small, color: C.success, fontWeight: '900' }}>Дундын дансны хамгаалалт</Text>
             <Text style={{ ...F.tiny, color: C.textSub, marginTop: 2 }}>
-              Бараа хүргэгдсэний дараа л төлбөр дэлгүүрт шилжинэ.
+              Та бараагаа хүлээн авснаа баталгаажуулсны дараа (эсвэл хүргэгдсэнээс 72 цагийн дараа) төлбөр дэлгүүрт шилжинэ.
             </Text>
           </View>
         </AppCard>
 
+        {otherShopCount > 0 ? (
+          <AppCard style={{ marginBottom: R.md, flexDirection: 'row', gap: R.sm, alignItems: 'flex-start' }}>
+            <Ionicons name="storefront-outline" size={20} color={C.primary} />
+            <Text style={{ ...F.small, color: C.textSub, flex: 1, lineHeight: 20 }}>
+              Сагсанд {otherShopCount + 1} дэлгүүрийн бараа байна. Энэ удаад «{shopGroups[0]?.name || 'Дэлгүүр'}»-ийн барааг захиална. Бусад дэлгүүрийн бараа сагсанд үлдэнэ.
+            </Text>
+          </AppCard>
+        ) : null}
         {hasCartIssues ? (
           <AppCard style={{ flexDirection: 'row', gap: R.sm, alignItems: 'flex-start', borderColor: C.gold + '55', marginBottom: R.md }}>
             <Ionicons name="shield-checkmark-outline" size={21} color={C.gold} />
@@ -487,3 +501,17 @@ const inputStyle = {
   borderWidth: 1,
   borderColor: C.border,
 };
+
+function groupByShop(list: ReturnType<typeof useCart.getState>['items']) {
+  const groups: Array<{ key: string; name: string; items: typeof list }> = [];
+  for (const item of list) {
+    const key = item.entityId || '';
+    let g = groups.find((x) => x.key === key);
+    if (!g) {
+      g = { key, name: item.entityName || '', items: [] };
+      groups.push(g);
+    }
+    g.items.push(item);
+  }
+  return groups;
+}
