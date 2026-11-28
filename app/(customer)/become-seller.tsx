@@ -386,7 +386,7 @@ export default function BecomeSeller() {
               >
                 <Ionicons name="gift-outline" size={19} color={C.gold} />
                 <Text style={{ color: C.text, fontSize: 12, fontWeight: '800', flex: 1 }}>
-                  Эхний 3 сар 0% комисс автоматаар хамаарна
+                  Эхний 1 сар 0% комисс автоматаар хамаарна
                 </Text>
               </View>
             </View>

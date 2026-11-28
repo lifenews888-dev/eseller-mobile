@@ -363,7 +363,7 @@ export default function RegisterShopScreen() {
             </Field>
             <View style={styles.infoCard}>
               <Ionicons name="information-circle" size={18} color={C.primary} />
-              <Text style={styles.infoText}>Эхний 3 сар 0% комисс.</Text>
+              <Text style={styles.infoText}>Эхний 1 сар 0% комисс.</Text>
             </View>
           </>
         ) : null}

@@ -14,7 +14,7 @@ type Feature = {
 const FEATURES: Feature[] = [
   {
     icon: 'cash-outline',
-    title: 'Эхний 3 сар 0% комисс',
+    title: 'Эхний 1 сар 0% комисс',
     text: 'Орлогоо бүрэн авна',
   },
   {
@@ -47,7 +47,7 @@ const FEATURES: Feature[] = [
 const FAQ = [
   {
     q: 'Хэдэн мөнгө төлөх вэ?',
-    a: 'Дэлгүүр нээхэд кредит карт шаардахгүй. Одоо бүртгүүлсэн дэлгүүрүүдэд эхний 3 сар 0% комисс автоматаар хамаарна.',
+    a: 'Дэлгүүр нээхэд кредит карт шаардахгүй. Одоо бүртгүүлсэн дэлгүүрүүдэд эхний 1 сар 0% комисс автоматаар хамаарна.',
   },
   {
     q: 'Хэдэн бараа нэмж болох вэ?',
@@ -110,7 +110,7 @@ export default function OpenShopScreen() {
             </Text>
           </View>
           <Text style={{ color: C.text, fontSize: 24, fontWeight: '900', textAlign: 'center' }}>
-            Эхний 3 сар — 0% комисс
+            Эхний 1 сар — 0% комисс
           </Text>
           <Text style={{ color: C.textSub, fontSize: 13, marginTop: 7, textAlign: 'center' }}>
             Одоо бүртгүүлсэн дэлгүүрүүдэд автоматаар хамаарна
