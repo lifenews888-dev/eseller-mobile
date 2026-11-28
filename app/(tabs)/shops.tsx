@@ -467,7 +467,7 @@ function ShopCard({ item }: { item: any }) {
             {description}
           </Text>
           <Text numberOfLines={1} style={{ ...F.tiny, color: C.textMuted, marginTop: 3 }}>
-            ★ {rating ? rating.toFixed(1) : '-'} · {reviews} сэтгэгдэл · {productCount} бараа
+            {rating ? `★ ${rating.toFixed(1)} · ${reviews} сэтгэгдэл · ` : 'Шинэ · '}{productCount} бараа
           </Text>
           <Text numberOfLines={1} style={{ ...F.small, color: accent, fontWeight: '800', marginTop: R.xs }}>
             Дэлгүүрээр зочлох

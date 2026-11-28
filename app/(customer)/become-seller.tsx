@@ -37,7 +37,7 @@ const SELLER_TYPES: SellerType[] = [
     title: 'Захиалгын дэлгүүр',
     desc: 'Гадаадаас захиалж оруулдаг бараа',
     badge: 'Шинэ',
-    tags: ['Pre-order систем', 'Хүлээх хугацаа', 'Минимум захиалга', 'Урьдчилгаа төлбөр'],
+    tags: ['Урьдчилсан захиалга', 'Хүлээх хугацаа', 'Минимум захиалга', 'Урьдчилгаа төлбөр'],
   },
   {
     id: 'real_estate',
@@ -73,7 +73,7 @@ const SELLER_TYPES: SellerType[] = [
     title: 'Файл / Дижитал бараа',
     desc: 'Татаж авах дижитал контент зарах',
     badge: 'Шинэ',
-    tags: ['PDF, ZIP, видео', 'Instant download', 'Subscription', 'License key'],
+    tags: ['PDF, ZIP, видео', 'Шууд татах', 'Сарын захиалга', 'Лицензийн түлхүүр'],
   },
 ]
 
@@ -275,7 +275,7 @@ export default function BecomeSeller() {
               >
                 <Ionicons name="information-circle-outline" size={19} color={C.store} />
                 <Text style={{ color: C.store, fontSize: 12, lineHeight: 18, flex: 1 }}>
-                  Dashboard-аас хүссэн үедээ нэмэлт дэлгүүрийн төрөл нэмж болно
+                  Самбараас хүссэн үедээ нэмэлт дэлгүүрийн төрөл нэмж болно
                 </Text>
               </View>
             </View>

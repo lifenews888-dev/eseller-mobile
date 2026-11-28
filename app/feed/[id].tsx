@@ -27,6 +27,7 @@ import {
 } from '../../src/shared/productQuality'
 import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams'
 import { getShopName } from '../../src/shared/shopIdentity'
+import { liveCategoryName } from '../../src/shared/liveCategories'
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar, useAppLayoutMetrics } from '../../src/shared/ui/AppUI'
 
 const W = Dimensions.get('window').width
@@ -148,7 +149,7 @@ export default function FeedDetailScreen() {
   const title = getProductName(item) || 'Зар'
   const price = getPublicProductPrice(item)
   const qualityIssue = getPublicProductQualityIssue(item)
-  const category = item.categoryName || item.category || item.type || 'Дэлгүүр'
+  const category = item.categoryName || liveCategoryName(item.category) || (/^[a-z0-9-]+$/.test(String(item.category || '')) ? 'Зар' : item.category) || 'Зар'
   const seller = item.seller || item.shop || item.owner || {}
   const sellerDisplayName = getShopName(seller)
   const sellerName =

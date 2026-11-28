@@ -119,3 +119,11 @@ export function resolveLiveCategoryKey(value?: string) {
     ?? LIVE_STORE_CATEGORIES.find((category) => category.apiCategory === normalized)?.key
     ?? normalized;
 }
+
+/** Ангиллын түлхүүрийг (жишээ: printing-services) монгол нэр болгоно. Олдохгүй бол хоосон. */
+export function liveCategoryName(value?: string | null): string {
+  if (!value) return '';
+  const key = resolveLiveCategoryKey(value);
+  return LIVE_FEED_CATEGORIES.find((category) => category.slug && (category.slug === key || category.slug === value))?.name
+    ?? (value === 'jobs' ? 'Ажил' : '');
+}
