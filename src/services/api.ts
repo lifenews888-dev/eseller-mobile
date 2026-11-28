@@ -270,11 +270,8 @@ export const WalletAPI = {
     return get('/wallet/transactions', params);
   },
 
-  topUp: (data: {
-    amount: number;
-    method: 'qpay' | 'socialpay' | 'card';
-    reference: string;
-  }) => post('/wallet/topup', data),
+  // QPay нэхэмжлэл үүсгэнэ; үлдэгдэл төлбөр баталгаажсаны дараа серверт нэмэгдэнэ
+  topUp: (data: { amount: number }) => post('/wallet/topup', data),
 
   requestPayout: (data: {
     amount: number;
