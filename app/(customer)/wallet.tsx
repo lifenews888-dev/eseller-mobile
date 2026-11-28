@@ -66,8 +66,6 @@ const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000];
 
 const TOPUP_METHODS: { id: 'qpay' | 'socialpay' | 'card'; label: string; icon: IconName }[] = [
   { id: 'qpay', label: 'QPay', icon: 'qr-code-outline' },
-  { id: 'socialpay', label: 'SocialPay', icon: 'wallet-outline' },
-  { id: 'card', label: 'Карт', icon: 'card-outline' },
 ];
 
 const BANKS = ['Хаан банк', 'Голомт банк', 'TDB банк', 'Хас банк', 'Ариг банк', 'Капитрон банк'];
@@ -158,21 +156,6 @@ export default function WalletScreen() {
     enabled: !!user && (tab === 'transactions' || tab === 'overview'),
   });
 
-  const topupMut = useMutation({
-    mutationFn: (data: { amount: number; method: 'qpay' | 'socialpay' | 'card'; reference: string }) =>
-      WalletAPI.topUp(data),
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      qc.invalidateQueries({ queryKey: ['wallet'] });
-      qc.invalidateQueries({ queryKey: ['wallet-transactions'] });
-      setTopupAmount('');
-      setTab('overview');
-      replaceWalletRoute({ tab: 'overview' });
-      Alert.alert('Амжилттай', 'Хэтэвч цэнэглэх хүсэлт илгээгдлээ.');
-    },
-    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Цэнэглэхэд алдаа гарлаа.'),
-  });
-
   const payoutMut = useMutation({
     mutationFn: (data: { amount: number; bankName: string; bankAccount: string }) =>
       WalletAPI.requestPayout(data),
@@ -208,7 +191,8 @@ export default function WalletScreen() {
       Alert.alert('Алдаа', 'Хамгийн багадаа 1,000₮ цэнэглэнэ.');
       return;
     }
-    topupMut.mutate({ amount, method: topupMethod, reference: `APP_${Date.now()}` });
+    // Цэнэглэлт QPay-ээр төлөгдсөний дараа л хэтэвчид орно — төлбөрийн хуудас руу шилжинэ
+    router.push({ pathname: '/wallet-topup', params: { amount: String(amount) } } as never);
   };
 
   const handlePayout = () => {
@@ -325,7 +309,7 @@ export default function WalletScreen() {
         <TopupForm
           amount={topupAmount}
           method={topupMethod}
-          pending={topupMut.isPending}
+          pending={false}
           setAmount={setTopupAmount}
           setMethod={setTopupMethod}
           onSubmit={handleTopup}

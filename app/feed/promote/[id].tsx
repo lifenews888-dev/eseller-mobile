@@ -89,7 +89,7 @@ export default function PromoteListingScreen() {
             {invoice.demo ? (
               <Text style={{ ...F.small, color: C.gold, textAlign: 'center' }}>QPay холболт тохируулагдаагүй тул энэ нь туршилтын нэхэмжлэл — төлбөр хийгдэхгүй.</Text>
             ) : null}
-            {qr ? <Image source={{ uri: qr }} style={{ width: 220, height: 220, backgroundColor: '#fff', borderRadius: 12 }} /> : null}
+            {qr ? <Image source={{ uri: qr }} style={{ width: 220, height: 220, backgroundColor: C.bgCard, borderRadius: 12 }} /> : null}
             {(invoice.urls || []).length > 0 ? (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
                 {(invoice.urls || []).slice(0, 10).map((u) => (
