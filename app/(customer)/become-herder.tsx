@@ -13,7 +13,7 @@ const CONFIG: OnboardingConfig = {
     { icon: 'phone-portrait-outline', title: 'Бүртгүүлэх',    desc: 'Утас + иргэний үнэмлэх — 2 минут' },
     { icon: 'document-text-outline',   title: 'А данс',         desc: 'МЭАЖГ-н бүртгэл baталгаажуулна' },
     { icon: 'camera-outline',          title: 'Бараа нэмэх',    desc: 'Зураг, тайлбар, үнэ оруулна' },
-    { icon: 'card-outline',            title: 'Орлого авах',    desc: 'Хүргэсний дараа 48 цагт банк руу' },
+    { icon: 'card-outline',            title: 'Орлого авах',    desc: 'Худалдан авагч хүлээн авсны дараа (72 цагт) хэтэвчид орно' },
   ],
   stats: [
     { label: 'Комисс',   value: '10%' },
