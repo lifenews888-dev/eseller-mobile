@@ -6,6 +6,13 @@ import { C } from '../shared/design';
 import { encodeRouteParam } from '../shared/routeParams';
 import type { Notification, NotificationResponse } from 'expo-notifications';
 
+let lastPushToken: string | null = null;
+
+/** Энэ утасны сүүлд бүртгэсэн push токен (гарахад серверээс салгахад хэрэглэнэ) */
+export function getLastPushToken(): string | null {
+  return lastPushToken;
+}
+
 async function loadNotifications() {
   if (Platform.OS === 'web') return null;
   return import('expo-notifications');
@@ -91,6 +98,7 @@ export async function registerPushToken(): Promise<string | null> {
       projectId ? { projectId } : undefined,
     );
     const token = tokenData.data;
+    lastPushToken = token;
 
     // Server-д хадгалах (fire-and-forget — backend register endpoint exists)
     await post('/push/register', {

@@ -17,7 +17,7 @@ function timeLabel(iso?: string) {
     : d.toLocaleDateString('mn-MN')
 }
 
-/** Зарын эзэдтэй хийсэн чатууд — нэвтэрсэн бол аккаунтын чатууд, үгүй бол энэ утсан дээрх зочин чатууд */
+/** Зарын эзэдтэй хийсэн чатууд — нэвтэрсэн бол зөвхөн аккаунтын чатууд, үгүй бол энэ утсан дээрх зочин чатууд */
 export default function ListingMessagesScreen() {
   const token = useAuth((s) => s.token)
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -31,7 +31,8 @@ export default function ListingMessagesScreen() {
         out.push({ id: c.id, guest: false, title: c.title || 'Зар', otherName: c.otherName || 'Зарын эзэн', lastMessage: c.lastMessage, lastAt: c.lastAt, unread: c.unread || 0 })
       }
     }
-    const guests = await readGuestChats()
+    // Зочны (нэвтрээгүй үеийн) чатууд зөвхөн нэвтрээгүй үед харагдана — бүртгэлтэй хэрэглэгчийн хайрцагт холилдохгүй
+    const guests = token ? [] : await readGuestChats()
     if (guests.length) {
       const info = await ListingAPI.guestUnread(guests).catch(() => null)
       const byId = new Map((info?.chats || []).map((c) => [c.id, c]))
