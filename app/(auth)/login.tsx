@@ -13,7 +13,6 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/store/auth';
 import { inferAuthRoleFromReturnTo, normalizeAuthRoleParam, routeAfterAuth } from '../../src/shared/routing';
@@ -29,7 +28,7 @@ import {
 } from '../../src/shared/biometric';
 import { OTP_ENABLED_DEFAULT } from '../../src/config/flags';
 import { SESSION_INVALIDATED_KEY } from '../../src/services/api';
-import { API_ORIGIN } from '../../src/config/apiBase';
+import { signInWithProvider } from '../../src/lib/oauthHandoff';
 import { AuthValueIntro } from '../../src/components/AuthValueIntro';
 import { AppButton, AppCard, AppHeader, useAppLayoutMetrics } from '../../src/shared/ui/AppUI';
 
@@ -187,16 +186,19 @@ export default function LoginScreen() {
     }
   };
 
+  const [providerBusy, setProviderBusy] = useState<'google' | 'dan' | null>(null);
+
+  // Google/ДАН-аар апп дотроо нэвтэрнэ: хөтчийн цонх нээгдээд, дуусахад апп руу буцаж сесс үүснэ
   const openAuthProvider = async (provider: 'google' | 'dan') => {
+    if (providerBusy) return;
+    setProviderBusy(provider);
     try {
-      const baseUrl = __DEV__
-        ? (process.env.EXPO_PUBLIC_DEV_API || API_ORIGIN)
-        : API_ORIGIN;
-      const providerParams = new URLSearchParams({ redirect: 'eseller://auth/callback' });
-      if (provider === 'google') providerParams.set('role', authRole || 'buyer');
-      await WebBrowser.openBrowserAsync(`${baseUrl}/api/auth/${provider}?${providerParams.toString()}`);
-    } catch (e) {
-      if (__DEV__) console.error(`[${provider}-oauth]`, e);
+      const role = await signInWithProvider(provider, provider === 'google' ? authRole || 'buyer' : null);
+      if (role) routeAfterAuth(role, authReturnTo);
+    } catch (e: any) {
+      Alert.alert('Нэвтрэх', e?.message || 'Нэвтрэх үед алдаа гарлаа.');
+    } finally {
+      setProviderBusy(null);
     }
   };
 
@@ -300,14 +302,16 @@ export default function LoginScreen() {
 
         <View style={styles.oauthStack}>
           <AppButton
-            label="Google-ээр нэвтрэх"
+            label={providerBusy === 'google' ? 'Google-ээр нэвтэрч байна...' : 'Google-ээр нэвтрэх'}
             icon="logo-google"
+            disabled={!!providerBusy}
             onPress={() => openAuthProvider('google')}
             variant="secondary"
           />
           <AppButton
-            label="ДАН-аар нэвтрэх"
+            label={providerBusy === 'dan' ? 'ДАН-аар нэвтэрч байна...' : 'ДАН-аар нэвтрэх'}
             icon="id-card-outline"
+            disabled={!!providerBusy}
             onPress={() => openAuthProvider('dan')}
             style={{ backgroundColor: C.primary, borderColor: C.primary }}
           />

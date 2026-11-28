@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   Alert,
   Dimensions,
@@ -91,10 +91,25 @@ export default function ProductDetailScreen() {
 
   const { data: product, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['product', productRouteId],
-    queryFn: () => get(`/products/${productRouteId}`),
+    // Хайлт/дэлгүүрийн жагсаалтад зар (feed) бараатай хамт ирдэг тул бараа олдохгүй бол зар эсэхийг шалгана
+    queryFn: async () => {
+      try {
+        return await get(`/products/${productRouteId}`);
+      } catch (productError) {
+        const listing = await get(`/feed/${productRouteId}`).catch(() => null);
+        if (listing) return { __listingRedirect: true } as any;
+        throw productError;
+      }
+    },
     enabled: !!productRouteId,
     retry: false,
   });
+
+  useEffect(() => {
+    if ((product as any)?.__listingRedirect && productRouteId) {
+      router.replace(`/feed/${productRouteId}` as any);
+    }
+  }, [product, productRouteId]);
 
   const { data: reviewsData } = useQuery<ReviewsResponse>({
     queryKey: ['product-reviews', productRouteId],
@@ -236,7 +251,7 @@ export default function ProductDetailScreen() {
     Alert.alert('Үнэлгээ бичих', 'Захиалга амжилттай биелсний дараа үнэлгээ бичих боломжтой.');
   };
 
-  if (isLoading) {
+  if (isLoading || (product as any)?.__listingRedirect) {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <Skeleton width="100%" height={340} borderRadius={0} />
