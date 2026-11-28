@@ -1,7 +1,7 @@
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { OrderAPI } from '../../src/services/api';
 import { C, F, R, UI } from '../../src/shared/design';
 import { encodeRouteParam, normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
@@ -23,6 +23,33 @@ const STATUS_ALIAS: Record<string, string> = {
   paid: 'confirmed',
   processing: 'preparing',
   shipped: 'delivering',
+};
+
+const ESCROW_INFO: Record<string, { title: string; body: string; icon: IconName; color: string }> = {
+  HOLDING: {
+    title: 'Дундын дансанд хадгалагдаж байна',
+    body: 'Төлбөр тань аюулгүй хадгалагдаж байна. Бараагаа хүлээн авсны дараа баталгаажуулахад дэлгүүрт шилжинэ.',
+    icon: 'shield-checkmark-outline',
+    color: C.primary,
+  },
+  DISPUTED: {
+    title: 'Буцаалт шийдвэрлэгдэж байна',
+    body: 'Шийдвэр гарах хүртэл төлбөр дундын дансанд хадгалагдана.',
+    icon: 'time-outline',
+    color: C.warning,
+  },
+  RELEASED: {
+    title: 'Төлбөр дэлгүүрт шилжсэн',
+    body: 'Захиалга амжилттай дууслаа.',
+    icon: 'checkmark-done-outline',
+    color: C.success,
+  },
+  REFUNDED: {
+    title: 'Төлбөр буцаагдсан',
+    body: 'Төлсөн мөнгө таны хэтэвчид буцаагдлаа.',
+    icon: 'wallet-outline',
+    color: C.success,
+  },
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -51,6 +78,25 @@ export default function OrderDetailScreen() {
     enabled: !!orderRouteParam,
     retry: false,
   });
+  const queryClient = useQueryClient();
+  const confirmMut = useMutation({
+    mutationFn: () => OrderAPI.confirmReceipt(orderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', orderRouteParam] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      Alert.alert('Баярлалаа', 'Бараа хүлээн авснаа баталгаажууллаа. Төлбөр дэлгүүрт шилжлээ.');
+    },
+    onError: (e: any) => Alert.alert('Алдаа', e?.message || 'Баталгаажуулж чадсангүй.'),
+  });
+  const askConfirm = () =>
+    Alert.alert(
+      'Бараагаа хүлээн авсан уу?',
+      'Баталгаажуулсны дараа төлбөр дэлгүүрт шилжинэ. Бараа асуудалтай бол эхлээд буцаалт хүсээрэй.',
+      [
+        { text: 'Болих', style: 'cancel' },
+        { text: 'Хүлээн авсан', onPress: () => confirmMut.mutate() },
+      ],
+    );
 
   if (isLoading) {
     return (
@@ -133,6 +179,10 @@ export default function OrderDetailScreen() {
   const address = formatAddress(order.deliveryAddress ?? order.shippingAddress ?? order.address);
   const subtotal = items.reduce((sum: number, item: any) => sum + itemTotal(item), 0);
   const total = order.total ?? order.grandTotal ?? subtotal;
+  const escrow = order.escrow as { status?: string; autoReleaseAt?: string | null } | null | undefined;
+  const escrowInfo = escrow?.status ? ESCROW_INFO[escrow.status] : undefined;
+  const canConfirm = !!order.canConfirmReceipt;
+  const canReturn = !!order.canRequestReturn;
 
   return (
     <View style={styles.screen}>
@@ -183,6 +233,33 @@ export default function OrderDetailScreen() {
           })}
         </View>
         </AppCard>
+
+        {escrowInfo ? (
+          <AppCard style={styles.sectionCard}>
+            <View style={styles.inlineTitle}>
+              <Ionicons name={escrowInfo.icon} size={18} color={escrowInfo.color} />
+              <Text style={styles.sectionTitle}>{escrowInfo.title}</Text>
+            </View>
+            <Text style={[styles.mutedText, { marginTop: R.xs }]}>{escrowInfo.body}</Text>
+            {escrow?.autoReleaseAt ? (
+              <Text style={[styles.mutedText, { marginTop: R.xs }]}>
+                {formatDeadline(escrow.autoReleaseAt)} хүртэл гомдол гаргаагүй бол автоматаар дэлгүүрт шилжинэ.
+              </Text>
+            ) : null}
+            {order.returnPending ? (
+              <Text style={[styles.mutedText, { marginTop: R.xs }]}>Таны буцаалтын хүсэлт шалгагдаж байна.</Text>
+            ) : null}
+            {canReturn ? (
+              <AppButton
+                label="Асуудалтай бол буцаалт хүсэх"
+                icon="refresh-outline"
+                variant="ghost"
+                style={{ marginTop: R.sm }}
+                onPress={() => router.push(`/returns?orderId=${orderRouteId}` as any)}
+              />
+            ) : null}
+          </AppCard>
+        ) : null}
 
         <AppCard style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Барааны жагсаалт</Text>
@@ -243,7 +320,17 @@ export default function OrderDetailScreen() {
       </AppScreen>
 
       <View style={[styles.fixedActions, { paddingBottom: layout.insets.bottom + R.lg }]}>
-        {delivered && !order.hasReview ? (
+        {canConfirm ? (
+          <AppButton
+            label={confirmMut.isPending ? 'Баталгаажуулж байна' : 'Хүлээн авсан'}
+            icon="checkmark-done-outline"
+            variant="success"
+            style={styles.actionButton}
+            accessibilityHint="Бараагаа хүлээн авснаа баталгаажуулж, төлбөрийг дэлгүүрт шилжүүлнэ"
+            disabled={confirmMut.isPending}
+            onPress={askConfirm}
+          />
+        ) : delivered && !order.hasReview ? (
           <AppButton
             label="Үнэлгээ өгөх"
             icon="star-outline"
@@ -295,6 +382,13 @@ function itemName(item: any) {
 
 function itemTotal(item: any) {
   return Number(item?.total ?? item?.lineTotal ?? (item?.price ?? 0) * (item?.quantity ?? item?.qty ?? 1));
+}
+
+function formatDeadline(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '72 цаг';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function formatMoney(value: any) {

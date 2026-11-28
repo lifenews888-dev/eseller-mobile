@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { get, post } from '../../src/services/api';
 import { useAuth } from '../../src/store/auth';
 import { encodeApiPathSegment } from '../../src/shared/apiPath';
+import { uploadImage } from '../../src/lib/uploadImage';
+import { normalizeRouteParam, safeDecodeRouteParam } from '../../src/shared/routeParams';
 import { C, F, R, UI } from '../../src/shared/design';
 import { AppButton, AppCard, AppHeader, AppScreen, AppTopBar } from '../../src/shared/ui/AppUI';
 import { RequireAuthScreen } from '../../src/shared/ui/RequireAuthScreen';
@@ -29,12 +31,18 @@ export default function ReturnsScreen() {
   });
   const orders = resolveOrders(data).filter((order: any) => order.status === 'delivered');
 
-  const [selected, setSelected] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ orderId?: string }>();
+  const preselected = safeDecodeRouteParam(normalizeRouteParam(params.orderId));
+  const [selected, setSelected] = useState<string | null>(preselected || null);
   const [reason, setReason] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
 
   const returnMut = useMutation({
-    mutationFn: (body: any) => post(`/orders/${encodeApiPathSegment(selected)}/return`, body),
+    mutationFn: async (body: { reason: string; images: string[] }) => {
+      // Зургийг эхлээд серверт байршуулна (утасны дотоод замыг сервер хүлээж авахгүй)
+      const images = await Promise.all(body.images.map((uri) => (/^https?:\/\//i.test(uri) ? uri : uploadImage(uri))));
+      return post(`/orders/${encodeApiPathSegment(selected)}/return`, { ...body, images });
+    },
     onSuccess: () => {
       Alert.alert('Амжилттай', 'Буцаалтын хүсэлт илгээгдлээ.');
       setSelected(null);
@@ -80,7 +88,7 @@ export default function ReturnsScreen() {
       <AppTopBar eyebrow="Дэмжлэг" title="Буцаалт" showBack={false} />
       <AppHeader
         title="Буцаалт"
-        subtitle="Хүргэгдсэн захиалгад 48 цагийн дотор буцаалтын хүсэлт илгээнэ."
+        subtitle="Хүргэгдсэнээс хойш 72 цагийн дотор, хүлээн авснаа баталгаажуулахаас өмнө буцаалт хүснэ."
         icon="refresh-outline"
         accent={C.primary}
       />
@@ -90,8 +98,8 @@ export default function ReturnsScreen() {
           <Ionicons name="shield-checkmark-outline" size={18} color={C.primary} />
         </View>
         <View style={styles.noticeText}>
-          <Text style={styles.noticeTitle}>48 цагийн баталгаа</Text>
-          <Text style={styles.noticeSub}>Шалтгаан, зураг хавсаргавал хүсэлт хурдан шийдэгдэнэ.</Text>
+          <Text style={styles.noticeTitle}>Дундын дансны хамгаалалт</Text>
+          <Text style={styles.noticeSub}>Хүсэлт шийдэгдэх хүртэл төлбөр дэлгүүрт шилжихгүй. Шалтгаан, зураг хавсаргавал хурдан шийдэгдэнэ.</Text>
         </View>
       </AppCard>
 
