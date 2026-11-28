@@ -263,7 +263,7 @@ export default function WalletScreen() {
           </View>
         </View>
         <View style={st.metricRow}>
-          <AppMetricCard label="Дундын данс" value={fmt(wallet?.escrowHold || 0)} icon="lock-closed-outline" accent={C.seller} />
+          <AppMetricCard label="Дундын дансанд хүлээгдэж буй" value={fmt(wallet?.pending || wallet?.escrowHold || 0)} icon="lock-closed-outline" accent={C.seller} />
           <AppMetricCard label="Оноо" value={(loyalty?.balance ?? 0).toLocaleString()} icon={tier.icon} accent={tier.color} />
         </View>
         <View style={st.tierRow}>
@@ -668,15 +668,16 @@ function txIcon(type: string): IconName {
 }
 
 function txColor(type: string, amount: number) {
-  if (type === 'TOPUP' || type === 'ESCROW_REFUND' || type === 'POINTS_REDEEM') return C.secondary;
-  if (type === 'PAYOUT' || type === 'ESCROW_HOLD') return C.error;
+  if (type === 'ESCROW_HOLD') return C.warning;
+  if (type === 'TOPUP' || type === 'POINTS_REDEEM') return C.secondary;
+  if (type === 'PAYOUT') return C.error;
   return amount >= 0 ? C.secondary : C.error;
 }
 
 function txLabel(type: string) {
   if (type === 'TOPUP') return 'Цэнэглэлт';
-  if (type === 'ESCROW_HOLD') return 'Дундын дансанд барьсан';
-  if (type === 'ESCROW_RELEASE') return 'Дундын данснаас шилжсэн';
+  if (type === 'ESCROW_HOLD') return 'Дундын дансанд хүлээгдэж буй';
+  if (type === 'ESCROW_RELEASE') return 'Дундын данснаас орлого шилжсэн';
   if (type === 'ESCROW_REFUND') return 'Буцаалт';
   if (type === 'POINTS_REDEEM') return 'Оноо мөнгө';
   if (type === 'PAYOUT') return 'Мөнгө гаргалт';

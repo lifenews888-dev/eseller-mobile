@@ -418,6 +418,8 @@ export const OrderAPI = {
   // Buyer
   myOrders: () => get('/orders'),
   detail: (id: string) => get(`/buyer/orders/${pathSegment(id)}`),
+  /** Худалдан авагч хүлээн авснаа баталгаажуулна → дундын данснаас дэлгүүрт шилжинэ */
+  confirmReceipt: (id: string) => post(`/orders/${pathSegment(id)}/confirm`),
 
   // Seller
   sellerOrders: (status?: string) =>
