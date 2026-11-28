@@ -20,7 +20,7 @@ export function useFeedBadge(): number {
         n += Number(chats?.count) || 0
         n += Number(searches?.count) || 0
       }
-      const guests = await readGuestChats()
+      const guests = token ? [] : await readGuestChats()
       if (guests.length) {
         const g = await ListingAPI.guestUnread(guests).catch(() => null)
         n += Number(g?.count) || 0

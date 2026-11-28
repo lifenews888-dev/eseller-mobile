@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { post, get, setOnUnauthorized, isOfflineError, type ApiError } from '../services/api';
 import * as SecureStore from '../shared/secureStore';
+import { getLastPushToken } from '../lib/notifications';
 
 const log = (...args: unknown[]) => {
   if (__DEV__) console.log('[auth]', ...args);
@@ -171,6 +172,9 @@ export const useAuth = create<AuthStore>()(
       },
 
       logout: async () => {
+        // Гарсан хэрэглэгчийн мэдэгдэл энэ утсанд ирэхээ болино (дараагийн хүнд өмнөх хүний мэдэгдэл харагдахгүй)
+        const pushToken = getLastPushToken();
+        await post('/push/unregister', pushToken ? { token: pushToken } : {}).catch(() => {});
         await SecureStore.deleteItemAsync('token');
         set({ user: null, token: null, role: 'BUYER' });
       },

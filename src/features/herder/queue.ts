@@ -141,3 +141,8 @@ export async function drain(): Promise<DrainResult> {
   await writeAll(next);
   return result;
 }
+
+/** Хэрэглэгч гарахад илгээгдээгүй дараалал дараагийн хэрэглэгчийн нэрээр явахаас сэргийлнэ */
+export async function clear(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+}
